@@ -99,3 +99,24 @@ ENV/
 
 # mypy
 .mypy_cache/
+
+# data dir
+/data/
+
+# model dir
+/models/
+
+# log dir
+/log/
+
+# tmp dir
+/tmp/
+
+# test dir
+/tests/
+
+# IDE 
+/.idea/
+*.iml
+*.sublime-project
+*.sublime-workspace
