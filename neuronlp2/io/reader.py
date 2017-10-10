@@ -17,7 +17,7 @@ class CoNLLReader(object):
     def close(self):
         self.__source_file.close()
 
-    def getNext(self, normalize_digits=True):
+    def getNext(self, normalize_digits=True, symbolic_root=False, symbolic_end=False):
         lines = []
         line = self.__source_file.readline()
         while line is not None and len(line.strip()) > 0:
@@ -40,15 +40,16 @@ class CoNLLReader(object):
         type_ids = []
         heads = []
 
-        words.append(conll_data.ROOT)
-        word_ids.append(self.__word_alphabet.get_index(conll_data.ROOT))
-        char_seqs.append([conll_data.ROOT_CHAR, ])
-        char_id_seqs.append([self.__char_alphabet.get_index(conll_data.ROOT_CHAR), ])
-        postags.append(conll_data.ROOT_POS)
-        pos_ids.append(self.__pos_alphabet.get_index(conll_data.ROOT_POS))
-        types.append(conll_data.ROOT_TYPE)
-        type_ids.append(self.__type_alphabet.get_index(conll_data.ROOT_TYPE))
-        heads.append(-1)
+        if symbolic_root:
+            words.append(conll_data.ROOT)
+            word_ids.append(self.__word_alphabet.get_index(conll_data.ROOT))
+            char_seqs.append([conll_data.ROOT_CHAR, ])
+            char_id_seqs.append([self.__char_alphabet.get_index(conll_data.ROOT_CHAR), ])
+            postags.append(conll_data.ROOT_POS)
+            pos_ids.append(self.__pos_alphabet.get_index(conll_data.ROOT_POS))
+            types.append(conll_data.ROOT_TYPE)
+            type_ids.append(self.__type_alphabet.get_index(conll_data.ROOT_TYPE))
+            heads.append(-1)
 
         for tokens in lines:
             chars = []
@@ -77,5 +78,16 @@ class CoNLLReader(object):
             type_ids.append(self.__type_alphabet.get_index(type))
 
             heads.append(head)
+
+        if symbolic_end:
+            words.append(conll_data.END)
+            word_ids.append(self.__word_alphabet.get_index(conll_data.END))
+            char_seqs.append([conll_data.END_CHAR, ])
+            char_id_seqs.append([self.__char_alphabet.get_index(conll_data.END_CHAR), ])
+            postags.append(conll_data.END_POS)
+            pos_ids.append(self.__pos_alphabet.get_index(conll_data.END_POS))
+            types.append(conll_data.END_TYPE)
+            type_ids.append(self.__type_alphabet.get_index(conll_data.END_TYPE))
+            heads.append(0)
 
         return DependencyInstance(Sentence(words, word_ids, char_seqs, char_id_seqs), postags, pos_ids, heads, types, type_ids)

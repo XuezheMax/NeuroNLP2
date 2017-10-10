@@ -9,19 +9,26 @@ from .alphabet import Alphabet
 from .logger import get_logger
 
 # Special vocabulary symbols - we always put them at the start.
-ROOT = b"_ROOT"
-ROOT_POS = b"_ROOT_POS"
-ROOT_TYPE = b"_<ROOT>"
-ROOT_CHAR = b"_ROOT_CHAR"
 PAD = b"_PAD"
 PAD_POS = b"_PAD_POS"
 PAD_TYPE = b"_<PAD>"
 PAD_CHAR = b"_PAD_CHAR"
-_START_VOCAB = [ROOT, PAD]
+ROOT = b"_ROOT"
+ROOT_POS = b"_ROOT_POS"
+ROOT_TYPE = b"_<ROOT>"
+ROOT_CHAR = b"_ROOT_CHAR"
+END = b"_END"
+END_POS = b"_END_POS"
+END_TYPE = b"_<END>"
+END_CHAR = b"_END_CHAR"
+_START_VOCAB = [PAD, ROOT, END]
 
 UNK_ID = 0
-ROOT_ID = 1
-PAD_ID = 2
+PAD_ID = 1
+ROOT_ID = 2
+END_ID = 3
+
+NUM_SYMBOLIC_TAGS = 4
 
 MAX_CHAR_LENGTH = 45
 
@@ -40,13 +47,17 @@ def create_alphabets(alphabet_directory, data_paths, max_vocabulary_size, min_oc
     if not os.path.isdir(alphabet_directory):
         logger.info("Creating Alphabets: %s" % alphabet_directory)
 
+        char_alphabet.add(PAD_CHAR)
+        pos_alphabet.add(PAD_POS)
+        type_alphabet.add(PAD_TYPE)
+
         char_alphabet.add(ROOT_CHAR)
         pos_alphabet.add(ROOT_POS)
         type_alphabet.add(ROOT_TYPE)
 
-        char_alphabet.add(PAD_CHAR)
-        pos_alphabet.add(PAD_POS)
-        type_alphabet.add(PAD_TYPE)
+        char_alphabet.add(END_CHAR)
+        pos_alphabet.add(END_POS)
+        type_alphabet.add(END_TYPE)
 
         vocab = dict()
         for data_path in data_paths:
@@ -109,14 +120,14 @@ def create_alphabets(alphabet_directory, data_paths, max_vocabulary_size, min_oc
 def read_data(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, max_size=None,
               normalize_digits=True):
     data = [[] for _ in _buckets]
-    print 'Reading data from %s' % source_path
+    print('Reading data from %s' % source_path)
     counter = 0
     reader = CoNLLReader(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
     inst = reader.getNext(normalize_digits)
     while inst is not None and (not max_size or counter < max_size):
         counter += 1
         if counter % 10000 == 0:
-            print "reading data: %d" % counter
+            print("reading data: %d" % counter)
 
         inst_size = inst.length()
         sent = inst.sentence
@@ -127,22 +138,22 @@ def read_data(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alph
 
         inst = reader.getNext(normalize_digits)
     reader.close()
-    print "Total number of data: %d" % counter
+    print("Total number of data: %d" % counter)
     return data
 
 
 def get_batch(data, batch_size):
-    bucket_sizes = [len(data[b]) for b in xrange(len(_buckets))]
+    bucket_sizes = [len(data[b]) for b in range(len(_buckets))]
     total_size = float(sum(bucket_sizes))
     # A bucket scale is a list of increasing numbers from 0 to 1 that we'll use
     # to select a bucket. Length of [scale[i], scale[i+1]] is proportional to
     # the size if i-th training bucket, as used later.
-    buckets_scale = [sum(bucket_sizes[:i + 1]) / total_size for i in xrange(len(bucket_sizes))]
+    buckets_scale = [sum(bucket_sizes[:i + 1]) / total_size for i in range(len(bucket_sizes))]
 
     # Choose a bucket according to data distribution. We pick a random number
     # in [0, 1] and use the corresponding interval in train_buckets_scale.
     random_number = np.random.random_sample()
-    bucket_id = min([i for i in xrange(len(buckets_scale)) if buckets_scale[i] > random_number])
+    bucket_id = min([i for i in range(len(buckets_scale)) if buckets_scale[i] > random_number])
 
     bucket_length = _buckets[bucket_id]
 
@@ -154,7 +165,7 @@ def get_batch(data, batch_size):
 
     masks = np.zeros([batch_size, bucket_length], dtype=np.float32)
 
-    for b in xrange(batch_size):
+    for b in range(batch_size):
         wids, cid_seqs, pids, hids, tids = random.choice(data[bucket_id])
 
         inst_size = len(wids)
@@ -181,7 +192,7 @@ def get_batch(data, batch_size):
 
 
 def iterate_batch(data, batch_size, shuffle=False):
-    bucket_sizes = [len(data[b]) for b in xrange(len(_buckets))]
+    bucket_sizes = [len(data[b]) for b in range(len(_buckets))]
     total_size = float(sum(bucket_sizes))
     bucket_indices = np.arange(len(_buckets))
     if shuffle:
