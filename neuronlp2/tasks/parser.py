@@ -2,7 +2,6 @@ __author__ = 'max'
 
 import re
 import numpy as np
-from ..io import conll_data
 
 def is_uni_punctuation(word):
     match = re.match("^[^\w\s]+$]", word, flags=re.UNICODE)
@@ -52,7 +51,7 @@ def eval(inputs, postags, pars_pred, types_pred, heads, types, masks, filename, 
     return ucorr, lcorr, total, ucorr_nopunc, lcorr_nopunc, total_nopunc
 
 
-def decode_MST(energies, masks, leading_symbolic=conll_data.NUM_SYMBOLIC_TAGS):
+def decode_MST(energies, masks, leading_symbolic):
     """
     decode best parsing tree with MST algorithm.
     :param energies: energies: numpy 4D tensor
@@ -61,7 +60,7 @@ def decode_MST(energies, masks, leading_symbolic=conll_data.NUM_SYMBOLIC_TAGS):
     :param masks: numpy 2D tensor
         masks in the shape [batch_size, n_steps].
     :param leading_symbolic: int
-        number of symbolic dependency types leading in type alphabets (default=conll_data.NUM_SYMBOLIC_TAGS)
+        number of symbolic dependency types leading in type alphabets)
     :return:
     """
 

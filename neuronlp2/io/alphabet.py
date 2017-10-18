@@ -8,16 +8,19 @@ import os
 from .logger import get_logger
 
 class Alphabet(object):
-    def __init__(self, name, keep_growing=True):
+    def __init__(self, name, defualt_value=False, keep_growing=True):
         self.__name = name
 
         self.instance2index = {}
         self.instances = []
+        self.default_value = defualt_value
+        self.offset = 1 if self.default_value else 0
         self.keep_growing = keep_growing
 
         # Index 0 is occupied by default, all else following.
-        self.default_index = 0
-        self.next_index = 1
+        self.default_index = 0 if self.default_value else None
+
+        self.next_index = self.offset
 
         self.logger = get_logger('Alphabet')
 
@@ -36,28 +39,31 @@ class Alphabet(object):
                 self.add(instance)
                 return index
             else:
-                return self.default_index
+                if self.default_value:
+                    return self.default_index
+                else:
+                    raise KeyError("instance not found: %s" % instance)
 
     def get_instance(self, index):
-        if index == 0:
+        if self.default_value and index == self.default_index:
             # First index is occupied by the wildcard element.
             return None
-        try:
-            return self.instances[index - 1]
-        except IndexError:
-            self.logger.warn('unknown instance, return the first label.')
-            return self.instances[0]
+        else:
+            try:
+                return self.instances[index - self.offset]
+            except IndexError:
+                raise IndexError('unknown index: %d' % index)
 
     def size(self):
-        return len(self.instances) + 1
+        return len(self.instances) + self.offset
 
     def iteritems(self):
-        return self.instance2index.iteritems()
+        return self.instance2index.items()
 
-    def enumerate_items(self, start=1):
-        if start < 1 or start >= self.size():
-            raise IndexError("Enumerate is allowed between [1 : size of the alphabet)")
-        return zip(range(start, len(self.instances) + 1), self.instances[start - 1:])
+    def enumerate_items(self, start):
+        if start < self.offset or start >= self.size():
+            raise IndexError("Enumerate is allowed between [%d : size of the alphabet)" % self.offset)
+        return zip(range(start, len(self.instances) + self.offset), self.instances[start - self.offset:])
 
     def close(self):
         self.keep_growing = False
@@ -98,5 +104,5 @@ class Alphabet(object):
         """
         loading_name = name if name else self.__name
         self.__from_json(json.load(open(os.path.join(input_directory, loading_name + ".json"))))
-        self.next_index = len(self.instances) + 1
+        self.next_index = len(self.instances) + self.offset
         self.keep_growing = False

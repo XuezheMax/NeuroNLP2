@@ -4,7 +4,7 @@ import os.path
 import re
 import random
 import numpy as np
-from .reader import CoNLLReader
+from .reader import CoNLLXReader
 from .alphabet import Alphabet
 from .logger import get_logger
 
@@ -24,11 +24,11 @@ END_CHAR = b"_END_CHAR"
 _START_VOCAB = [PAD, ROOT, END]
 
 UNK_ID = 0
-PAD_ID = 1
-ROOT_ID = 2
-END_ID = 3
+PAD_ID_WORD = 1
+PAD_ID_CHAR = 1
+PAD_ID_TAG = 0
 
-NUM_SYMBOLIC_TAGS = 4
+NUM_SYMBOLIC_TAGS = 3
 
 MAX_CHAR_LENGTH = 45
 
@@ -40,8 +40,8 @@ _buckets = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 140]
 
 def create_alphabets(alphabet_directory, data_paths, max_vocabulary_size, min_occurence=1, normalize_digits=True):
     logger = get_logger("Create Alphabets")
-    word_alphabet = Alphabet('word')
-    char_alphabet = Alphabet('character')
+    word_alphabet = Alphabet('word', defualt_value=True)
+    char_alphabet = Alphabet('character', defualt_value=True)
     pos_alphabet = Alphabet('pos')
     type_alphabet = Alphabet('type')
     if not os.path.isdir(alphabet_directory):
@@ -122,7 +122,7 @@ def read_data(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alph
     data = [[] for _ in _buckets]
     print('Reading data from %s' % source_path)
     counter = 0
-    reader = CoNLLReader(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
+    reader = CoNLLXReader(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
     inst = reader.getNext(normalize_digits)
     while inst is not None and (not max_size or counter < max_size):
         counter += 1
@@ -171,17 +171,17 @@ def get_batch(data, batch_size):
         inst_size = len(wids)
         # word ids
         wid_inputs[b, :inst_size] = wids
-        wid_inputs[b, inst_size:] = PAD_ID
+        wid_inputs[b, inst_size:] = PAD_ID_WORD
         for c, cids in enumerate(cid_seqs):
             cid_inputs[b, c, :len(cids)] = cids
-            cid_inputs[b, c, len(cids):] = PAD_ID
-        cid_inputs[b, inst_size:, :] = PAD_ID
+            cid_inputs[b, c, len(cids):] = PAD_ID_CHAR
+        cid_inputs[b, inst_size:, :] = PAD_ID_CHAR
         # pos ids
         pid_inputs[b, :inst_size] = pids
-        pid_inputs[b, inst_size:] = PAD_ID
+        pid_inputs[b, inst_size:] = PAD_ID_TAG
         # type ids
         tid_inputs[b, :inst_size] = tids
-        tid_inputs[b, inst_size:] = PAD_ID
+        tid_inputs[b, inst_size:] = PAD_ID_TAG
         # heads
         hid_inputs[b, :inst_size] = hids
         hid_inputs[b, inst_size:] = -1
@@ -217,17 +217,17 @@ def iterate_batch(data, batch_size, shuffle=False):
             inst_size = len(wids)
             # word ids
             wid_inputs[i, :inst_size] = wids
-            wid_inputs[i, inst_size:] = PAD_ID
+            wid_inputs[i, inst_size:] = PAD_ID_WORD
             for c, cids in enumerate(cid_seqs):
                 cid_inputs[i, c, :len(cids)] = cids
-                cid_inputs[i, c, len(cids):] = PAD_ID
-            cid_inputs[i, inst_size:, :] = PAD_ID
+                cid_inputs[i, c, len(cids):] = PAD_ID_CHAR
+            cid_inputs[i, inst_size:, :] = PAD_ID_CHAR
             # pos ids
             pid_inputs[i, :inst_size] = pids
-            pid_inputs[i, inst_size:] = PAD_ID
+            pid_inputs[i, inst_size:] = PAD_ID_TAG
             # type ids
             tid_inputs[i, :inst_size] = tids
-            tid_inputs[i, inst_size:] = PAD_ID
+            tid_inputs[i, inst_size:] = PAD_ID_TAG
             # heads
             hid_inputs[i, :inst_size] = hids
             hid_inputs[i, inst_size:] = -1

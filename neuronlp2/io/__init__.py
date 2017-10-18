@@ -2,5 +2,6 @@ __author__ = 'max'
 
 from .alphabet import *
 from .instance import *
-from .conll_data import *
+from .conllx_data import *
+from .conll03_data import *
 from .logger import *

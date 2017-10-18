@@ -1,10 +1,9 @@
 __author__ = 'max'
 
 import torch
-from ..io import conll_data
 
 
-def decode_Viterbi(energies, masks, leading_symbolic=0):
+def decode_Viterbi(energies, masks, leading_symbolic):
     """
     decode best sequence of labels with Viterbi algorithm.
     :param energies: energies: torch 4D tensor
@@ -13,7 +12,7 @@ def decode_Viterbi(energies, masks, leading_symbolic=0):
     :param masks: torch 2D tensor
         masks in the shape [batch_size, n_steps].
     :param leading_symbolic: int
-        number of symbolic dependency types leading in type alphabets (default=0)
+        number of symbolic dependency types leading in type alphabets (set it to 0 if you are not sure)
     :return: torch 2D tensor
         decoding in shape [batch, n_steps]
     """
