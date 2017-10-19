@@ -1,12 +1,12 @@
 __author__ = 'max'
 
 import os.path
-import re
 import random
 import numpy as np
 from .reader import CoNLL03Reader
 from .alphabet import Alphabet
 from .logger import get_logger
+import utils
 
 # Special vocabulary symbols - we always put them at the start.
 PAD = b"_PAD"
@@ -22,11 +22,6 @@ PAD_ID_CHAR = 1
 PAD_ID_TAG = 0
 
 NUM_SYMBOLIC_TAGS = 1
-
-MAX_CHAR_LENGTH = 45
-
-# Regular expressions used to normalize digits.
-DIGIT_RE = re.compile(br"\d")
 
 _buckets = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 140]
 
@@ -61,7 +56,7 @@ def create_alphabets(alphabet_directory, data_paths, max_vocabulary_size, min_oc
                     for char in tokens[1]:
                         char_alphabet.add(char)
 
-                    word = DIGIT_RE.sub(b"0", tokens[1]) if normalize_digits else tokens[1]
+                    word = utils.DIGIT_RE.sub(b"0", tokens[1]) if normalize_digits else tokens[1]
                     pos = tokens[2]
                     chunk = tokens[3]
                     ner = tokens[4]
@@ -152,7 +147,7 @@ def get_batch(data, batch_size):
     bucket_length = _buckets[bucket_id]
 
     wid_inputs = np.empty([batch_size, bucket_length], dtype=np.int32)
-    cid_inputs = np.empty([batch_size, bucket_length, MAX_CHAR_LENGTH], dtype=np.int32)
+    cid_inputs = np.empty([batch_size, bucket_length, utils.MAX_CHAR_LENGTH], dtype=np.int32)
     pid_inputs = np.empty([batch_size, bucket_length], dtype=np.int32)
     chid_inputs = np.empty([batch_size, bucket_length], dtype=np.int32)
     nid_inputs = np.empty([batch_size, bucket_length], dtype=np.int32)
@@ -199,7 +194,7 @@ def iterate_batch(data, batch_size, shuffle=False):
 
         bucket_length = _buckets[bucket_id]
         wid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int32)
-        cid_inputs = np.empty([bucket_size, bucket_length, MAX_CHAR_LENGTH], dtype=np.int32)
+        cid_inputs = np.empty([bucket_size, bucket_length, utils.MAX_CHAR_LENGTH], dtype=np.int32)
         pid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int32)
         chid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int32)
         nid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int32)
