@@ -5,10 +5,9 @@ import torch
 import torch.nn as nn
 from torch.nn.parameter import Parameter
 from neuronlp2.nlinalg import logsumexp, logdet
-import torch.nn.functional as F
 
 
-class ChainCRFLayer(nn.Module):
+class ChainCRF(nn.Module):
     def __init__(self, input_size, num_labels, bias=True, **kwargs):
         '''
 
@@ -21,7 +20,7 @@ class ChainCRFLayer(nn.Module):
                 if apply bias parameter.
             **kwargs:
         '''
-        super(ChainCRFLayer, self).__init__()
+        super(ChainCRF, self).__init__()
         self.input_size = input_size
         self.num_labels = num_labels + 1
         self.pad_label_id = num_labels

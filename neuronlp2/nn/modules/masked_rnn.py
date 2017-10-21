@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from torch.nn.parameter import Parameter
 import torch.nn.functional as F
-from ._functions import AutogradMaskedRNN
+from .._functions import AutogradMaskedRNN
 
 
 class MaskedRNNBase(nn.Module):

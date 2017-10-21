@@ -5,7 +5,7 @@ import torch
 from torch.nn.parameter import Parameter
 from torch.nn import Conv1d, Module
 import torch.nn.functional as F
-from .utils import _single, _pair, _triple
+from ..utils import _single, _pair, _triple
 
 __all__ = [
     "ConvTimeStep1d",
@@ -71,7 +71,7 @@ class ConvTimeStep1d(_ConvTimeStepNd):
     """
     CNN with time step at axis=1.
     The input shape should be [batch_size, n-step, in_channels, input_length].
-    The output shape should be [batch_size, n-step, out_channels,
+    The output shape should be [batch_size, n-step, out_channels, output_length].
 
     Parameters
     ----------
