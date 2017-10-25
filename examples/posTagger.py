@@ -116,11 +116,16 @@ def main():
         print('Epoch %d (%s, learning rate=%.4f, decay rate=%.4f): ' % (epoch, mode, lr, decay_rate))
         train_err = 0.0
         train_corr = 0.0
-        train_total = 1
+        train_total = 0
         start_time = time.time()
         num_back = 0
         network.train()
+
+        data_time = 0
+        network_time = 0
+        display_time = 0
         for batch in range(1, num_batches + 1):
+            tt = time.time()
             wids, cids, pids, _, _, masks = conllx_data.get_batch(data_train, batch_size)
             num_tokens = masks.sum()
             word, char, labels, masks = Variable(torch.from_numpy(wids)), \
@@ -130,14 +135,20 @@ def main():
             if torch.cuda.is_available():
                 word, char, labels, masks = word.cuda(), char.cuda(), labels.cuda(), masks.cuda()
 
+            data_time += time.time() - tt
+            tt = time.time()
+
             optim.zero_grad()
             loss, corr, _ = network.loss(word, char, labels, masks, leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
             loss.backward()
             optim.step()
 
-            # train_err += loss.data[0] * num_tokens
-            # train_corr += corr.data[0]
-            # train_total += num_tokens
+            network_time += time.time() - tt
+            tt = time.time()
+
+            train_err += loss.data[0] * num_tokens
+            train_corr += corr.data[0]
+            train_total += num_tokens
             time_ave = (time.time() - start_time) / batch
             time_left = (num_batches - batch) * time_ave
 
@@ -148,6 +159,9 @@ def main():
                     batch, num_batches, train_err / train_total, train_corr * 100 / train_total, time_left)
                 sys.stdout.write(log_info)
                 num_back = len(log_info)
+
+            display_time += time.time() - tt
+        print('%.2fs, %.2fs, %.2fs, %.2fs' % (data_time, network_time, display_time, time.time() - start_time))
         sys.stdout.write("\b" * num_back)
         print('train: %d loss: %.4f, acc: %.2f%%, time: %.2fs' % (
             epoch * num_batches, train_err / train_total, train_corr * 100 / train_total, time.time() - start_time))
