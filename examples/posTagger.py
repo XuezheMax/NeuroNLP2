@@ -135,9 +135,9 @@ def main():
             loss.backward()
             optim.step()
 
-            num_tokens = masks.sum().data[0]
-            train_err += loss.data[0] * num_tokens
-            train_corr += corr.data[0]
+            num_tokens = masks.data.sum()
+            train_err += loss.data * num_tokens
+            train_corr += corr.data
             train_total += num_tokens
             train_inst += wids.shape[0]
             time_ave = (time.time() - start_time) / batch
@@ -150,10 +150,10 @@ def main():
             # sys.stdout.write(log_info)
             # num_back = len(log_info)
         assert train_inst == num_batches * batch_size
-        # sys.stdout.write("\b" * num_back)
+        sys.stdout.write("\b" * num_back)
         print('train: %d/%d loss: %.4f, acc: %.2f%%, time: %.2fs' % (train_inst, train_inst,
-                                                                     train_err / train_total,
-                                                                     train_corr * 100 / train_total,
+                                                                     train_err[0] / train_total[0],
+                                                                     train_corr[0] * 100 / train_total[0],
                                                                      time.time() - start_time))
 
         # evaluate performance on dev data
