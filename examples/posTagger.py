@@ -157,7 +157,7 @@ def main():
             # train_corr += corr.data
             # train_total += num_tokens
 
-            num_tokens = masks.data.sum()
+            num_tokens = 100 #masks.data.sum()
             train_err += loss.data[0] * num_tokens
             train_corr += corr.data[0]
             train_total += num_tokens
