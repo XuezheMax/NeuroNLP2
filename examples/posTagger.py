@@ -103,6 +103,9 @@ def main():
         network.cuda()
 
     lr = 0.002
+    for parameter in network.parameters():
+        print(parameter)
+        raw_input()
     optim = Adam(network.parameters(), lr=lr, betas=(0.9, 0.9), weight_decay=gamma)
     logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d" % (mode, num_layers, hidden_size, num_filters))
     logger.info("training: l2: %f, (#training data: %d, batch: %d, dropout: %.2f)" % (gamma, num_data, batch_size, p))
@@ -112,7 +115,6 @@ def main():
     best_epoch = 0
     test_correct = 0.0
     test_total = 0
-    test_total_nr = 0
     for epoch in range(1, num_epochs + 1):
         print('Epoch %d (%s, learning rate=%.4f, decay rate=%.4f): ' % (epoch, mode, lr, decay_rate))
         train_err = 0.0
