@@ -2,7 +2,8 @@ __author__ = 'max'
 
 import torch
 import torch.nn as nn
-from ..nn import MaskedRNN, MaskedLSTM, MaskedGRU, ChainCRF, Embedding
+from ..nn import MaskedRNN, MaskedLSTM, MaskedGRU, ChainCRF
+from ..nn import Embedding
 
 
 class BiRecurrentConv(nn.Module):
@@ -20,7 +21,8 @@ class BiRecurrentConv(nn.Module):
         if rnn_mode == 'RNN':
             RNN = MaskedRNN
         elif rnn_mode == 'LSTM':
-            RNN = MaskedLSTM
+            # RNN = MaskedLSTM
+            RNN = nn.LSTM
         elif rnn_mode == 'GRU':
             RNN = MaskedGRU
         else:
@@ -55,7 +57,7 @@ class BiRecurrentConv(nn.Module):
         # apply dropout
         input = self.dropout_in(input)
         # output from rnn [batch, length, hidden_size]
-        output, _ = self.rnn(input, mask)
+        output, _ = self.rnn(input) #self.rnn(input, mask)
         # [batch, length, num_labels]
         return self.dense(self.dropout_rnn(output))
 
