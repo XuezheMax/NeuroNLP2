@@ -135,9 +135,9 @@ def main():
             loss.backward()
             optim.step()
 
-            num_tokens = masks.sum().data.numpy()
-            train_err += loss.data.numpy() * num_tokens
-            train_corr += corr.data.numpy()
+            num_tokens = masks.sum().data.cpu().numpy()
+            train_err += loss.data.cpu().numpy() * num_tokens
+            train_corr += corr.data.cpu().numpy()
             train_total += num_tokens
             train_inst += wids.shape[0]
             time_ave = (time.time() - start_time) / batch
@@ -169,8 +169,8 @@ def main():
             if torch.cuda.is_available():
                 word, char, labels, masks = word.cuda(), char.cuda(), labels.cuda(), masks.cuda()
             loss, corr, preds = network.loss(word, char, labels, masks, leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
-            num_tokens = masks.sum().data.numpy()
-            dev_corr += corr.data.numpy()
+            num_tokens = masks.sum().data.cpu().numpy()
+            dev_corr += corr.data.cpu().numpy()
             dev_total += num_tokens
         print('dev corr: %d, total: %d, acc: %.2f%%' % (dev_corr, dev_total, dev_corr * 100 / dev_total))
 
@@ -191,8 +191,8 @@ def main():
                     word, char, labels, masks = word.cuda(), char.cuda(), labels.cuda(), masks.cuda()
                 loss, corr, preds = network.loss(word, char, labels, masks,
                                                  leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
-                num_tokens = masks.sum().data.numpy()
-                test_corr += corr.data.numpy()
+                num_tokens = masks.sum().data.cpu().numpy()
+                test_corr += corr.data.cpu().numpy()
                 test_total += num_tokens
             test_correct = test_corr
         print("best dev  corr: %d, total: %d, acc: %.2f%% (epoch: %d)" % (
