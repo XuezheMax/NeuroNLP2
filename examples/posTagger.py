@@ -121,7 +121,7 @@ def main():
 
         train_err = 0.
         train_corr = 0.
-        train_total = 0.
+        train_total = 1.
 
         start_time = time.time()
         num_back = 0
@@ -157,13 +157,13 @@ def main():
             # train_corr += corr.data
             # train_total += num_tokens
 
-            num_tokens = 100 #masks.data.sum()
-            train_err += loss.data[0] * num_tokens
-            train_corr += corr.data[0]
-            train_total += num_tokens
-
-            time_ave = (time.time() - start_time) / batch
-            time_left = (num_batches - batch) * time_ave
+            # num_tokens = masks.data.sum()
+            # train_err += loss.data[0] * num_tokens
+            # train_corr += corr.data[0]
+            # train_total += num_tokens
+            #
+            # time_ave = (time.time() - start_time) / batch
+            # time_left = (num_batches - batch) * time_ave
 
             cal_time += time.time() - tt
             tt = time.time()
@@ -172,7 +172,7 @@ def main():
             if batch % 100 == 0:
                 sys.stdout.write("\b" * num_back)
                 log_info = 'train: %d/%d loss: %.4f, acc: %.2f%%, time left (estimated): %.2fs' % (
-                    batch, num_batches, train_err / train_total, train_corr * 100 / train_total, time_left)
+                    batch, num_batches, train_err / train_total, train_corr * 100 / train_total, 0)
                 sys.stdout.write(log_info)
                 num_back = len(log_info)
 
