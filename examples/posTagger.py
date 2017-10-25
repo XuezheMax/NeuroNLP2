@@ -161,8 +161,9 @@ def main():
                 num_back = len(log_info)
 
             display_time += time.time() - tt
-        print('%.2fs, %.2fs, %.2fs, %.2fs' % (data_time, network_time, display_time, time.time() - start_time))
         sys.stdout.write("\b" * num_back)
+        print('\n')
+        print('%.2fs, %.2fs, %.2fs, %.2fs' % (data_time, network_time, display_time, time.time() - start_time))
         print('train: %d loss: %.4f, acc: %.2f%%, time: %.2fs' % (
             epoch * num_batches, train_err / train_total, train_corr * 100 / train_total, time.time() - start_time))
 
