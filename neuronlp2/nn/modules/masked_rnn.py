@@ -57,7 +57,7 @@ class MaskedRNNBase(nn.Module):
                                  train=self.training,
                                  bidirectional=self.bidirectional,
                                  lstm=lstm)
-        output, hidden = func(input, self.all_cells, hx, mask)
+        output, hidden = func(input, self.all_cells, hx, mask.view(mask.size() + (1, )))
         return output, hidden
 
 

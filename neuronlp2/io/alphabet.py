@@ -57,7 +57,7 @@ class Alphabet(object):
     def size(self):
         return len(self.instances) + self.offset
 
-    def iteritems(self):
+    def items(self):
         return self.instance2index.items()
 
     def enumerate_items(self, start):

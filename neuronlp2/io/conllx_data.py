@@ -115,12 +115,12 @@ def create_alphabets(alphabet_directory, data_paths, max_vocabulary_size, min_oc
 
 
 def read_data(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, max_size=None,
-              normalize_digits=True):
+              normalize_digits=True, symbolic_root=False, symbolic_end=False):
     data = [[] for _ in _buckets]
     print('Reading data from %s' % source_path)
     counter = 0
     reader = CoNLLXReader(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
-    inst = reader.getNext(normalize_digits)
+    inst = reader.getNext(normalize_digits=normalize_digits, symbolic_root=symbolic_root, symbolic_end=symbolic_end)
     while inst is not None and (not max_size or counter < max_size):
         counter += 1
         if counter % 10000 == 0:
@@ -133,7 +133,7 @@ def read_data(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alph
                 data[bucket_id].append([sent.word_ids, sent.char_id_seqs, inst.pos_ids, inst.heads, inst.type_ids])
                 break
 
-        inst = reader.getNext(normalize_digits)
+        inst = reader.getNext(normalize_digits=normalize_digits, symbolic_root=symbolic_root, symbolic_end=symbolic_end)
     reader.close()
     print("Total number of data: %d" % counter)
     return data
@@ -154,11 +154,11 @@ def get_batch(data, batch_size):
 
     bucket_length = _buckets[bucket_id]
 
-    wid_inputs = np.empty([batch_size, bucket_length])
-    cid_inputs = np.empty([batch_size, bucket_length, utils.MAX_CHAR_LENGTH])
-    pid_inputs = np.empty([batch_size, bucket_length])
-    hid_inputs = np.empty([batch_size, bucket_length])
-    tid_inputs = np.empty([batch_size, bucket_length])
+    wid_inputs = np.empty([batch_size, bucket_length], dtype=np.int64)
+    cid_inputs = np.empty([batch_size, bucket_length, utils.MAX_CHAR_LENGTH], dtype=np.int64)
+    pid_inputs = np.empty([batch_size, bucket_length], dtype=np.int64)
+    hid_inputs = np.empty([batch_size, bucket_length], dtype=np.int64)
+    tid_inputs = np.empty([batch_size, bucket_length], dtype=np.int64)
 
     masks = np.zeros([batch_size, bucket_length], dtype=np.float32)
 
@@ -201,11 +201,11 @@ def iterate_batch(data, batch_size, shuffle=False):
             continue
 
         bucket_length = _buckets[bucket_id]
-        wid_inputs = np.empty([bucket_size, bucket_length])
-        cid_inputs = np.empty([bucket_size, bucket_length, utils.MAX_CHAR_LENGTH])
-        pid_inputs = np.empty([bucket_size, bucket_length])
-        hid_inputs = np.empty([bucket_size, bucket_length])
-        tid_inputs = np.empty([bucket_size, bucket_length])
+        wid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int64)
+        cid_inputs = np.empty([bucket_size, bucket_length, utils.MAX_CHAR_LENGTH], dtype=np.int64)
+        pid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int64)
+        hid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int64)
+        tid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int64)
 
         masks = np.zeros([bucket_size, bucket_length], dtype=np.float32)
 

@@ -52,7 +52,8 @@ class Embedding(nn.Module):
 
     def reset_parameters(self, init_embedding):
         if init_embedding is None:
-            self.weight.data.normal_(0, 1)
+            scale = np.sqrt(3.0 / self.embedding_dim)
+            self.weight.data.uniform_(-scale, scale)
         else:
             assign_tensor(self.weight, init_embedding)
         if self.padding_idx is not None:

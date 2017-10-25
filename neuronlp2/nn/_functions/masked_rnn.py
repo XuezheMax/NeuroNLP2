@@ -8,7 +8,14 @@ def MaskedRecurrent(reverse=False):
         output = []
         steps = range(input.size(0) - 1, -1, -1) if reverse else range(input.size(0))
         for i in steps:
-            hidden = hidden + (cell(input[i], hidden) - hidden) * mask[i].view(mask[i].size(0), 1)
+            hidden_next = cell(input[i], hidden)
+            # hack to handle LSTM
+            if isinstance(hidden, tuple):
+                hx, cx = hidden
+                hp1, cp1 = hidden_next
+                hidden = (hx + (hp1 - hx) * mask[i], cx + (cp1 - cx) * mask[i])
+            else:
+                hidden = hidden + (hidden_next - hidden) * mask[i]
             # hack to handle LSTM
             output.append(hidden[0] if isinstance(hidden, tuple) else hidden)
 
@@ -79,6 +86,7 @@ def AutogradMaskedRNN(num_layers=1, batch_first=False, dropout=0, train=True, bi
     def forward(input, cells, hidden, mask):
         if batch_first:
             input = input.transpose(0, 1)
+            mask = mask.transpose(0, 1)
 
         nexth, output = func(input, hidden, cells, mask)
 

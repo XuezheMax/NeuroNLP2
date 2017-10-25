@@ -146,11 +146,11 @@ def get_batch(data, batch_size):
 
     bucket_length = _buckets[bucket_id]
 
-    wid_inputs = np.empty([batch_size, bucket_length])
-    cid_inputs = np.empty([batch_size, bucket_length, utils.MAX_CHAR_LENGTH])
-    pid_inputs = np.empty([batch_size, bucket_length])
-    chid_inputs = np.empty([batch_size, bucket_length])
-    nid_inputs = np.empty([batch_size, bucket_length])
+    wid_inputs = np.empty([batch_size, bucket_length], dtype=np.int64)
+    cid_inputs = np.empty([batch_size, bucket_length, utils.MAX_CHAR_LENGTH], dtype=np.int64)
+    pid_inputs = np.empty([batch_size, bucket_length], dtype=np.int64)
+    chid_inputs = np.empty([batch_size, bucket_length], dtype=np.int64)
+    nid_inputs = np.empty([batch_size, bucket_length], dtype=np.int64)
 
     masks = np.zeros([batch_size, bucket_length], dtype=np.float32)
 
@@ -193,11 +193,11 @@ def iterate_batch(data, batch_size, shuffle=False):
             continue
 
         bucket_length = _buckets[bucket_id]
-        wid_inputs = np.empty([bucket_size, bucket_length])
-        cid_inputs = np.empty([bucket_size, bucket_length, utils.MAX_CHAR_LENGTH])
-        pid_inputs = np.empty([bucket_size, bucket_length])
-        chid_inputs = np.empty([bucket_size, bucket_length])
-        nid_inputs = np.empty([bucket_size, bucket_length])
+        wid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int64)
+        cid_inputs = np.empty([bucket_size, bucket_length, utils.MAX_CHAR_LENGTH], dtype=np.int64)
+        pid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int64)
+        chid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int64)
+        nid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int64)
 
         masks = np.zeros([bucket_size, bucket_length], dtype=np.float32)
 
