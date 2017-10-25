@@ -136,21 +136,21 @@ def main():
             optim.step()
 
             num_tokens = masks.sum().data[0]
-            train_err += loss.data[0]
+            train_err += loss.data[0] * num_tokens
             train_corr += corr.data[0]
             train_total += num_tokens
             train_inst += wids.shape[0]
             time_ave = (time.time() - start_time) / batch
             time_left = (num_batches - batch) * time_ave
 
-            # update log
-            sys.stdout.write("\b" * num_back)
-            log_info = 'train: %d/%d loss: %.4f, acc: %.2f%%, time left (estimated): %.2fs' % (
-                batch, num_batches, train_err / train_total, train_corr * 100 / train_total, time_left)
-            sys.stdout.write(log_info)
-            num_back = len(log_info)
+            # # update log
+            # sys.stdout.write("\b" * num_back)
+            # log_info = 'train: %d/%d loss: %.4f, acc: %.2f%%, time left (estimated): %.2fs' % (
+            #     batch, num_batches, train_err / train_total, train_corr * 100 / train_total, time_left)
+            # sys.stdout.write(log_info)
+            # num_back = len(log_info)
         assert train_inst == num_batches * batch_size
-        sys.stdout.write("\b" * num_back)
+        # sys.stdout.write("\b" * num_back)
         print('train: %d/%d loss: %.4f, acc: %.2f%%, time: %.2fs' % (train_inst, train_inst,
                                                                      train_err / train_total,
                                                                      train_corr * 100 / train_total,
