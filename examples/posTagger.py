@@ -117,7 +117,6 @@ def main():
         train_err = 0.0
         train_corr = 0.0
         train_total = 0
-        train_inst = 0
         start_time = time.time()
         num_back = 0
         network.train()
@@ -136,24 +135,22 @@ def main():
             loss.backward()
             optim.step()
 
-        #     train_err += loss.data[0] * num_tokens
-        #     train_corr += corr.data[0]
-        #     train_total += num_tokens
-        #     train_inst += wids.shape[0]
-        #     time_ave = (time.time() - start_time) / batch
-        #     time_left = (num_batches - batch) * time_ave
-        #
-        #     # update log
-        #     if batch % 100 == 0:
-        #         sys.stdout.write("\b" * num_back)
-        #         log_info = 'train: %d/%d loss: %.4f, acc: %.2f%%, time left (estimated): %.2fs' % (
-        #             batch, num_batches, train_err / train_total, train_corr * 100 / train_total, time_left)
-        #         sys.stdout.write(log_info)
-        #         num_back = len(log_info)
-        # assert train_inst == num_batches * batch_size
+            train_err += loss.data[0] * num_tokens
+            train_corr += corr.data[0]
+            train_total += num_tokens
+            time_ave = (time.time() - start_time) / batch
+            time_left = (num_batches - batch) * time_ave
+
+            # update log
+            if batch % 100 == 0:
+                sys.stdout.write("\b" * num_back)
+                log_info = 'train: %d/%d loss: %.4f, acc: %.2f%%, time left (estimated): %.2fs' % (
+                    batch, num_batches, train_err / train_total, train_corr * 100 / train_total, time_left)
+                sys.stdout.write(log_info)
+                num_back = len(log_info)
         sys.stdout.write("\b" * num_back)
-        print('train: %d/%d loss: %.4f, acc: %.2f%%, time: %.2fs' % (
-            train_inst, train_inst, train_err / train_total, train_corr * 100 / train_total, time.time() - start_time))
+        print('train: %d loss: %.4f, acc: %.2f%%, time: %.2fs' % (
+            epoch * num_batches, train_err / train_total, train_corr * 100 / train_total, time.time() - start_time))
 
         # evaluate performance on dev data
         network.eval()
