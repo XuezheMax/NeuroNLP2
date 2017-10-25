@@ -23,7 +23,7 @@ from neuronlp2 import utils
 
 
 def main():
-    torch.backends.cudnn.enabled = False
+    torch.backends.cudnn.enabled = True
     parser = argparse.ArgumentParser(description='Tuning with bi-directional RNN-CNN')
     parser.add_argument('--mode', choices=['RNN', 'LSTM', 'GRU'], help='architecture of rnn',
                         required=True)
