@@ -116,7 +116,7 @@ def main():
         print('Epoch %d (%s, learning rate=%.4f, decay rate=%.4f): ' % (epoch, mode, lr, decay_rate))
         train_err = 0.0
         train_corr = 0.0
-        train_total = 0
+        train_total = 1
         start_time = time.time()
         num_back = 0
         network.train()
@@ -135,9 +135,9 @@ def main():
             loss.backward()
             optim.step()
 
-            train_err += loss.data[0] * num_tokens
-            train_corr += corr.data[0]
-            train_total += num_tokens
+            # train_err += loss.data[0] * num_tokens
+            # train_corr += corr.data[0]
+            # train_total += num_tokens
             time_ave = (time.time() - start_time) / batch
             time_left = (num_batches - batch) * time_ave
 
