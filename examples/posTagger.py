@@ -123,6 +123,7 @@ def main():
         network.train()
         for batch in range(1, num_batches + 1):
             wids, cids, pids, _, _, masks = conllx_data.get_batch(data_train, batch_size)
+            num_tokens = masks.sum()
             word, char, labels, masks = Variable(torch.from_numpy(wids)), \
                                         Variable(torch.from_numpy(cids)), \
                                         Variable(torch.from_numpy(pids)), \
@@ -135,26 +136,24 @@ def main():
             loss.backward()
             optim.step()
 
-            num_tokens = masks.data.sum()
-            train_err += loss.data * num_tokens
-            train_corr += corr.data
-            train_total += num_tokens
-            train_inst += wids.shape[0]
-            time_ave = (time.time() - start_time) / batch
-            time_left = (num_batches - batch) * time_ave
-
-            # # update log
-            # sys.stdout.write("\b" * num_back)
-            # log_info = 'train: %d/%d loss: %.4f, acc: %.2f%%, time left (estimated): %.2fs' % (
-            #     batch, num_batches, train_err / train_total, train_corr * 100 / train_total, time_left)
-            # sys.stdout.write(log_info)
-            # num_back = len(log_info)
-        assert train_inst == num_batches * batch_size
+        #     train_err += loss.data[0] * num_tokens
+        #     train_corr += corr.data[0]
+        #     train_total += num_tokens
+        #     train_inst += wids.shape[0]
+        #     time_ave = (time.time() - start_time) / batch
+        #     time_left = (num_batches - batch) * time_ave
+        #
+        #     # update log
+        #     if batch % 100 == 0:
+        #         sys.stdout.write("\b" * num_back)
+        #         log_info = 'train: %d/%d loss: %.4f, acc: %.2f%%, time left (estimated): %.2fs' % (
+        #             batch, num_batches, train_err / train_total, train_corr * 100 / train_total, time_left)
+        #         sys.stdout.write(log_info)
+        #         num_back = len(log_info)
+        # assert train_inst == num_batches * batch_size
         sys.stdout.write("\b" * num_back)
-        print('train: %d/%d loss: %.4f, acc: %.2f%%, time: %.2fs' % (train_inst, train_inst,
-                                                                     train_err[0] / train_total[0],
-                                                                     train_corr[0] * 100 / train_total[0],
-                                                                     time.time() - start_time))
+        print('train: %d/%d loss: %.4f, acc: %.2f%%, time: %.2fs' % (
+            train_inst, train_inst, train_err / train_total, train_corr * 100 / train_total, time.time() - start_time))
 
         # evaluate performance on dev data
         network.eval()
@@ -162,14 +161,14 @@ def main():
         dev_total = 0
         for batch in conllx_data.iterate_batch(data_dev, batch_size):
             wids, cids, pids, _, _, masks = batch
+            num_tokens = masks.sum()
             word, char, labels, masks = Variable(torch.from_numpy(wids)), \
                                         Variable(torch.from_numpy(cids)), \
                                         Variable(torch.from_numpy(pids)), \
                                         Variable(torch.from_numpy(masks))
             if torch.cuda.is_available():
                 word, char, labels, masks = word.cuda(), char.cuda(), labels.cuda(), masks.cuda()
-            loss, corr, preds = network.loss(word, char, labels, masks, leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
-            num_tokens = masks.sum().data[0]
+            _, corr, preds = network.loss(word, char, labels, masks, leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
             dev_corr += corr.data[0]
             dev_total += num_tokens
         print('dev corr: %d, total: %d, acc: %.2f%%' % (dev_corr, dev_total, dev_corr * 100 / dev_total))
@@ -183,15 +182,15 @@ def main():
             test_total = 0
             for batch in conllx_data.iterate_batch(data_test, batch_size):
                 wids, cids, pids, _, _, masks = batch
+                num_tokens = masks.sum()
                 word, char, labels, masks = Variable(torch.from_numpy(wids)), \
                                             Variable(torch.from_numpy(cids)), \
                                             Variable(torch.from_numpy(pids)), \
                                             Variable(torch.from_numpy(masks))
                 if torch.cuda.is_available():
                     word, char, labels, masks = word.cuda(), char.cuda(), labels.cuda(), masks.cuda()
-                loss, corr, preds = network.loss(word, char, labels, masks,
-                                                 leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
-                num_tokens = masks.sum().data[0]
+                _, corr, preds = network.loss(word, char, labels, masks,
+                                              leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
                 test_corr += corr.data[0]
                 test_total += num_tokens
             test_correct = test_corr
