@@ -151,11 +151,7 @@ def main():
             train_err += loss.data * num_tokens
             train_corr += corr.data
             train_total += num_tokens
-            print(num_tokens)
-            print(train_err)
-            print(train_corr)
-            print(train_total)
-            raw_input()
+
             time_ave = (time.time() - start_time) / batch
             time_left = (num_batches - batch) * time_ave
 
@@ -163,7 +159,7 @@ def main():
             if batch % 100 == 0:
                 sys.stdout.write("\b" * num_back)
                 log_info = 'train: %d/%d loss: %.4f, acc: %.2f%%, time left (estimated): %.2fs' % (
-                    batch, num_batches, train_err / train_total, train_corr * 100 / train_total, time_left)
+                    batch, num_batches, train_err[0] / train_total[0], train_corr[0] * 100 / train_total[0], time_left)
                 sys.stdout.write(log_info)
                 num_back = len(log_info)
 
@@ -172,7 +168,8 @@ def main():
         print('\n')
         print('%.2fs, %.2fs, %.2fs, %.2fs' % (data_time, network_time, display_time, time.time() - start_time))
         print('train: %d loss: %.4f, acc: %.2f%%, time: %.2fs' % (
-            epoch * num_batches, train_err / train_total, train_corr * 100 / train_total, time.time() - start_time))
+            epoch * num_batches, train_err[0] / train_total[0], train_corr[0] * 100 / train_total[0],
+            time.time() - start_time))
 
         # evaluate performance on dev data
         network.eval()
