@@ -31,6 +31,7 @@ class MaskedRNNBase(nn.Module):
 
                 cell = self.Cell(layer_input_size, hidden_size, self.bias, **kwargs)
                 self.all_cells.append(cell)
+                self.add_module('cell%d' % (layer * num_directions + direction), cell)
 
         self.reset_parameters()
 

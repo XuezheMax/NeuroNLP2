@@ -103,9 +103,6 @@ def main():
         network.cuda()
 
     lr = 0.002
-    for parameter in network.parameters():
-        print(parameter)
-        raw_input()
     optim = Adam(network.parameters(), lr=lr, betas=(0.9, 0.9), weight_decay=gamma)
     logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d" % (mode, num_layers, hidden_size, num_filters))
     logger.info("training: l2: %f, (#training data: %d, batch: %d, dropout: %.2f)" % (gamma, num_data, batch_size, p))
