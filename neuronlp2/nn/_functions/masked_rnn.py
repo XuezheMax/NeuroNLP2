@@ -9,13 +9,14 @@ def MaskedRecurrent(reverse=False):
         steps = range(input.size(0) - 1, -1, -1) if reverse else range(input.size(0))
         for i in steps:
             hidden_next = cell(input[i], hidden)
-            # hack to handle LSTM
-            if isinstance(hidden, tuple):
-                hx, cx = hidden
-                hp1, cp1 = hidden_next
-                hidden = (hx + (hp1 - hx) * mask[i], cx + (cp1 - cx) * mask[i])
-            else:
-                hidden = hidden + (hidden_next - hidden) * mask[i]
+            # # hack to handle LSTM
+            # if isinstance(hidden, tuple):
+            #     hx, cx = hidden
+            #     hp1, cp1 = hidden_next
+            #     hidden = (hx + (hp1 - hx) * mask[i], cx + (cp1 - cx) * mask[i])
+            # else:
+            #     hidden = hidden + (hidden_next - hidden) * mask[i]
+            hidden = hidden_next
             # hack to handle LSTM
             output.append(hidden[0] if isinstance(hidden, tuple) else hidden)
 
