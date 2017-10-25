@@ -23,7 +23,6 @@ from neuronlp2 import utils
 
 
 def main():
-    torch.backends.cudnn.enabled = False
     parser = argparse.ArgumentParser(description='Tuning with bi-directional RNN-CNN')
     parser.add_argument('--mode', choices=['RNN', 'LSTM', 'GRU'], help='architecture of rnn',
                         required=True)
@@ -100,7 +99,8 @@ def main():
     network = BiRecurrentConv(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), num_filters, window,
                               mode, hidden_size, num_layers, num_labels, embedd_word=None,
                               p_rnn=p)
-    if torch.cuda.is_available():
+    use_gpu = torch.cuda.is_available()
+    if use_gpu:
         network.cuda()
 
     lr = 0.002
@@ -115,9 +115,10 @@ def main():
     test_total = 0
     for epoch in range(1, num_epochs + 1):
         print('Epoch %d (%s, learning rate=%.4f, decay rate=%.4f): ' % (epoch, mode, lr, decay_rate))
-        train_err = 0.0
-        train_corr = 0.0
-        train_total = 0
+        train_err = torch.zeros(1).cuda() if use_gpu else torch.zeros(1)
+        train_corr = torch.zeros(1).cuda() if use_gpu else torch.zeros(1)
+        train_total = torch.zeros(1).cuda() if use_gpu else torch.zeros(1)
+
         start_time = time.time()
         num_back = 0
         network.train()
@@ -128,12 +129,11 @@ def main():
         for batch in range(1, num_batches + 1):
             tt = time.time()
             wids, cids, pids, _, _, masks = conllx_data.get_batch(data_train, batch_size)
-            num_tokens = masks.sum()
             word, char, labels, masks = Variable(torch.from_numpy(wids)), \
                                         Variable(torch.from_numpy(cids)), \
                                         Variable(torch.from_numpy(pids)), \
                                         Variable(torch.from_numpy(masks))
-            if torch.cuda.is_available():
+            if use_gpu:
                 word, char, labels, masks = word.cuda(), char.cuda(), labels.cuda(), masks.cuda()
 
             data_time += time.time() - tt
@@ -147,9 +147,15 @@ def main():
             network_time += time.time() - tt
             tt = time.time()
 
-            train_err += loss.data[0] * num_tokens
-            train_corr += corr.data[0]
+            num_tokens = masks.sum().data
+            train_err += loss.data * num_tokens
+            train_corr += corr.data
             train_total += num_tokens
+            print(num_tokens)
+            print(train_err)
+            print(train_corr)
+            print(train_total)
+            raw_input()
             time_ave = (time.time() - start_time) / batch
             time_left = (num_batches - batch) * time_ave
 
@@ -179,7 +185,7 @@ def main():
                                         Variable(torch.from_numpy(cids)), \
                                         Variable(torch.from_numpy(pids)), \
                                         Variable(torch.from_numpy(masks))
-            if torch.cuda.is_available():
+            if use_gpu:
                 word, char, labels, masks = word.cuda(), char.cuda(), labels.cuda(), masks.cuda()
             _, corr, preds = network.loss(word, char, labels, masks, leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
             dev_corr += corr.data[0]
@@ -200,7 +206,7 @@ def main():
                                             Variable(torch.from_numpy(cids)), \
                                             Variable(torch.from_numpy(pids)), \
                                             Variable(torch.from_numpy(masks))
-                if torch.cuda.is_available():
+                if use_gpu:
                     word, char, labels, masks = word.cuda(), char.cuda(), labels.cuda(), masks.cuda()
                 _, corr, preds = network.loss(word, char, labels, masks,
                                               leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
