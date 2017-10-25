@@ -125,6 +125,7 @@ def main():
 
         data_time = 0
         network_time = 0
+        cal_time = 0
         display_time = 0
         for batch in range(1, num_batches + 1):
             tt = time.time()
@@ -155,6 +156,9 @@ def main():
             time_ave = (time.time() - start_time) / batch
             time_left = (num_batches - batch) * time_ave
 
+            cal_time += time.time() - tt
+            tt = time.time()
+
             # update log
             if batch % 100 == 0:
                 sys.stdout.write("\b" * num_back)
@@ -166,7 +170,7 @@ def main():
             display_time += time.time() - tt
         sys.stdout.write("\b" * num_back)
         print('\n')
-        print('%.2fs, %.2fs, %.2fs, %.2fs' % (data_time, network_time, display_time, time.time() - start_time))
+        print('%.2fs, %.2fs, %.2fs, %.2fs, %.2fs' % (data_time, network_time, cal_time, display_time, time.time() - start_time))
         print('train: %d loss: %.4f, acc: %.2f%%, time: %.2fs' % (
             epoch * num_batches, train_err[0] / train_total[0], train_corr[0] * 100 / train_total[0],
             time.time() - start_time))
