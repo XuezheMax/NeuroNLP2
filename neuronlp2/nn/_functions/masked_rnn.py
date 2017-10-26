@@ -15,8 +15,7 @@ def MaskedRecurrent(reverse=False):
                 hp1, cp1 = hidden_next
                 hidden = (hx + (hp1 - hx) * mask[i], cx + (cp1 - cx) * mask[i])
             else:
-                # hidden = hidden + (hidden_next - hidden) * mask[i]
-                hidden = torch.lerp(hidden, hidden_next, mask[i])
+                hidden = hidden + (hidden_next - hidden) * mask[i]
             # hack to handle LSTM
             output.append(hidden[0] if isinstance(hidden, tuple) else hidden)
 
