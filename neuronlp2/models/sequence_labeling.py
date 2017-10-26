@@ -21,8 +21,7 @@ class BiRecurrentConv(nn.Module):
         if rnn_mode == 'RNN':
             RNN = MaskedRNN
         elif rnn_mode == 'LSTM':
-            # RNN = MaskedLSTM
-            RNN = nn.LSTM
+            RNN = MaskedLSTM
         elif rnn_mode == 'GRU':
             RNN = MaskedGRU
         else:
@@ -57,7 +56,7 @@ class BiRecurrentConv(nn.Module):
         # apply dropout
         input = self.dropout_in(input)
         # output from rnn [batch, length, hidden_size]
-        output, _ = self.rnn(input) #self.rnn(input, mask)
+        output, _ = self.rnn(input, mask)
         # [batch, length, num_labels]
         return self.dense(self.dropout_rnn(output))
 
