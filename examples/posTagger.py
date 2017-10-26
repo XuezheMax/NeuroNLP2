@@ -139,10 +139,10 @@ def main():
             data_time += time.time() - tt
             tt = time.time()
 
-            optim.zero_grad()
-            loss, corr, _ = network.loss(word, char, labels, masks, leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
-            loss.backward()
-            optim.step()
+            # optim.zero_grad()
+            # loss, corr, _ = network.loss(word, char, labels, masks, leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
+            # loss.backward()
+            # optim.step()
 
             network_time += time.time() - tt
             tt = time.time()
