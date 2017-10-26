@@ -257,6 +257,7 @@ def read_data_to_variable(source_path, word_alphabet, char_alphabet, pos_alphabe
     for bucket_id in range(len(_buckets)):
         bucket_size = bucket_sizes[bucket_id]
         if bucket_size == 0:
+            data_variable.append((1, 1))
             continue
 
         bucket_length = _buckets[bucket_id]
