@@ -73,10 +73,11 @@ def main():
     logger.info("Reading Data")
     use_gpu = torch.cuda.is_available()
 
-    data_train = conllx_data.read_data_to_variable(train_path, word_alphabet, char_alphabet, pos_alphabet,
-                                                   type_alphabet, use_gpu=use_gpu)
-    # num_data = sum([len(bucket) for bucket in data_train])
-    num_data = sum(data_train[1])
+    # data_train = conllx_data.read_data_to_variable(train_path, word_alphabet, char_alphabet, pos_alphabet,
+    #                                                type_alphabet, use_gpu=use_gpu)
+    data_train = conllx_data.read_data(train_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
+    num_data = sum([len(bucket) for bucket in data_train])
+    # num_data = sum(data_train[1])
     num_labels = pos_alphabet.size()
 
     data_dev = conllx_data.read_data(dev_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
@@ -134,7 +135,15 @@ def main():
         display_time = 0
         for batch in range(1, num_batches + 1):
             tt = time.time()
-            word, char, labels, _, _, masks, lengths = conllx_data.get_batch_variable(data_train, batch_size)
+            wids, cids, pids, _, _, masks = conllx_data.get_batch(data_train, batch_size)
+            word, char, labels, masks = Variable(torch.from_numpy(wids)), \
+                                        Variable(torch.from_numpy(cids)), \
+                                        Variable(torch.from_numpy(pids)), \
+                                        Variable(torch.from_numpy(masks))
+            if use_gpu:
+                word, char, labels, masks = word.cuda(), char.cuda(), labels.cuda(), masks.cuda()
+            
+            # word, char, labels, _, _, masks, lengths = conllx_data.get_batch_variable(data_train, batch_size)
 
             data_time += time.time() - tt
             tt = time.time()
