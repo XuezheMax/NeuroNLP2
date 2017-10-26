@@ -94,7 +94,7 @@ def main():
             embedding = embedd_dict[ww] if ww in embedd_dict else np.random.uniform(-scale, scale,
                                                                                     [1, embedd_dim]).astype(np.float32)
             table[index, :] = embedding
-        return table
+        return torch.from_numpy(table)
 
     embedd_dict, embedd_dim, caseless = utils.load_word_embedding_dict('glove', "data/glove/glove.6B/glove.6B.100d.gz")
     word_table = construct_word_embedding_table()
