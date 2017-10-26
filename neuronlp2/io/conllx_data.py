@@ -327,3 +327,34 @@ def get_batch_variable(data, batch_size):
 
     return words[index], chars[index], pos[index], heads[index], types[index], \
            masks[index], lengths[id_np]
+
+
+def iterate_batch_variable(data, batch_size, shuffle=False):
+    data_variable, bucket_sizes = data
+
+    bucket_indices = np.arange(len(_buckets))
+    if shuffle:
+        np.random.shuffle((bucket_indices))
+
+    for bucket_id in bucket_indices:
+        bucket_size = bucket_sizes[bucket_id]
+        if bucket_size == 0:
+            continue
+
+        words, chars, pos, heads, types, masks, lengths = data_variable[bucket_id]
+
+        indices = None
+        if shuffle:
+            indices = torch.randperm(bucket_size).long()
+            ids_np = indices.numpy()
+            if words.is_cuda:
+                indices = indices.cuda()
+        for start_idx in range(0, bucket_size, batch_size):
+            if shuffle:
+                excerpt = indices[start_idx:start_idx + batch_size]
+                excerpt_np = ids_np[start_idx:start_idx + batch_size]
+            else:
+                excerpt = slice(start_idx, start_idx + batch_size)
+                excerpt_np = excerpt
+            yield words[excerpt], chars[excerpt], pos[excerpt], heads[excerpt], types[excerpt], \
+                  masks[excerpt], lengths[excerpt_np]

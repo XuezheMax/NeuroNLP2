@@ -73,15 +73,17 @@ def main():
     logger.info("Reading Data")
     use_gpu = torch.cuda.is_available()
 
-    # data_train = conllx_data.read_data_to_variable(train_path, word_alphabet, char_alphabet, pos_alphabet,
-    #                                                type_alphabet, use_gpu=use_gpu)
-    data_train = conllx_data.read_data(train_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
-    num_data = sum([len(bucket) for bucket in data_train])
-    # num_data = sum(data_train[1])
+    data_train = conllx_data.read_data_to_variable(train_path, word_alphabet, char_alphabet, pos_alphabet,
+                                                   type_alphabet, use_gpu=use_gpu)
+    # data_train = conllx_data.read_data(train_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
+    # num_data = sum([len(bucket) for bucket in data_train])
+    num_data = sum(data_train[1])
     num_labels = pos_alphabet.size()
 
-    data_dev = conllx_data.read_data(dev_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
-    data_test = conllx_data.read_data(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
+    data_dev = conllx_data.read_data_to_variable(dev_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
+                                                 use_gpu=use_gpu)
+    data_test = conllx_data.read_data_to_variable(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
+                                                  use_gpu=use_gpu)
 
     def construct_word_embedding_table():
         scale = np.sqrt(3.0 / embedd_dim)
@@ -105,7 +107,7 @@ def main():
                               char_dim, char_alphabet.size(),
                               num_filters, window,
                               mode, hidden_size, num_layers,
-                              num_labels, embedd_word=None, p_rnn=p)
+                              num_labels, embedd_word=word_table, p_rnn=p)
     if use_gpu:
         network.cuda()
 
@@ -123,62 +125,36 @@ def main():
         print('Epoch %d (%s, learning rate=%.4f, decay rate=%.4f): ' % (epoch, mode, lr, decay_rate))
         train_err = 0.
         train_corr = 0.
-        train_total = 1.
+        train_total = 0.
 
         start_time = time.time()
         num_back = 0
         network.train()
-
-        data_time = 0
-        network_time = 0
-        cal_time = 0
-        display_time = 0
         for batch in range(1, num_batches + 1):
-            tt = time.time()
-            wids, cids, pids, _, _, masks = conllx_data.get_batch(data_train, batch_size)
-            word, char, labels, masks = Variable(torch.from_numpy(wids)), \
-                                        Variable(torch.from_numpy(cids)), \
-                                        Variable(torch.from_numpy(pids)), \
-                                        Variable(torch.from_numpy(masks))
-            if use_gpu:
-                word, char, labels, masks = word.cuda(), char.cuda(), labels.cuda(), masks.cuda()
-            
-            # word, char, labels, _, _, masks, lengths = conllx_data.get_batch_variable(data_train, batch_size)
+            word, char, labels, _, _, masks, lengths = conllx_data.get_batch_variable(data_train, batch_size)
 
-            data_time += time.time() - tt
-            tt = time.time()
+            optim.zero_grad()
+            loss, corr, _ = network.loss(word, char, labels, masks, leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
+            loss.backward()
+            optim.step()
 
-            # optim.zero_grad()
-            # loss, corr, _ = network.loss(word, char, labels, masks, leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
-            # loss.backward()
-            # optim.step()
+            num_tokens = masks.data.sum()
+            train_err += loss.data[0] * num_tokens
+            train_corr += corr.data[0]
+            train_total += num_tokens
 
-            network_time += time.time() - tt
-            tt = time.time()
-
-            # num_tokens = masks.data.sum()
-            # train_err += loss.data[0] * num_tokens
-            # train_corr += corr.data[0]
-            # train_total += num_tokens
-            #
-            # time_ave = (time.time() - start_time) / batch
-            # time_left = (num_batches - batch) * time_ave
-
-            cal_time += time.time() - tt
-            tt = time.time()
+            time_ave = (time.time() - start_time) / batch
+            time_left = (num_batches - batch) * time_ave
 
             # update log
             if batch % 100 == 0:
                 sys.stdout.write("\b" * num_back)
                 log_info = 'train: %d/%d loss: %.4f, acc: %.2f%%, time left (estimated): %.2fs' % (
-                    batch, num_batches, train_err / train_total, train_corr * 100 / train_total, 0)
+                    batch, num_batches, train_err / train_total, train_corr * 100 / train_total, time_left)
                 sys.stdout.write(log_info)
                 num_back = len(log_info)
 
-            display_time += time.time() - tt
         sys.stdout.write("\b" * num_back)
-        print('\n')
-        print('%.2fs, %.2fs, %.2fs, %.2fs, %.2fs' % (data_time, network_time, cal_time, display_time, time.time() - start_time))
         print('train: %d loss: %.4f, acc: %.2f%%, time: %.2fs' % (
             epoch * num_batches, train_err / train_total, train_corr * 100 / train_total, time.time() - start_time))
 
@@ -186,16 +162,10 @@ def main():
         network.eval()
         dev_corr = 0.0
         dev_total = 0
-        for batch in conllx_data.iterate_batch(data_dev, batch_size):
-            wids, cids, pids, _, _, masks = batch
-            num_tokens = masks.sum()
-            word, char, labels, masks = Variable(torch.from_numpy(wids)), \
-                                        Variable(torch.from_numpy(cids)), \
-                                        Variable(torch.from_numpy(pids)), \
-                                        Variable(torch.from_numpy(masks))
-            if use_gpu:
-                word, char, labels, masks = word.cuda(), char.cuda(), labels.cuda(), masks.cuda()
+        for batch in conllx_data.iterate_batch_variable(data_dev, batch_size):
+            word, char, labels, _, _, masks, lengths = batch
             _, corr, preds = network.loss(word, char, labels, masks, leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
+            num_tokens = masks.data.sum()
             dev_corr += corr.data[0]
             dev_total += num_tokens
         print('dev corr: %d, total: %d, acc: %.2f%%' % (dev_corr, dev_total, dev_corr * 100 / dev_total))
@@ -207,17 +177,11 @@ def main():
             # evaluate on test data when better performance detected
             test_corr = 0.0
             test_total = 0
-            for batch in conllx_data.iterate_batch(data_test, batch_size):
-                wids, cids, pids, _, _, masks = batch
-                num_tokens = masks.sum()
-                word, char, labels, masks = Variable(torch.from_numpy(wids)), \
-                                            Variable(torch.from_numpy(cids)), \
-                                            Variable(torch.from_numpy(pids)), \
-                                            Variable(torch.from_numpy(masks))
-                if use_gpu:
-                    word, char, labels, masks = word.cuda(), char.cuda(), labels.cuda(), masks.cuda()
+            for batch in conllx_data.iterate_batch_variable(data_test, batch_size):
+                word, char, labels, _, _, masks, lengths = batch
                 _, corr, preds = network.loss(word, char, labels, masks,
                                               leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
+                num_tokens = masks.data.sum()
                 test_corr += corr.data[0]
                 test_total += num_tokens
             test_correct = test_corr
