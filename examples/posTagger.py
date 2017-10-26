@@ -71,8 +71,12 @@ def main():
     logger.info("POS Alphabet Size: %d" % pos_alphabet.size())
 
     logger.info("Reading Data")
-    data_train = conllx_data.read_data(train_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
-    num_data = sum([len(bucket) for bucket in data_train])
+    use_gpu = torch.cuda.is_available()
+
+    data_train = conllx_data.read_data_to_variable(train_path, word_alphabet, char_alphabet, pos_alphabet,
+                                                   type_alphabet, use_gpu=use_gpu)
+    # num_data = sum([len(bucket) for bucket in data_train])
+    num_data = sum(data_train[1])
     num_labels = pos_alphabet.size()
 
     data_dev = conllx_data.read_data(dev_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
@@ -96,10 +100,11 @@ def main():
     char_dim = 30
     window = 3
     num_layers = 1
-    network = BiRecurrentConv(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), num_filters, window,
-                              mode, hidden_size, num_layers, num_labels, embedd_word=None,
-                              p_rnn=p)
-    use_gpu = torch.cuda.is_available()
+    network = BiRecurrentConv(embedd_dim, word_alphabet.size(),
+                              char_dim, char_alphabet.size(),
+                              num_filters, window,
+                              mode, hidden_size, num_layers,
+                              num_labels, embedd_word=None, p_rnn=p)
     if use_gpu:
         network.cuda()
 
@@ -115,10 +120,6 @@ def main():
     test_total = 0
     for epoch in range(1, num_epochs + 1):
         print('Epoch %d (%s, learning rate=%.4f, decay rate=%.4f): ' % (epoch, mode, lr, decay_rate))
-        # train_err = torch.zeros(1).cuda() if use_gpu else torch.zeros(1)
-        # train_corr = torch.zeros(1).cuda() if use_gpu else torch.zeros(1)
-        # train_total = torch.zeros(1).cuda() if use_gpu else torch.zeros(1)
-
         train_err = 0.
         train_corr = 0.
         train_total = 1.
@@ -133,13 +134,7 @@ def main():
         display_time = 0
         for batch in range(1, num_batches + 1):
             tt = time.time()
-            wids, cids, pids, _, _, masks = conllx_data.get_batch(data_train, batch_size)
-            word, char, labels, masks = Variable(torch.from_numpy(wids)), \
-                                        Variable(torch.from_numpy(cids)), \
-                                        Variable(torch.from_numpy(pids)), \
-                                        Variable(torch.from_numpy(masks))
-            if use_gpu:
-                word, char, labels, masks = word.cuda(), char.cuda(), labels.cuda(), masks.cuda()
+            word, char, labels, _, _, masks, lengths = conllx_data.get_batch_variable(data_train, batch_size)
 
             data_time += time.time() - tt
             tt = time.time()
@@ -151,11 +146,6 @@ def main():
 
             network_time += time.time() - tt
             tt = time.time()
-
-            # num_tokens = masks.sum().data.cpu()
-            # train_err += loss.data.cpu() * num_tokens
-            # train_corr += corr.data
-            # train_total += num_tokens
 
             # num_tokens = masks.data.sum()
             # train_err += loss.data[0] * num_tokens
