@@ -8,7 +8,7 @@ def MaskedRecurrent(reverse=False):
         output = []
         steps = range(input.size(0) - 1, -1, -1) if reverse else range(input.size(0))
         for i in steps:
-            if mask[i].data.min() > 0.5:
+            if mask is None or mask[i].data.min() > 0.5:
                 hidden = cell(input[i], hidden)
             elif mask[i].data.max() > 0.5:
                 hidden_next = cell(input[i], hidden)
@@ -89,7 +89,8 @@ def AutogradMaskedRNN(num_layers=1, batch_first=False, dropout=0, train=True, bi
     def forward(input, cells, hidden, mask):
         if batch_first:
             input = input.transpose(0, 1)
-            mask = mask.transpose(0, 1)
+            if mask is not None:
+                mask = mask.transpose(0, 1)
 
         nexth, output = func(input, hidden, cells, mask)
 

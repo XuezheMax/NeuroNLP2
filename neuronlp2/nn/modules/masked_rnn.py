@@ -39,7 +39,7 @@ class MaskedRNNBase(nn.Module):
         for cell in self.all_cells:
             cell.reset_parameters()
 
-    def forward(self, input, mask, hx=None):
+    def forward(self, input, mask=None, hx=None):
         max_batch_size = input.size(0) if self.batch_first else input.size(1)
         lstm = False
         if hx is None:
@@ -58,7 +58,7 @@ class MaskedRNNBase(nn.Module):
                                  train=self.training,
                                  bidirectional=self.bidirectional,
                                  lstm=lstm)
-        output, hidden = func(input, self.all_cells, hx, mask.view(mask.size() + (1, )))
+        output, hidden = func(input, self.all_cells, hx, None if mask is None else mask.view(mask.size() + (1, )))
         return output, hidden
 
 

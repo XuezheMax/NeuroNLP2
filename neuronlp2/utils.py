@@ -4,7 +4,6 @@ import pickle
 import numpy as np
 from gensim.models.word2vec import Word2Vec
 import gzip
-import theano
 
 from .io import utils
 
@@ -38,7 +37,7 @@ def load_word_embedding_dict(embedding, embedding_path, normalize_digits=True):
                     embedd_dim = len(tokens) - 1
                 else:
                     assert (embedd_dim + 1 == len(tokens))
-                embedd = np.empty([1, embedd_dim], dtype=theano.config.floatX)
+                embedd = np.empty([1, embedd_dim], dtype=np.float32)
                 embedd[:] = tokens[1:]
                 word = utils.DIGIT_RE.sub(b"0", tokens[0]) if normalize_digits else tokens[0]
                 embedd_dict[word] = embedd
@@ -59,7 +58,7 @@ def load_word_embedding_dict(embedding, embedding_path, normalize_digits=True):
                     embedd_dim = len(tokens) - 1
                 else:
                     assert (embedd_dim + 1 == len(tokens))
-                embedd = np.empty([1, embedd_dim], dtype=theano.config.floatX)
+                embedd = np.empty([1, embedd_dim], dtype=np.float32)
                 embedd[:] = tokens[1:]
                 word = utils.DIGIT_RE.sub(b"0", tokens[0]) if normalize_digits else tokens[0]
                 embedd_dict[word] = embedd
@@ -79,7 +78,7 @@ def load_word_embedding_dict(embedding, embedding_path, normalize_digits=True):
                 tokens = line.split()
                 if embedd_dim < 0:
                     embedd_dim = len(tokens) - 1
-                embedd = np.empty([1, embedd_dim], dtype=theano.config.floatX)
+                embedd = np.empty([1, embedd_dim], dtype=np.float32)
                 start = len(tokens) - embedd_dim
                 word = ' '.join(tokens[0:start])
                 embedd[:] = tokens[start:]
@@ -91,7 +90,7 @@ def load_word_embedding_dict(embedding, embedding_path, normalize_digits=True):
         _, embedd_dim = embeddings.shape
         embedd_dict = dict()
         for i, word in enumerate(words):
-            embedd = np.empty([1, embedd_dim], dtype=theano.config.floatX)
+            embedd = np.empty([1, embedd_dim], dtype=np.float32)
             embedd[:] = embeddings[i, :]
             word = utils.DIGIT_RE.sub(b"0", word) if normalize_digits else word
             embedd_dict[word] = embedd
