@@ -6,6 +6,7 @@ import torch.nn as nn
 from torch.nn.parameter import Parameter
 from torch.autograd import Variable
 import torch.nn.functional as F
+from .._functions import VarRNNReLUCell, VarRNNTanhCell
 
 
 class VarRNNCellBase(nn.Module):
@@ -89,14 +90,14 @@ class VarRNNCell(VarRNNCellBase):
 
     def reset_noise(self, batch_size):
         if self.training and self.p:
-            noise = self.weight_hh.data.new(batch_size, self.hidden_size).bernoulli_(1 - self.p)
+            noise = self.weight_hh.data.new(batch_size, self.hidden_size).bernoulli_(1.0 - self.p) / (1.0 - self.p)
             self.noise = Variable(noise)
 
     def forward(self, input, hx):
         if self.nonlinearity == "tanh":
-            func = self._backend.RNNTanhCell
+            func = VarRNNTanhCell
         elif self.nonlinearity == "relu":
-            func = self._backend.RNNReLUCell
+            func = VarRNNReLUCell
         else:
             raise RuntimeError(
                 "Unknown nonlinearity: {}".format(self.nonlinearity))
@@ -105,4 +106,5 @@ class VarRNNCell(VarRNNCellBase):
             input, hx,
             self.weight_ih, self.weight_hh,
             self.bias_ih, self.bias_hh,
+            self.noise,
         )
