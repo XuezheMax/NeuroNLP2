@@ -4,6 +4,7 @@ import math
 import torch
 import torch.nn as nn
 from torch.nn.parameter import Parameter
+from torch.autograd import Variable
 import torch.nn.functional as F
 
 
@@ -16,6 +17,14 @@ class VarRNNCellBase(nn.Module):
             s += ', nonlinearity={nonlinearity}'
         s += ')'
         return s.format(name=self.__class__.__name__, **self.__dict__)
+
+    def reset_noise(self, batch_size):
+        """
+        Should be overriden by all subclasses.
+        Args:
+            batch_size: (int) batch size of input.
+        """
+        raise NotImplementedError
 
 
 class VarRNNCell(VarRNNCellBase):
@@ -52,7 +61,7 @@ class VarRNNCell(VarRNNCellBase):
 
     """
 
-    def __init__(self, input_size, hidden_size, bias=True, nonlinearity="tanh"):
+    def __init__(self, input_size, hidden_size, bias=True, nonlinearity="tanh", p=0.5):
         super(VarRNNCell, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -67,11 +76,21 @@ class VarRNNCell(VarRNNCellBase):
             self.register_parameter('bias_ih', None)
             self.register_parameter('bias_hh', None)
         self.reset_parameters()
+        if p < 0 or p > 1:
+            raise ValueError("dropout probability has to be between 0 and 1, "
+                             "but got {}".format(p))
+        self.p = p
+        self.noise = None
 
     def reset_parameters(self):
         stdv = 1.0 / math.sqrt(self.hidden_size)
         for weight in self.parameters():
             weight.data.uniform_(-stdv, stdv)
+
+    def reset_noise(self, batch_size):
+        if self.training and self.p:
+            noise = self.weight_hh.data.new(batch_size, self.hidden_size).bernoulli_(1 - self.p)
+            self.noise = Variable(noise)
 
     def forward(self, input, hx):
         if self.nonlinearity == "tanh":

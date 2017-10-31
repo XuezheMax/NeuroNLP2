@@ -6,6 +6,7 @@ import torch.nn as nn
 from torch.nn.parameter import Parameter
 import torch.nn.functional as F
 from .._functions import AutogradMaskedRNN
+from .variational_rnn import VarRNNCellBase
 
 
 class MaskedRNNBase(nn.Module):
@@ -40,13 +41,13 @@ class MaskedRNNBase(nn.Module):
             cell.reset_parameters()
 
     def forward(self, input, mask=None, hx=None):
-        max_batch_size = input.size(0) if self.batch_first else input.size(1)
+        batch_size = input.size(0) if self.batch_first else input.size(1)
         lstm = False
         if hx is None:
             num_directions = 2 if self.bidirectional else 1
             hx = torch.autograd.Variable(input.data.new(self.num_layers *
                                                         num_directions,
-                                                        max_batch_size,
+                                                        batch_size,
                                                         self.hidden_size).zero_())
             if self.Cell is nn.LSTMCell:
                 lstm = True
@@ -58,6 +59,10 @@ class MaskedRNNBase(nn.Module):
                                  train=self.training,
                                  bidirectional=self.bidirectional,
                                  lstm=lstm)
+        for cell in self.all_cells:
+            if isinstance(cell, VarRNNCellBase):
+                cell.reset_noise(batch_size)
+
         output, hidden = func(input, self.all_cells, hx, None if mask is None else mask.view(mask.size() + (1, )))
         return output, hidden
 

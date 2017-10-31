@@ -2,6 +2,7 @@ __author__ = 'max'
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from ..nn import MaskedRNN, MaskedLSTM, MaskedGRU, ChainCRF
 from ..nn import Embedding
 
@@ -49,7 +50,7 @@ class BiRecurrentConv(nn.Module):
         # then put into maxpooling [batch * length, char_filters]
         char, _ = self.conv1d(char).max(dim=2)
         # reshape to [batch, length, char_filters]
-        char = char.view(char_size[0], char_size[1], -1)
+        char = F.tanh(char.view(char_size[0], char_size[1], -1))
 
         # concatenate word and char [batch, length, word_dim+char_filter]
         input = torch.cat([word, char], dim=2)
