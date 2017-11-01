@@ -34,8 +34,12 @@ class BiRecurrentConv(nn.Module):
         else:
             raise ValueError('Unknown RNN mode: %s' % rnn_mode)
 
-        self.rnn = RNN(word_dim + num_filters, hidden_size, num_layers=num_layers,
-                       batch_first=True, bidirectional=True, dropout=p_rnn, p=p_rnn)
+        if rnn_mode.startswith('Var'):
+            self.rnn = RNN(word_dim + num_filters, hidden_size, num_layers=num_layers,
+                           batch_first=True, bidirectional=True, dropout=p_rnn, p=p_rnn)
+        else:
+            self.rnn = RNN(word_dim + num_filters, hidden_size, num_layers=num_layers,
+                           batch_first=True, bidirectional=True, dropout=p_rnn)
 
         self.dense = nn.Linear(hidden_size * 2, num_labels)
 
