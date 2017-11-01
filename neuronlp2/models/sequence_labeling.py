@@ -3,7 +3,7 @@ __author__ = 'max'
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from ..nn import MaskedRNN, MaskedLSTM, MaskedGRU, ChainCRF, VarMaskedLSTM
+from ..nn import MaskedRNN, MaskedLSTM, MaskedGRU, ChainCRF, VarMaskedLSTM, VarMaskedRNN, VarMaskedGRU
 from ..nn import Embedding
 
 
@@ -21,11 +21,16 @@ class BiRecurrentConv(nn.Module):
 
         if rnn_mode == 'RNN':
             RNN = MaskedRNN
+        elif rnn_mode == 'VarRNN':
+            RNN = VarMaskedRNN
         elif rnn_mode == 'LSTM':
-            # RNN = MaskedLSTM
+            RNN = MaskedLSTM
+        elif rnn_mode == 'VarLSTM':
             RNN = VarMaskedLSTM
         elif rnn_mode == 'GRU':
             RNN = MaskedGRU
+        elif rnn_mode == 'VarGRU':
+            RNN = VarMaskedGRU
         else:
             raise ValueError('Unknown RNN mode: %s' % rnn_mode)
 

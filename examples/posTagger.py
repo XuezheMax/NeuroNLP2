@@ -24,8 +24,8 @@ from neuronlp2 import utils
 
 def main():
     parser = argparse.ArgumentParser(description='Tuning with bi-directional RNN-CNN')
-    parser.add_argument('--mode', choices=['RNN', 'LSTM', 'GRU'], help='architecture of rnn',
-                        required=True)
+    parser.add_argument('--mode', choices=['RNN', 'LSTM', 'GRU', 'VarRNN', 'VarLSTM', 'VarGRU'],
+                        help='architecture of rnn', required=True)
     parser.add_argument('--num_epochs', type=int, default=1000, help='Number of training epochs')
     parser.add_argument('--batch_size', type=int, default=16, help='Number of sentences in each batch')
     parser.add_argument('--hidden_size', type=int, default=128, help='Number of hidden units in RNN')

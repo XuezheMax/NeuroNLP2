@@ -233,6 +233,57 @@ class MaskedGRU(MaskedRNNBase):
         super(MaskedGRU, self).__init__(nn.GRUCell, *args, **kwargs)
 
 
+class VarMaskedRNN(MaskedRNNBase):
+    r"""Applies a multi-layer Elman RNN with costomized non-linearity to an
+    input sequence.
+
+
+    For each element in the input sequence, each layer computes the following
+    function:
+
+    .. math::
+
+        h_t = \tanh(w_{ih} * x_t + b_{ih}  +  w_{hh} * h_{(t-1)} + b_{hh})
+
+    where :math:`h_t` is the hidden state at time `t`, and :math:`x_t` is
+    the hidden state of the previous layer at time `t` or :math:`input_t`
+    for the first layer. If nonlinearity='relu', then `ReLU` is used instead
+    of `tanh`.
+
+    Args:
+        input_size: The number of expected features in the input x
+        hidden_size: The number of features in the hidden state h
+        num_layers: Number of recurrent layers.
+        nonlinearity: The non-linearity to use ['tanh'|'relu']. Default: 'tanh'
+        bias: If False, then the layer does not use bias weights b_ih and b_hh.
+            Default: True
+        batch_first: If True, then the input and output tensors are provided
+            as (batch, seq, feature)
+        dropout: If non-zero, introduces a dropout layer on the outputs of each
+            RNN layer except the last layer
+        bidirectional: If True, becomes a bidirectional RNN. Default: False
+        p: (float, optional): the variational (recurrent) drop probability. Default: 0.5
+
+    Inputs: input, mask, h_0
+        - **input** (seq_len, batch, input_size): tensor containing the features
+          of the input sequence.
+          **mask** (seq_len, batch): 0-1 tensor containing the mask of the input sequence.
+        - **h_0** (num_layers * num_directions, batch, hidden_size): tensor
+          containing the initial hidden state for each element in the batch.
+
+    Outputs: output, h_n
+        - **output** (seq_len, batch, hidden_size * num_directions): tensor
+          containing the output features (h_k) from the last layer of the RNN,
+          for each k.  If a :class:`torch.nn.utils.rnn.PackedSequence` has
+          been given as the input, the output will also be a packed sequence.
+        - **h_n** (num_layers * num_directions, batch, hidden_size): tensor
+          containing the hidden state for k=seq_len.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(VarMaskedRNN, self).__init__(VarRNNCell, *args, **kwargs)
+
+
 class VarMaskedLSTM(MaskedRNNBase):
     r"""Applies a multi-layer long short-term memory (LSTM) RNN to an input
     sequence.
@@ -294,3 +345,58 @@ class VarMaskedLSTM(MaskedRNNBase):
 
     def __init__(self, *args, **kwargs):
         super(VarMaskedLSTM, self).__init__(VarLSTMCell, *args, **kwargs)
+
+
+class VarMaskedGRU(MaskedRNNBase):
+    r"""Applies a multi-layer gated recurrent unit (GRU) RNN to an input sequence.
+
+
+    For each element in the input sequence, each layer computes the following
+    function:
+
+    .. math::
+
+            \begin{array}{ll}
+            r_t = \mathrm{sigmoid}(W_{ir} x_t + b_{ir} + W_{hr} h_{(t-1)} + b_{hr}) \\
+            z_t = \mathrm{sigmoid}(W_{iz} x_t + b_{iz} + W_{hz} h_{(t-1)} + b_{hz}) \\
+            n_t = \tanh(W_{in} x_t + b_{in} + r_t * (W_{hn} h_{(t-1)}+ b_{hn})) \\
+            h_t = (1 - z_t) * n_t + z_t * h_{(t-1)} \\
+            \end{array}
+
+    where :math:`h_t` is the hidden state at time `t`, :math:`x_t` is the hidden
+    state of the previous layer at time `t` or :math:`input_t` for the first
+    layer, and :math:`r_t`, :math:`z_t`, :math:`n_t` are the reset, input,
+    and new gates, respectively.
+
+    Args:
+        input_size: The number of expected features in the input x
+        hidden_size: The number of features in the hidden state h
+        num_layers: Number of recurrent layers.
+        nonlinearity: The non-linearity to use ['tanh'|'relu']. Default: 'tanh'
+        bias: If False, then the layer does not use bias weights b_ih and b_hh.
+            Default: True
+        batch_first: If True, then the input and output tensors are provided
+            as (batch, seq, feature)
+        dropout: If non-zero, introduces a dropout layer on the outputs of each
+            RNN layer except the last layer
+        bidirectional: If True, becomes a bidirectional RNN. Default: False
+        p: (float, optional): the variational (recurrent) drop probability. Default: 0.5
+
+    Inputs: input, mask, h_0
+        - **input** (seq_len, batch, input_size): tensor containing the features
+          of the input sequence.
+          **mask** (seq_len, batch): 0-1 tensor containing the mask of the input sequence.
+        - **h_0** (num_layers * num_directions, batch, hidden_size): tensor
+          containing the initial hidden state for each element in the batch.
+
+    Outputs: output, h_n
+        - **output** (seq_len, batch, hidden_size * num_directions): tensor
+          containing the output features (h_k) from the last layer of the RNN,
+          for each k.  If a :class:`torch.nn.utils.rnn.PackedSequence` has
+          been given as the input, the output will also be a packed sequence.
+        - **h_n** (num_layers * num_directions, batch, hidden_size): tensor
+          containing the hidden state for k=seq_len.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(VarMaskedGRU, self).__init__(VarGRUCell, *args, **kwargs)
