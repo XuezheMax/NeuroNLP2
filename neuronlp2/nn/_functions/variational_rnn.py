@@ -45,13 +45,13 @@ def LSTMCell(input, hidden, w_ih, w_hh, b_ih=None, b_hh=None, noise=None):
 
 
 def GRUCell(input, hidden, w_ih, w_hh, b_ih=None, b_hh=None, noise=None):
-    # if input.is_cuda:
-    #     gi = F.linear(input, w_ih)
-    #     gh = F.linear(hidden, w_hh)
-    #     state = fusedBackend.GRUFused.apply
-    #     return state(gi, gh, hidden) if b_ih is None else state(gi, gh, hidden, b_ih, b_hh)
-
     hx = hidden if noise is None else hidden * noise
+    if input.is_cuda:
+        gi = F.linear(input, w_ih)
+        gh = F.linear(hx, w_hh)
+        state = fusedBackend.GRUFused()
+        return state(gi, gh, hidden) if b_ih is None else state(gi, gh, hidden, b_ih, b_hh)
+
     gi = F.linear(input, w_ih, b_ih)
     gh = F.linear(hx, w_hh, b_hh)
     i_r, i_i, i_n = gi.chunk(3, 1)
