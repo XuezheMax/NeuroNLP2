@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from torch.nn.parameter import Parameter
 from torch.autograd import Variable
-import neuronlp2.nn._functions as rnnF
+from .._functions import RNNReLUCell, RNNTanhCell, LSTMCell, GRUCell
 
 
 class VarRNNCellBase(nn.Module):
@@ -94,9 +94,9 @@ class VarRNNCell(VarRNNCellBase):
 
     def forward(self, input, hx):
         if self.nonlinearity == "tanh":
-            func = rnnF.VarRNNTanhCell
+            func = RNNTanhCell
         elif self.nonlinearity == "relu":
-            func = rnnF.VarRNNReLUCell
+            func = RNNReLUCell
         else:
             raise RuntimeError(
                 "Unknown nonlinearity: {}".format(self.nonlinearity))
@@ -153,7 +153,7 @@ class VarLSTMCell(VarRNNCellBase):
         bias_hh: the learnable hidden-hidden bias, of shape `(4*hidden_size)`
     """
 
-    def __init__(self, input_size, hidden_size, bias=True):
+    def __init__(self, input_size, hidden_size, bias=True, p=0.5):
         super(VarLSTMCell, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -167,6 +167,11 @@ class VarLSTMCell(VarRNNCellBase):
             self.register_parameter('bias_ih', None)
             self.register_parameter('bias_hh', None)
         self.reset_parameters()
+        if p < 0 or p > 1:
+            raise ValueError("dropout probability has to be between 0 and 1, "
+                             "but got {}".format(p))
+        self.p = p
+        self.noise = None
 
     def reset_parameters(self):
         stdv = 1.0 / math.sqrt(self.hidden_size)
@@ -179,7 +184,7 @@ class VarLSTMCell(VarRNNCellBase):
             self.noise = Variable(noise)
 
     def forward(self, input, hx):
-        return rnnF.VarLSTMCell(
+        return LSTMCell(
             input, hx,
             self.weight_ih, self.weight_hh,
             self.bias_ih, self.bias_hh,
@@ -224,7 +229,7 @@ class VarGRUCell(VarRNNCellBase):
         bias_hh: the learnable hidden-hidden bias, of shape `(3*hidden_size)`
     """
 
-    def __init__(self, input_size, hidden_size, bias=True):
+    def __init__(self, input_size, hidden_size, bias=True, p=0.5):
         super(VarGRUCell, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -238,6 +243,11 @@ class VarGRUCell(VarRNNCellBase):
             self.register_parameter('bias_ih', None)
             self.register_parameter('bias_hh', None)
         self.reset_parameters()
+        if p < 0 or p > 1:
+            raise ValueError("dropout probability has to be between 0 and 1, "
+                             "but got {}".format(p))
+        self.p = p
+        self.noise = None
 
     def reset_parameters(self):
         stdv = 1.0 / math.sqrt(self.hidden_size)
@@ -250,7 +260,7 @@ class VarGRUCell(VarRNNCellBase):
             self.noise = Variable(noise)
 
     def forward(self, input, hx):
-        return rnnF.VarGRUCell(
+        return GRUCell(
             input, hx,
             self.weight_ih, self.weight_hh,
             self.bias_ih, self.bias_hh,

@@ -3,7 +3,7 @@ __author__ = 'max'
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from ..nn import MaskedRNN, MaskedLSTM, MaskedGRU, ChainCRF
+from ..nn import MaskedRNN, MaskedLSTM, MaskedGRU, ChainCRF, VarMaskedLSTM
 from ..nn import Embedding
 
 
@@ -22,14 +22,15 @@ class BiRecurrentConv(nn.Module):
         if rnn_mode == 'RNN':
             RNN = MaskedRNN
         elif rnn_mode == 'LSTM':
-            RNN = MaskedLSTM
+            # RNN = MaskedLSTM
+            RNN = VarMaskedLSTM
         elif rnn_mode == 'GRU':
             RNN = MaskedGRU
         else:
             raise ValueError('Unknown RNN mode: %s' % rnn_mode)
 
         self.rnn = RNN(word_dim + num_filters, hidden_size, num_layers=num_layers,
-                       batch_first=True, bidirectional=True, dropout=p_rnn)
+                       batch_first=True, bidirectional=True, dropout=p_rnn, p=p_rnn)
 
         self.dense = nn.Linear(hidden_size * 2, num_labels)
 

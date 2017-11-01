@@ -6,7 +6,7 @@ import torch.nn as nn
 from torch.nn.parameter import Parameter
 import torch.nn.functional as F
 from .._functions import AutogradMaskedRNN
-from .variational_rnn import VarRNNCellBase
+from .variational_rnn import VarRNNCellBase, VarLSTMCell, VarGRUCell, VarRNNCell
 
 
 class MaskedRNNBase(nn.Module):
@@ -49,7 +49,7 @@ class MaskedRNNBase(nn.Module):
                                                         num_directions,
                                                         batch_size,
                                                         self.hidden_size).zero_())
-            if self.Cell is nn.LSTMCell:
+            if self.Cell is nn.LSTMCell or self.Cell is VarLSTMCell:
                 lstm = True
                 hx = (hx, hx)
 
@@ -231,3 +231,66 @@ class MaskedGRU(MaskedRNNBase):
 
     def __init__(self, *args, **kwargs):
         super(MaskedGRU, self).__init__(nn.GRUCell, *args, **kwargs)
+
+
+class VarMaskedLSTM(MaskedRNNBase):
+    r"""Applies a multi-layer long short-term memory (LSTM) RNN to an input
+    sequence.
+
+
+    For each element in the input sequence, each layer computes the following
+    function:
+
+    .. math::
+
+            \begin{array}{ll}
+            i_t = \mathrm{sigmoid}(W_{ii} x_t + b_{ii} + W_{hi} h_{(t-1)} + b_{hi}) \\
+            f_t = \mathrm{sigmoid}(W_{if} x_t + b_{if} + W_{hf} h_{(t-1)} + b_{hf}) \\
+            g_t = \tanh(W_{ig} x_t + b_{ig} + W_{hc} h_{(t-1)} + b_{hg}) \\
+            o_t = \mathrm{sigmoid}(W_{io} x_t + b_{io} + W_{ho} h_{(t-1)} + b_{ho}) \\
+            c_t = f_t * c_{(t-1)} + i_t * g_t \\
+            h_t = o_t * \tanh(c_t)
+            \end{array}
+
+    where :math:`h_t` is the hidden state at time `t`, :math:`c_t` is the cell
+    state at time `t`, :math:`x_t` is the hidden state of the previous layer at
+    time `t` or :math:`input_t` for the first layer, and :math:`i_t`,
+    :math:`f_t`, :math:`g_t`, :math:`o_t` are the input, forget, cell,
+    and out gates, respectively.
+
+    Args:
+        input_size: The number of expected features in the input x
+        hidden_size: The number of features in the hidden state h
+        num_layers: Number of recurrent layers.
+        bias: If False, then the layer does not use bias weights b_ih and b_hh.
+            Default: True
+        batch_first: If True, then the input and output tensors are provided
+            as (batch, seq, feature)
+        dropout: If non-zero, introduces a dropout layer on the outputs of each
+            RNN layer except the last layer
+        bidirectional: If True, becomes a bidirectional RNN. Default: False
+        p: (float, optional): the variational (recurrent) drop probability. Default: 0.5
+
+    Inputs: input, mask, (h_0, c_0)
+        - **input** (seq_len, batch, input_size): tensor containing the features
+          of the input sequence.
+          **mask** (seq_len, batch): 0-1 tensor containing the mask of the input sequence.
+        - **h_0** (num_layers \* num_directions, batch, hidden_size): tensor
+          containing the initial hidden state for each element in the batch.
+        - **c_0** (num_layers \* num_directions, batch, hidden_size): tensor
+          containing the initial cell state for each element in the batch.
+
+
+    Outputs: output, (h_n, c_n)
+        - **output** (seq_len, batch, hidden_size * num_directions): tensor
+          containing the output features `(h_t)` from the last layer of the RNN,
+          for each t. If a :class:`torch.nn.utils.rnn.PackedSequence` has been
+          given as the input, the output will also be a packed sequence.
+        - **h_n** (num_layers * num_directions, batch, hidden_size): tensor
+          containing the hidden state for t=seq_len
+        - **c_n** (num_layers * num_directions, batch, hidden_size): tensor
+          containing the cell state for t=seq_len
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(VarMaskedLSTM, self).__init__(VarLSTMCell, *args, **kwargs)

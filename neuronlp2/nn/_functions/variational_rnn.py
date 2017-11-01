@@ -5,21 +5,21 @@ from torch.nn._functions.thnn import rnnFusedPointwise as fusedBackend
 from torch.nn import functional as F
 
 
-def VarRNNReLUCell(input, hidden, w_ih, w_hh, b_ih=None, b_hh=None, noise=None):
+def RNNReLUCell(input, hidden, w_ih, w_hh, b_ih=None, b_hh=None, noise=None):
     if noise is not None:
         hidden = hidden * noise
     hy = F.relu(F.linear(input, w_ih, b_ih) + F.linear(hidden, w_hh, b_hh))
     return hy
 
 
-def VarRNNTanhCell(input, hidden, w_ih, w_hh, b_ih=None, b_hh=None, noise=None):
+def RNNTanhCell(input, hidden, w_ih, w_hh, b_ih=None, b_hh=None, noise=None):
     if noise is not None:
         hidden = hidden * noise
     hy = F.tanh(F.linear(input, w_ih, b_ih) + F.linear(hidden, w_hh, b_hh))
     return hy
 
 
-def VarLSTMCell(input, hidden, w_ih, w_hh, b_ih=None, b_hh=None, noise=None):
+def LSTMCell(input, hidden, w_ih, w_hh, b_ih=None, b_hh=None, noise=None):
     # if input.is_cuda:
     #     igates = F.linear(input, w_ih)
     #     hgates = F.linear(hidden[0], w_hh)
@@ -44,7 +44,7 @@ def VarLSTMCell(input, hidden, w_ih, w_hh, b_ih=None, b_hh=None, noise=None):
     return hy, cy
 
 
-def VarGRUCell(input, hidden, w_ih, w_hh, b_ih=None, b_hh=None, noise=None):
+def GRUCell(input, hidden, w_ih, w_hh, b_ih=None, b_hh=None, noise=None):
     # if input.is_cuda:
     #     gi = F.linear(input, w_ih)
     #     gh = F.linear(hidden, w_hh)
