@@ -91,6 +91,8 @@ class VarRNNCell(VarRNNCellBase):
         if self.training and self.p:
             noise = self.weight_hh.data.new(batch_size, self.hidden_size).bernoulli_(1.0 - self.p) / (1.0 - self.p)
             self.noise = Variable(noise)
+        else:
+            self.noise = None
 
     def forward(self, input, hx):
         if self.nonlinearity == "tanh":
@@ -182,6 +184,8 @@ class VarLSTMCell(VarRNNCellBase):
         if self.training and self.p:
             noise = self.weight_hh.data.new(batch_size, self.hidden_size).bernoulli_(1.0 - self.p) / (1.0 - self.p)
             self.noise = Variable(noise)
+        else:
+            self.noise = None
 
     def forward(self, input, hx):
         return LSTMCell(
@@ -258,6 +262,8 @@ class VarGRUCell(VarRNNCellBase):
         if self.training and self.p:
             noise = self.weight_hh.data.new(batch_size, self.hidden_size).bernoulli_(1.0 - self.p) / (1.0 - self.p)
             self.noise = Variable(noise)
+        else:
+            self.noise = None
 
     def forward(self, input, hx):
         return GRUCell(
