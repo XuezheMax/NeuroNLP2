@@ -321,7 +321,7 @@ def get_batch_variable(data, batch_size):
 
     words, chars, pos, heads, types, masks, lengths = data_variable[bucket_id]
     bucket_size = bucket_sizes[bucket_id]
-    index = (torch.rand(batch_size) * bucket_size).floor().long()
+    index = torch.randperm(bucket_size).long()[:min(bucket_size, batch_size)]
     id_np = index.numpy()
     if words.is_cuda:
         index = index.cuda()
