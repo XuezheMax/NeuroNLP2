@@ -23,7 +23,7 @@ def LSTMCell(input, hidden, w_ih, w_hh, b_ih=None, b_hh=None, noise=None):
     if input.is_cuda:
         igates = F.linear(input, w_ih)
         hgates = F.linear(hidden[0], w_hh) if noise is None else F.linear(hidden[0] * noise, w_hh)
-        state = fusedBackend.LSTMFused.apply
+        state = fusedBackend.LSTMFused()
         return state(igates, hgates, hidden[1]) if b_ih is None else state(igates, hgates, hidden[1], b_ih, b_hh)
 
     hx, cx = hidden
