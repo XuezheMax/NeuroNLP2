@@ -18,14 +18,13 @@ import torch
 from torch.optim import Adam, SGD
 from torch.autograd import Variable
 from neuronlp2.io import get_logger, conllx_data
-from neuronlp2.models import BiRecurrentConv
+from neuronlp2.models import BiRecurrentConv, BiVarRecurrentConv
 from neuronlp2 import utils
 
 
 def main():
     parser = argparse.ArgumentParser(description='Tuning with bi-directional RNN-CNN')
-    parser.add_argument('--mode', choices=['RNN', 'LSTM', 'GRU', 'VarRNN', 'VarLSTM', 'VarGRU'],
-                        help='architecture of rnn', required=True)
+    parser.add_argument('--mode', choices=['RNN', 'LSTM', 'GRU'], help='architecture of rnn', required=True)
     parser.add_argument('--num_epochs', type=int, default=1000, help='Number of training epochs')
     parser.add_argument('--batch_size', type=int, default=16, help='Number of sentences in each batch')
     parser.add_argument('--hidden_size', type=int, default=128, help='Number of hidden units in RNN')
@@ -33,6 +32,7 @@ def main():
     parser.add_argument('--learning_rate', type=float, default=0.1, help='Learning rate')
     parser.add_argument('--decay_rate', type=float, default=0.1, help='Decay rate of learning rate')
     parser.add_argument('--gamma', type=float, default=0.0, help='weight for regularization')
+    parser.add_argument('--dropout', choices=['std', 'variational'], help='type of dropout', required=True)
     parser.add_argument('--p', type=float, default=0.5, help='dropout rate')
     parser.add_argument('--schedule', nargs='+', type=int, help='schedule for learning rate decay')
     parser.add_argument('--output_prediction', action='store_true', help='Output predictions to temp files')
@@ -102,12 +102,19 @@ def main():
 
     char_dim = 30
     window = 3
-    num_layers = 1
-    network = BiRecurrentConv(embedd_dim, word_alphabet.size(),
-                              char_dim, char_alphabet.size(),
-                              num_filters, window,
-                              mode, hidden_size, num_layers,
-                              num_labels, embedd_word=word_table, p_rnn=p)
+    num_layers = 2
+    if args.dropout == 'std':
+        network = BiRecurrentConv(embedd_dim, word_alphabet.size(),
+                                  char_dim, char_alphabet.size(),
+                                  num_filters, window,
+                                  mode, hidden_size, num_layers,
+                                  num_labels, embedd_word=word_table, p_rnn=p)
+    else:
+        network = BiVarRecurrentConv(embedd_dim, word_alphabet.size(),
+                                     char_dim, char_alphabet.size(),
+                                     num_filters, window,
+                                     mode, hidden_size, num_layers,
+                                     num_labels, embedd_word=word_table, p_rnn=p)
     if use_gpu:
         network.cuda()
 

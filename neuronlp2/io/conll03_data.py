@@ -7,6 +7,8 @@ from .reader import CoNLL03Reader
 from .alphabet import Alphabet
 from .logger import get_logger
 import utils
+import torch
+from torch.autograd import Variable
 
 # Special vocabulary symbols - we always put them at the start.
 PAD = b"_PAD"
@@ -122,7 +124,7 @@ def read_data(source_path, word_alphabet, char_alphabet, pos_alphabet, chunk_alp
         sent = inst.sentence
         for bucket_id, bucket_size in enumerate(_buckets):
             if inst_size < bucket_size:
-                data[bucket_id].append([sent.word_ids, sent.char_id_seqs, inst.pos_ids, inst.heads, inst.type_ids])
+                data[bucket_id].append([sent.word_ids, sent.char_id_seqs, inst.pos_ids, inst.chunk_ids, inst.ner_ids])
                 break
 
         inst = reader.getNext(normalize_digits)
@@ -234,3 +236,114 @@ def iterate_batch(data, batch_size, shuffle=False):
                 excerpt = slice(start_idx, start_idx + batch_size)
             yield wid_inputs[excerpt], cid_inputs[excerpt], pid_inputs[excerpt], chid_inputs[excerpt], \
                   nid_inputs[excerpt], masks[excerpt]
+
+
+def read_data_to_variable(source_path, word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet,
+                          max_size=None, normalize_digits=True, use_gpu=False):
+    data = read_data(source_path, word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet,
+                     max_size=max_size, normalize_digits=normalize_digits)
+    bucket_sizes = [len(data[b]) for b in range(len(_buckets))]
+
+    data_variable = []
+
+    for bucket_id in range(len(_buckets)):
+        bucket_size = bucket_sizes[bucket_id]
+        if bucket_size == 0:
+            data_variable.append((1, 1))
+            continue
+
+        bucket_length = _buckets[bucket_id]
+        wid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int64)
+        cid_inputs = np.empty([bucket_size, bucket_length, utils.MAX_CHAR_LENGTH], dtype=np.int64)
+        pid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int64)
+        chid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int64)
+        nid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int64)
+
+        masks = np.zeros([bucket_size, bucket_length], dtype=np.float32)
+
+        lengths = np.empty(bucket_size, dtype=np.int64)
+
+        for i, inst in enumerate(data[bucket_id]):
+            wids, cid_seqs, pids, chids, nids = inst
+            inst_size = len(wids)
+            lengths[i] = inst_size
+            # word ids
+            wid_inputs[i, :inst_size] = wids
+            wid_inputs[i, inst_size:] = PAD_ID_WORD
+            for c, cids in enumerate(cid_seqs):
+                cid_inputs[i, c, :len(cids)] = cids
+                cid_inputs[i, c, len(cids):] = PAD_ID_CHAR
+            cid_inputs[i, inst_size:, :] = PAD_ID_CHAR
+            # pos ids
+            pid_inputs[i, :inst_size] = pids
+            pid_inputs[i, inst_size:] = PAD_ID_TAG
+            # chunk ids
+            chid_inputs[i, :inst_size] = chids
+            chid_inputs[i, inst_size:] = PAD_ID_TAG
+            # ner ids
+            nid_inputs[i, :inst_size] = nids
+            nid_inputs[i, inst_size:] = PAD_ID_TAG
+            # masks
+            masks[i, :inst_size] = 1.0
+
+        words = Variable(torch.from_numpy(wid_inputs)).cuda() if use_gpu else Variable(torch.from_numpy(wid_inputs))
+        chars = Variable(torch.from_numpy(cid_inputs)).cuda() if use_gpu else Variable(torch.from_numpy(cid_inputs))
+        pos = Variable(torch.from_numpy(pid_inputs)).cuda() if use_gpu else Variable(torch.from_numpy(pid_inputs))
+        chunks = Variable(torch.from_numpy(chid_inputs)).cuda() if use_gpu else Variable(torch.from_numpy(chid_inputs))
+        ners = Variable(torch.from_numpy(nid_inputs)).cuda() if use_gpu else Variable(torch.from_numpy(nid_inputs))
+        masks = Variable(torch.from_numpy(masks)).cuda() if use_gpu else Variable(torch.from_numpy(masks))
+        lengths = torch.from_numpy(lengths).cuda() if use_gpu else torch.from_numpy(lengths)
+
+        data_variable.append((words, chars, pos, chunks, ners, masks, lengths))
+
+    return data_variable, bucket_sizes
+
+
+def get_batch_variable(data, batch_size):
+    data_variable, bucket_sizes = data
+    total_size = float(sum(bucket_sizes))
+    # A bucket scale is a list of increasing numbers from 0 to 1 that we'll use
+    # to select a bucket. Length of [scale[i], scale[i+1]] is proportional to
+    # the size if i-th training bucket, as used later.
+    buckets_scale = [sum(bucket_sizes[:i + 1]) / total_size for i in range(len(bucket_sizes))]
+
+    # Choose a bucket according to data distribution. We pick a random number
+    # in [0, 1] and use the corresponding interval in train_buckets_scale.
+    random_number = np.random.random_sample()
+    bucket_id = min([i for i in range(len(buckets_scale)) if buckets_scale[i] > random_number])
+
+    words, chars, pos, chunks, ners, masks, lengths = data_variable[bucket_id]
+    bucket_size = bucket_sizes[bucket_id]
+    index = torch.randperm(bucket_size).long()[:min(bucket_size, batch_size)]
+    if words.is_cuda:
+        index = index.cuda()
+
+    return words[index], chars[index], pos[index], chunks[index], ners[index], masks[index], lengths[index]
+
+
+def iterate_batch_variable(data, batch_size, shuffle=False):
+    data_variable, bucket_sizes = data
+
+    bucket_indices = np.arange(len(_buckets))
+    if shuffle:
+        np.random.shuffle((bucket_indices))
+
+    for bucket_id in bucket_indices:
+        bucket_size = bucket_sizes[bucket_id]
+        if bucket_size == 0:
+            continue
+
+        words, chars, pos, chunks, ners, masks, lengths = data_variable[bucket_id]
+
+        indices = None
+        if shuffle:
+            indices = torch.randperm(bucket_size).long()
+            if words.is_cuda:
+                indices = indices.cuda()
+        for start_idx in range(0, bucket_size, batch_size):
+            if shuffle:
+                excerpt = indices[start_idx:start_idx + batch_size]
+            else:
+                excerpt = slice(start_idx, start_idx + batch_size)
+            yield words[excerpt], chars[excerpt], pos[excerpt], chunks[excerpt], ners[excerpt], \
+                  masks[excerpt], lengths[excerpt]

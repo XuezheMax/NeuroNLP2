@@ -300,6 +300,7 @@ def read_data_to_variable(source_path, word_alphabet, char_alphabet, pos_alphabe
         heads = Variable(torch.from_numpy(hid_inputs)).cuda() if use_gpu else Variable(torch.from_numpy(hid_inputs))
         types = Variable(torch.from_numpy(tid_inputs)).cuda() if use_gpu else Variable(torch.from_numpy(tid_inputs))
         masks = Variable(torch.from_numpy(masks)).cuda() if use_gpu else Variable(torch.from_numpy(masks))
+        lengths = torch.from_numpy(lengths).cuda() if use_gpu else torch.from_numpy(lengths)
 
         data_variable.append((words, chars, pos, heads, types, masks, lengths))
 
@@ -322,12 +323,11 @@ def get_batch_variable(data, batch_size):
     words, chars, pos, heads, types, masks, lengths = data_variable[bucket_id]
     bucket_size = bucket_sizes[bucket_id]
     index = torch.randperm(bucket_size).long()[:min(bucket_size, batch_size)]
-    id_np = index.numpy()
     if words.is_cuda:
         index = index.cuda()
 
     return words[index], chars[index], pos[index], heads[index], types[index], \
-           masks[index], lengths[id_np]
+           masks[index], lengths[index]
 
 
 def iterate_batch_variable(data, batch_size, shuffle=False):
@@ -347,15 +347,12 @@ def iterate_batch_variable(data, batch_size, shuffle=False):
         indices = None
         if shuffle:
             indices = torch.randperm(bucket_size).long()
-            ids_np = indices.numpy()
             if words.is_cuda:
                 indices = indices.cuda()
         for start_idx in range(0, bucket_size, batch_size):
             if shuffle:
                 excerpt = indices[start_idx:start_idx + batch_size]
-                excerpt_np = ids_np[start_idx:start_idx + batch_size]
             else:
                 excerpt = slice(start_idx, start_idx + batch_size)
-                excerpt_np = excerpt
             yield words[excerpt], chars[excerpt], pos[excerpt], heads[excerpt], types[excerpt], \
-                  masks[excerpt], lengths[excerpt_np]
+                  masks[excerpt], lengths[excerpt]
