@@ -38,6 +38,12 @@ class BiRecurrentConv(nn.Module):
         self.nll_loss = nn.NLLLoss(size_average=False)
 
     def forward(self, input_word, input_char, mask=None, length=None, hx=None):
+        # hack length from mask
+        # we do not hack mask from length for special reasons.
+        # Thus, always provide mask if it is necessary.
+        if length is None and mask is not None:
+            length = mask.sum(dim=1).long()
+
         # [batch, length, word_dim]
         word = self.word_embedd(input_word)
 
@@ -59,18 +65,18 @@ class BiRecurrentConv(nn.Module):
         input = self.dropout_in(input)
         # prepare packed_sequence
         if length is not None:
-            seq_input, rev_order, mask = utils.prepare_rnn_seq(input, length, masks=mask, batch_first=True)
-            seq_output, _ = self.rnn(seq_input)
-            output = utils.recover_rnn_seq(seq_output, rev_order, batch_first=True)
+            seq_input, hx, rev_order, mask = utils.prepare_rnn_seq(input, length, hx=hx, masks=mask, batch_first=True)
+            seq_output, hn = self.rnn(seq_input, hx=hx)
+            output, hn = utils.recover_rnn_seq(seq_output, rev_order, hx=hn, batch_first=True)
         else:
             # output from rnn [batch, length, hidden_size]
-            output, _ = self.rnn(input)
+            output, hn = self.rnn(input, hx=hx)
         # [batch, length, num_labels]
-        return self.dense(self.dropout_rnn(output))
+        return self.dense(self.dropout_rnn(output)), hn, mask
 
     def loss(self, input_word, input_char, target, mask=None, length=None, hx=None, leading_symbolic=0):
         # [batch, length, num_labels]
-        output, mask = self.forward(input_word, input_char, mask=mask, length=length, hx=hx)
+        output, _, mask = self.forward(input_word, input_char, mask=mask, length=length, hx=hx)
         # preds = [batch, length]
         _, preds = torch.max(output[:, :, leading_symbolic:], dim=2)
         preds += leading_symbolic
@@ -118,7 +124,7 @@ class BiVarRecurrentConv(nn.Module):
         self.logsoftmax = nn.LogSoftmax()
         self.nll_loss = nn.NLLLoss(size_average=False)
 
-    def forward(self, input_word, input_char, mask=None, length=None, hx=None):
+    def forward(self, input_word, input_char, mask=None, hx=None):
         # [batch, length, word_dim]
         word = self.word_embedd(input_word)
 
@@ -140,13 +146,13 @@ class BiVarRecurrentConv(nn.Module):
         # [batch, length, dim] --> [batch, dim, length] --> [batch, length, dim]
         input = self.dropout_in(input.transpose(1, 2)).transpose(1, 2)
         # output from rnn [batch, length, hidden_size]
-        output, _ = self.rnn(input, mask)
+        output, _ = self.rnn(input, mask, hx=hx)
         # [batch, length, num_labels]
         return self.dense(self.dropout_rnn(output.transpose(1, 2)).transpose(1, 2))
 
-    def loss(self, input_word, input_char, target, mask=None, length=None, hx=None, leading_symbolic=0):
+    def loss(self, input_word, input_char, target, mask=None, hx=None, leading_symbolic=0):
         # [batch, length, num_labels]
-        output = self.forward(input_word, input_char, mask=mask, length=length, hx=hx)
+        output = self.forward(input_word, input_char, mask=mask, hx=hx)
         # preds = [batch, length]
         _, preds = torch.max(output[:, :, leading_symbolic:], dim=2)
         preds += leading_symbolic
@@ -155,5 +161,11 @@ class BiVarRecurrentConv(nn.Module):
         # [batch * length, num_labels]
         output_size = (output_size[0] * output_size[1], output_size[2])
         output = output.view(output_size)
-        return self.nll_loss(self.logsoftmax(output) * mask.view(output_size[0], 1), target.view(-1)) / mask.sum(), \
+        if mask is not None:
+            return self.nll_loss(self.logsoftmax(output) * mask.view(output_size[0], 1),
+                                 target.view(-1)) / mask.sum(), \
                (torch.eq(preds, target).type_as(mask) * mask).sum(), preds
+        else:
+            num = output_size[0] * output_size[1]
+            return self.nll_loss(self.logsoftmax(output), target.view(-1)) / num, \
+                   (torch.eq(preds, target).type_as(output)).sum(), preds
