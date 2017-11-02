@@ -102,7 +102,7 @@ def main():
 
     char_dim = 30
     window = 3
-    num_layers = 2
+    num_layers = 1
     if args.dropout == 'std':
         network = BiRecurrentConv(embedd_dim, word_alphabet.size(),
                                   char_dim, char_alphabet.size(),
@@ -129,7 +129,7 @@ def main():
     test_correct = 0.0
     test_total = 0
     for epoch in range(1, num_epochs + 1):
-        print('Epoch %d (%s, learning rate=%.4f, decay rate=%.4f): ' % (epoch, mode, lr, decay_rate))
+        print('Epoch %d (%s(%s), learning rate=%.4f, decay rate=%.4f): ' % (epoch, mode, args.dropout, lr, decay_rate))
         train_err = 0.
         train_corr = 0.
         train_total = 0.
@@ -141,7 +141,8 @@ def main():
             word, char, labels, _, _, masks, lengths = conllx_data.get_batch_variable(data_train, batch_size)
 
             optim.zero_grad()
-            loss, corr, _ = network.loss(word, char, labels, masks, leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
+            loss, corr, _ = network.loss(word, char, labels, mask=masks, length=lengths,
+                                         leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
             loss.backward()
             optim.step()
 

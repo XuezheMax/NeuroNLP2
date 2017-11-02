@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from ..nn import ChainCRF, VarMaskedGRU, VarMaskedRNN, VarMaskedLSTM
 from ..nn import Embedding
+from ..nn import utils
 
 
 class BiRecurrentConv(nn.Module):
@@ -36,7 +37,7 @@ class BiRecurrentConv(nn.Module):
         self.logsoftmax = nn.LogSoftmax()
         self.nll_loss = nn.NLLLoss(size_average=False)
 
-    def forward(self, input_word, input_char, mask, hx=None):
+    def forward(self, input_word, input_char, mask=None, length=None, hx=None):
         # [batch, length, word_dim]
         word = self.word_embedd(input_word)
 
@@ -56,14 +57,20 @@ class BiRecurrentConv(nn.Module):
         input = F.tanh(torch.cat([word, char], dim=2))
         # apply dropout
         input = self.dropout_in(input)
-        # output from rnn [batch, length, hidden_size]
-        output, _ = self.rnn(input, mask)
+        # prepare packed_sequence
+        if length is not None:
+            seq_input, rev_order, mask = utils.prepare_rnn_seq(input, length, masks=mask, batch_first=True)
+            seq_output, _ = self.rnn(seq_input)
+            output = utils.recover_rnn_seq(seq_output, rev_order, batch_first=True)
+        else:
+            # output from rnn [batch, length, hidden_size]
+            output, _ = self.rnn(input)
         # [batch, length, num_labels]
         return self.dense(self.dropout_rnn(output))
 
-    def loss(self, input_word, input_char, target, mask, hx=None, leading_symbolic=0):
+    def loss(self, input_word, input_char, target, mask=None, length=None, hx=None, leading_symbolic=0):
         # [batch, length, num_labels]
-        output = self.forward(input_word, input_char, mask, hx)
+        output, mask = self.forward(input_word, input_char, mask=mask, length=length, hx=hx)
         # preds = [batch, length]
         _, preds = torch.max(output[:, :, leading_symbolic:], dim=2)
         preds += leading_symbolic
@@ -72,8 +79,14 @@ class BiRecurrentConv(nn.Module):
         # [batch * length, num_labels]
         output_size = (output_size[0] * output_size[1], output_size[2])
         output = output.view(output_size)
-        return self.nll_loss(self.logsoftmax(output) * mask.view(output_size[0], 1), target.view(-1)) / mask.sum(), \
-               (torch.eq(preds, target).type_as(mask) * mask).sum(), preds
+        if mask is not None:
+            return self.nll_loss(self.logsoftmax(output) * mask.view(output_size[0], 1),
+                                 target.view(-1)) / mask.sum(), \
+                   (torch.eq(preds, target).type_as(mask) * mask).sum(), preds
+        else:
+            num = output_size[0] * output_size[1]
+            return self.nll_loss(self.logsoftmax(output), target.view(-1)) / num, \
+                   (torch.eq(preds, target).type_as(output)).sum(), preds
 
 
 class BiVarRecurrentConv(nn.Module):
@@ -105,7 +118,7 @@ class BiVarRecurrentConv(nn.Module):
         self.logsoftmax = nn.LogSoftmax()
         self.nll_loss = nn.NLLLoss(size_average=False)
 
-    def forward(self, input_word, input_char, mask, hx=None):
+    def forward(self, input_word, input_char, mask=None, length=None, hx=None):
         # [batch, length, word_dim]
         word = self.word_embedd(input_word)
 
@@ -131,9 +144,9 @@ class BiVarRecurrentConv(nn.Module):
         # [batch, length, num_labels]
         return self.dense(self.dropout_rnn(output.transpose(1, 2)).transpose(1, 2))
 
-    def loss(self, input_word, input_char, target, mask, hx=None, leading_symbolic=0):
+    def loss(self, input_word, input_char, target, mask=None, length=None, hx=None, leading_symbolic=0):
         # [batch, length, num_labels]
-        output = self.forward(input_word, input_char, mask, hx)
+        output = self.forward(input_word, input_char, mask=mask, length=length, hx=hx)
         # preds = [batch, length]
         _, preds = torch.max(output[:, :, leading_symbolic:], dim=2)
         preds += leading_symbolic
