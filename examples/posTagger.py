@@ -141,8 +141,7 @@ def main():
             word, char, labels, _, _, masks, lengths = conllx_data.get_batch_variable(data_train, batch_size)
 
             optim.zero_grad()
-            loss, corr, _ = network.loss(word, char, labels, mask=masks, length=lengths,
-                                         leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
+            loss, corr, _ = network.loss(word, char, labels, mask=masks, leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
             loss.backward()
             optim.step()
 
