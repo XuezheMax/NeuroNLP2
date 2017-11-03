@@ -49,7 +49,14 @@ def prepare_rnn_seq(rnn_input, lengths, hx=None, masks=None, batch_first=False):
         batch_dim = 0 if batch_first else 1
         rnn_input = rnn_input.index_select(batch_dim, order)
         if hx is not None:
-            hx = hx.index_select(1, order)
+            # hack lstm
+            if isinstance(hx, tuple):
+                hx, cx = hx
+                hx = hx.index_select(1, order)
+                cx = cx.index_select(1, order)
+                hx = (hx, cx)
+            else:
+                hx = hx.index_select(1, order)
 
     lens = lens.tolist()
     seq = rnn_utils.pack_padded_sequence(rnn_input, lens, batch_first=batch_first)
@@ -67,5 +74,12 @@ def recover_rnn_seq(seq, rev_order, hx=None, batch_first=False):
         batch_dim = 0 if batch_first else 1
         output = output.index_select(batch_dim, rev_order)
         if hx is not None:
-            hx = hx.index_select(1, rev_order)
+            # hack lstm
+            if isinstance(hx, tuple):
+                hx, cx = hx
+                hx = hx.index_select(1, rev_order)
+                cx = cx.index_select(1, rev_order)
+                hx = (hx, cx)
+            else:
+                hx = hx.index_select(1, rev_order)
     return output, hx

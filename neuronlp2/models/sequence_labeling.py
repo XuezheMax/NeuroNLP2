@@ -42,7 +42,7 @@ class BiRecurrentConv(nn.Module):
         # we do not hack mask from length for special reasons.
         # Thus, always provide mask if it is necessary.
         if length is None and mask is not None:
-            length = mask.sum(dim=1).long()
+            length = mask.data.sum(dim=1).long()
 
         # [batch, length, word_dim]
         word = self.word_embedd(input_word)
@@ -75,6 +75,11 @@ class BiRecurrentConv(nn.Module):
         return self.dense(self.dropout_rnn(output)), hn, mask
 
     def loss(self, input_word, input_char, target, mask=None, length=None, hx=None, leading_symbolic=0):
+        # hack length from mask
+        # we do not hack mask from length for special reasons.
+        # Thus, always provide mask if it is necessary.
+        if length is None and mask is not None:
+            length = mask.data.sum(dim=1).long()
         # [batch, length, num_labels]
         output, _, mask = self.forward(input_word, input_char, mask=mask, length=length, hx=hx)
         # preds = [batch, length]
@@ -85,8 +90,14 @@ class BiRecurrentConv(nn.Module):
         # [batch * length, num_labels]
         output_size = (output_size[0] * output_size[1], output_size[2])
         output = output.view(output_size)
+
+        if length is not None:
+            max_len = length.max()
+            target = target[:, :max_len]
+            target = target.contiguous()
+
         if mask is not None:
-            return self.nll_loss(self.logsoftmax(output) * mask.view(output_size[0], 1),
+            return self.nll_loss(self.logsoftmax(output) * mask.contiguous().view(output_size[0], 1),
                                  target.view(-1)) / mask.sum(), \
                    (torch.eq(preds, target).type_as(mask) * mask).sum(), preds
         else:
