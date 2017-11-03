@@ -3,6 +3,7 @@ __author__ = 'max'
 import torch
 from torch.nn import functional as F
 
+
 def MaskedRecurrent(reverse=False):
     def forward(input, hidden, cell, mask):
         output = []
@@ -32,12 +33,11 @@ def MaskedRecurrent(reverse=False):
 
 
 def StackedRNN(inners, num_layers, lstm=False, dropout=0, train=True):
-
     num_directions = len(inners)
     total_layers = num_layers * num_directions
 
     def forward(input, hidden, cells, mask):
-        assert(len(cells) == total_layers)
+        assert (len(cells) == total_layers)
         next_hidden = []
 
         if lstm:
@@ -72,7 +72,6 @@ def StackedRNN(inners, num_layers, lstm=False, dropout=0, train=True):
 
 
 def AutogradMaskedRNN(num_layers=1, batch_first=False, dropout=0, train=True, bidirectional=False, lstm=False):
-
     rec_factory = MaskedRecurrent
 
     if bidirectional:
