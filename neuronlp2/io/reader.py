@@ -112,7 +112,7 @@ class CoNLL03Reader(object):
         while line is not None and len(line.strip()) > 0:
             line = line.strip()
             line = line.decode('utf-8')
-            lines.append(line.split('\t'))
+            lines.append(line.split(' '))
             line = self.__source_file.readline()
 
         length = len(lines)

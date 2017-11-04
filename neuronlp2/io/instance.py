@@ -34,3 +34,6 @@ class NERInstance(object):
         self.chunk_ids = chunk_ids
         self.ner_tags = ner_tags
         self.ner_ids = ner_ids
+
+    def length(self):
+        return self.sentence.length()

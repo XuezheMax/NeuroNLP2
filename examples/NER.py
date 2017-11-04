@@ -17,7 +17,7 @@ import numpy as np
 import torch
 from torch.optim import Adam, SGD
 from torch.autograd import Variable
-from neuronlp2.io import get_logger, conll03_data
+from neuronlp2.io import get_logger, conll03_data, CoNLL03Writer
 from neuronlp2.models import BiRecurrentConv, BiVarRecurrentConv
 from neuronlp2 import utils
 
@@ -36,6 +36,9 @@ def main():
     parser.add_argument('--p', type=float, default=0.5, help='dropout rate')
     parser.add_argument('--schedule', nargs='+', type=int, help='schedule for learning rate decay')
     parser.add_argument('--output_prediction', action='store_true', help='Output predictions to temp files')
+    parser.add_argument('--embedding', choices=['glove', 'senna', 'sskip', 'polyglot'], help='Embedding for words',
+                        required=True)
+    parser.add_argument('--embedding_dict', help='path for embedding dict')
     parser.add_argument('--train')  # "data/POS-penn/wsj/split1/wsj1.train.original"
     parser.add_argument('--dev')  # "data/POS-penn/wsj/split1/wsj1.dev.original"
     parser.add_argument('--test')  # "data/POS-penn/wsj/split1/wsj1.test.original"
@@ -59,11 +62,13 @@ def main():
     schedule = args.schedule
     p = args.p
     output_predict = args.output_prediction
+    embedding = args.embedding
+    embedding_path = args.embedding_dict
 
     logger.info("Creating Alphabets")
     word_alphabet, char_alphabet, pos_alphabet, \
     chunk_alphabet, ner_alphabet = conll03_data.create_alphabets("data/alphabets/", [train_path, dev_path, test_path],
-                                                                 40000)
+                                                                 40000, min_occurence=0)
 
     logger.info("Word Alphabet Size: %d" % word_alphabet.size())
     logger.info("Character Alphabet Size: %d" % char_alphabet.size())
@@ -83,6 +88,7 @@ def main():
                                                   chunk_alphabet, ner_alphabet, use_gpu=use_gpu)
     data_test = conll03_data.read_data_to_variable(test_path, word_alphabet, char_alphabet, pos_alphabet,
                                                    chunk_alphabet, ner_alphabet, use_gpu=use_gpu)
+    writer = CoNLL03Writer(word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet)
 
     def construct_word_embedding_table():
         scale = np.sqrt(3.0 / embedd_dim)
@@ -95,7 +101,7 @@ def main():
             table[index, :] = embedding
         return torch.from_numpy(table)
 
-    embedd_dict, embedd_dim, caseless = utils.load_word_embedding_dict('glove', "data/glove/glove.6B/glove.6B.100d.gz")
+    embedd_dict, embedd_dim, caseless = utils.load_word_embedding_dict(embedding, embedding_path)
     word_table = construct_word_embedding_table()
     logger.info("constructing network...")
 
@@ -169,14 +175,22 @@ def main():
         network.eval()
         dev_corr = 0.0
         dev_total = 0
+        if output_predict:
+            writer.start('tmp/dev%d' % epoch)
+
         for batch in conll03_data.iterate_batch_variable(data_dev, batch_size):
-            word, char, _, _, labels, masks, lengths = batch
+            word, char, pos, chunk, labels, masks, lengths = batch
             _, corr, preds = network.loss(word, char, labels, mask=masks,
                                           leading_symbolic=conll03_data.NUM_SYMBOLIC_TAGS)
             num_tokens = masks.data.sum()
             dev_corr += corr.data[0]
             dev_total += num_tokens
+            if output_predict:
+                writer.write(word.data.cpu().numpy(), pos.data.cpu().numpy(), chunk.data.cpu().numpy(),
+                             labels.data.cpu().numpy(), preds.data.cpu().numpy(), lengths.cpu().numpy())
         print('dev corr: %d, total: %d, acc: %.2f%%' % (dev_corr, dev_total, dev_corr * 100 / dev_total))
+        if output_predict:
+            writer.close()
 
         if dev_correct < dev_corr:
             dev_correct = dev_corr
@@ -185,14 +199,23 @@ def main():
             # evaluate on test data when better performance detected
             test_corr = 0.0
             test_total = 0
+            if output_predict:
+                writer.start('tmp/test%d' % epoch)
+
             for batch in conll03_data.iterate_batch_variable(data_test, batch_size):
-                word, char, _, _, labels, masks, lengths = batch
+                word, char, pos, chunk, labels, masks, lengths = batch
                 _, corr, preds = network.loss(word, char, labels, mask=masks,
                                               leading_symbolic=conll03_data.NUM_SYMBOLIC_TAGS)
                 num_tokens = masks.data.sum()
                 test_corr += corr.data[0]
                 test_total += num_tokens
+                if output_predict:
+                    writer.write(word.data.cpu().numpy(), pos.data.cpu().numpy(), chunk.data.cpu().numpy(),
+                                 labels.data.cpu().numpy(), preds.data.cpu().numpy(), lengths.cpu().numpy())
             test_correct = test_corr
+            if output_predict:
+                writer.close()
+
         print("best dev  corr: %d, total: %d, acc: %.2f%% (epoch: %d)" % (
             dev_correct, dev_total, dev_correct * 100 / dev_total, best_epoch))
         print("best test corr: %d, total: %d, acc: %.2f%% (epoch: %d)" % (

@@ -54,7 +54,7 @@ def create_alphabets(alphabet_directory, data_paths, max_vocabulary_size, min_oc
                     if len(line) == 0:
                         continue
 
-                    tokens = line.split('\t')
+                    tokens = line.split(' ')
                     for char in tokens[1]:
                         char_alphabet.add(char)
 
