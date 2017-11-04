@@ -20,7 +20,7 @@ def load_word_embedding_dict(embedding, embedding_path, normalize_digits=True):
         # loading word2vec
         word2vec = Word2Vec.load_word2vec_format(embedding_path, binary=True)
         embedd_dim = word2vec.vector_size
-        return word2vec, embedd_dim, False
+        return word2vec, embedd_dim
     elif embedding == 'glove':
         # loading GloVe
         embedd_dim = -1
@@ -41,7 +41,7 @@ def load_word_embedding_dict(embedding, embedding_path, normalize_digits=True):
                 embedd[:] = tokens[1:]
                 word = utils.DIGIT_RE.sub(b"0", tokens[0]) if normalize_digits else tokens[0]
                 embedd_dict[word] = embedd
-        return embedd_dict, embedd_dim, True
+        return embedd_dict, embedd_dim
     elif embedding == 'senna':
         # loading Senna
         embedd_dim = -1
@@ -62,7 +62,7 @@ def load_word_embedding_dict(embedding, embedding_path, normalize_digits=True):
                 embedd[:] = tokens[1:]
                 word = utils.DIGIT_RE.sub(b"0", tokens[0]) if normalize_digits else tokens[0]
                 embedd_dict[word] = embedd
-        return embedd_dict, embedd_dim, True
+        return embedd_dict, embedd_dim
     elif embedding == 'sskip':
         embedd_dim = -1
         embedd_dict = dict()
@@ -84,7 +84,7 @@ def load_word_embedding_dict(embedding, embedding_path, normalize_digits=True):
                 embedd[:] = tokens[start:]
                 word = utils.DIGIT_RE.sub(b"0", word) if normalize_digits else word
                 embedd_dict[word] = embedd
-        return embedd_dict, embedd_dim, True
+        return embedd_dict, embedd_dim
     elif embedding == 'polyglot':
         words, embeddings = pickle.load(open(embedding_path, 'rb'))
         _, embedd_dim = embeddings.shape
@@ -94,7 +94,7 @@ def load_word_embedding_dict(embedding, embedding_path, normalize_digits=True):
             embedd[:] = embeddings[i, :]
             word = utils.DIGIT_RE.sub(b"0", word) if normalize_digits else word
             embedd_dict[word] = embedd
-        return embedd_dict, embedd_dim, False
+        return embedd_dict, embedd_dim
 
     else:
         raise ValueError("embedding should choose from [word2vec, senna, glove, sskip, polyglot]")

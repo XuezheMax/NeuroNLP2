@@ -65,7 +65,7 @@ def main():
     embedding = args.embedding
     embedding_path = args.embedding_dict
 
-    embedd_dict, embedd_dim, caseless = utils.load_word_embedding_dict(embedding, embedding_path)
+    embedd_dict, embedd_dim = utils.load_word_embedding_dict(embedding, embedding_path)
 
     logger.info("Creating Alphabets")
     word_alphabet, char_alphabet, pos_alphabet, \
@@ -98,9 +98,10 @@ def main():
         table[conll03_data.UNK_ID, :] = np.random.uniform(-scale, scale, [1, embedd_dim]).astype(np.float32)
         oov = 0
         for word, index in word_alphabet.items():
-            ww = word.lower() if caseless else word
-            if ww in embedd_dict:
-                embedding = embedd_dict[ww]
+            if word in embedd_dict:
+                embedding = embedd_dict[word]
+            elif word.lower() in embedd_dict:
+                embedding = embedd_dict[word.lower()]
             else:
                 embedding = np.random.uniform(-scale, scale, [1, embedd_dim]).astype(np.float32)
                 oov += 1

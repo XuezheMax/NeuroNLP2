@@ -90,13 +90,16 @@ def main():
         table = np.empty([word_alphabet.size(), embedd_dim], dtype=np.float32)
         table[conllx_data.UNK_ID, :] = np.random.uniform(-scale, scale, [1, embedd_dim]).astype(np.float32)
         for word, index in word_alphabet.items():
-            ww = word.lower() if caseless else word
-            embedding = embedd_dict[ww] if ww in embedd_dict else np.random.uniform(-scale, scale,
-                                                                                    [1, embedd_dim]).astype(np.float32)
+            if word in embedd_dict:
+                embedding = embedd_dict[word]
+            elif word.lower() in embedd_dict:
+                embedding = embedd_dict[word.lower()]
+            else:
+                embedding = np.random.uniform(-scale, scale, [1, embedd_dim]).astype(np.float32)
             table[index, :] = embedding
         return torch.from_numpy(table)
 
-    embedd_dict, embedd_dim, caseless = utils.load_word_embedding_dict('glove', "data/glove/glove.6B/glove.6B.100d.gz")
+    embedd_dict, embedd_dim = utils.load_word_embedding_dict('glove', "data/glove/glove.6B/glove.6B.100d.gz")
     word_table = construct_word_embedding_table()
     logger.info("constructing network...")
 
