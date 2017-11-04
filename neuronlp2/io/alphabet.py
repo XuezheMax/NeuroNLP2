@@ -47,7 +47,7 @@ class Alphabet(object):
     def get_instance(self, index):
         if self.default_value and index == self.default_index:
             # First index is occupied by the wildcard element.
-            return None
+            return '<_UNK>'
         else:
             try:
                 return self.instances[index - self.offset]
