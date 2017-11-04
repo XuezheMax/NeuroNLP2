@@ -65,6 +65,8 @@ def main():
     embedding = args.embedding
     embedding_path = args.embedding_dict
 
+    embedd_dict, embedd_dim, caseless = utils.load_word_embedding_dict(embedding, embedding_path)
+
     logger.info("Creating Alphabets")
     word_alphabet, char_alphabet, pos_alphabet, \
     chunk_alphabet, ner_alphabet = conll03_data.create_alphabets("data/alphabets/", [train_path, dev_path, test_path],
@@ -94,14 +96,18 @@ def main():
         scale = np.sqrt(3.0 / embedd_dim)
         table = np.empty([word_alphabet.size(), embedd_dim], dtype=np.float32)
         table[conll03_data.UNK_ID, :] = np.random.uniform(-scale, scale, [1, embedd_dim]).astype(np.float32)
+        oov = 0
         for word, index in word_alphabet.items():
             ww = word.lower() if caseless else word
-            embedding = embedd_dict[ww] if ww in embedd_dict else np.random.uniform(-scale, scale,
-                                                                                    [1, embedd_dim]).astype(np.float32)
+            if ww in embedd_dict:
+                embedding = embedd_dict[ww]
+            else:
+                embedding = np.random.uniform(-scale, scale, [1, embedd_dim]).astype(np.float32)
+                oov += 1
             table[index, :] = embedding
+        print('oov: %d' % oov)
         return torch.from_numpy(table)
 
-    embedd_dict, embedd_dim, caseless = utils.load_word_embedding_dict(embedding, embedding_path)
     word_table = construct_word_embedding_table()
     logger.info("constructing network...")
 
