@@ -123,8 +123,9 @@ def main():
     if use_gpu:
         network.cuda()
 
-    lr = 0.002
-    optim = Adam(network.parameters(), lr=lr, betas=(0.9, 0.9), weight_decay=gamma)
+    lr = learning_rate
+    # optim = Adam(network.parameters(), lr=lr, betas=(0.9, 0.9), weight_decay=gamma)
+    optim = SGD(network.parameters(), lr=lr, momentum=momentum, weight_decay=gamma, nesterov=True)
     logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d" % (mode, num_layers, hidden_size, num_filters))
     logger.info("training: l2: %f, (#training data: %d, batch: %d, dropout: %.2f)" % (gamma, num_data, batch_size, p))
 
