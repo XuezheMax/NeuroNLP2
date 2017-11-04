@@ -23,7 +23,7 @@ class CoNLL03Writer(object):
         batch_size, _ = word.shape
         for i in range(batch_size):
             for j in range(lengths[i]):
-                w = self.__word_alphabet.get_instance(word[i, j])
+                w = self.__word_alphabet.get_instance(word[i, j]).encode('utf-8')
                 p = self.__pos_alphabet.get_instance(pos[i, j])
                 ch = self.__chunk_alphabet.get_instance(chunk[i, j])
                 tgt = self.__ner_alphabet.get_instance(targets[i, j])
