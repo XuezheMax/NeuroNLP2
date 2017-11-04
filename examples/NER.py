@@ -68,7 +68,7 @@ def main():
     logger.info("Creating Alphabets")
     word_alphabet, char_alphabet, pos_alphabet, \
     chunk_alphabet, ner_alphabet = conll03_data.create_alphabets("data/alphabets/", [train_path, dev_path, test_path],
-                                                                 40000, min_occurence=0)
+                                                                 50000, min_occurence=0)
 
     logger.info("Word Alphabet Size: %d" % word_alphabet.size())
     logger.info("Character Alphabet Size: %d" % char_alphabet.size())
@@ -188,7 +188,7 @@ def main():
             dev_total += num_tokens
             if output_predict:
                 writer.write(word.data.cpu().numpy(), pos.data.cpu().numpy(), chunk.data.cpu().numpy(),
-                             labels.data.cpu().numpy(), preds.data.cpu().numpy(), lengths.cpu().numpy())
+                             preds.data.cpu().numpy(), labels.data.cpu().numpy(), lengths.cpu().numpy())
         print('dev corr: %d, total: %d, acc: %.2f%%' % (dev_corr, dev_total, dev_corr * 100 / dev_total))
         if output_predict:
             writer.close()
@@ -212,7 +212,7 @@ def main():
                 test_total += num_tokens
                 if output_predict:
                     writer.write(word.data.cpu().numpy(), pos.data.cpu().numpy(), chunk.data.cpu().numpy(),
-                                 labels.data.cpu().numpy(), preds.data.cpu().numpy(), lengths.cpu().numpy())
+                                 preds.data.cpu().numpy(), labels.data.cpu().numpy(), lengths.cpu().numpy())
             test_correct = test_corr
             if output_predict:
                 writer.close()
