@@ -69,8 +69,10 @@ def main():
 
     logger.info("Creating Alphabets")
     word_alphabet, char_alphabet, pos_alphabet, \
-    chunk_alphabet, ner_alphabet = conll03_data.create_alphabets("data/alphabets/", [train_path, dev_path, test_path],
-                                                                 50000, min_occurence=0)
+    chunk_alphabet, ner_alphabet = conll03_data.create_alphabets("data/alphabets/", train_path,
+                                                                 data_paths=[dev_path, test_path],
+                                                                 embedd_dict=embedd_dict,
+                                                                 max_vocabulary_size=50000)
 
     logger.info("Word Alphabet Size: %d" % word_alphabet.size())
     logger.info("Character Alphabet Size: %d" % char_alphabet.size())

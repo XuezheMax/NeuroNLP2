@@ -37,7 +37,35 @@ NUM_SYMBOLIC_TAGS = 3
 _buckets = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 140]
 
 
-def create_alphabets(alphabet_directory, data_paths, max_vocabulary_size, min_occurence=1, normalize_digits=True):
+def create_alphabets(alphabet_directory, train_path, data_paths=None, max_vocabulary_size=50000, embedd_dict=None,
+                     min_occurence=1, normalize_digits=True):
+
+    def expand_vocab():
+        vocab_set = set(vocab_list)
+        for data_path in data_paths:
+            # logger.info("Processing data: %s" % data_path)
+            with open(data_path, 'r') as file:
+                for line in file:
+                    line = line.decode('utf-8')
+                    line = line.strip()
+                    if len(line) == 0:
+                        continue
+
+                    tokens = line.split('\t')
+                    for char in tokens[1]:
+                        char_alphabet.add(char)
+
+                    word = utils.DIGIT_RE.sub(b"0", tokens[1]) if normalize_digits else tokens[1]
+                    pos = tokens[4]
+                    type = tokens[7]
+
+                    pos_alphabet.add(pos)
+                    type_alphabet.add(type)
+
+                    if word not in vocab_set and (word in embedd_dict or word.lower() in embedd_dict):
+                        vocab_set.add(word)
+                        vocab_list.append(word)
+
     logger = get_logger("Create Alphabets")
     word_alphabet = Alphabet('word', defualt_value=True)
     char_alphabet = Alphabet('character', defualt_value=True)
@@ -59,34 +87,42 @@ def create_alphabets(alphabet_directory, data_paths, max_vocabulary_size, min_oc
         type_alphabet.add(END_TYPE)
 
         vocab = dict()
-        for data_path in data_paths:
-            logger.info("Processing data: %s" % data_path)
-            with open(data_path, 'r') as file:
-                for line in file:
-                    line = line.decode('utf-8')
-                    line = line.strip()
-                    if len(line) == 0:
-                        continue
+        with open(train_path, 'r') as file:
+            for line in file:
+                line = line.decode('utf-8')
+                line = line.strip()
+                if len(line) == 0:
+                    continue
 
-                    tokens = line.split('\t')
-                    for char in tokens[1]:
-                        char_alphabet.add(char)
+                tokens = line.split('\t')
+                for char in tokens[1]:
+                    char_alphabet.add(char)
 
-                    word = utils.DIGIT_RE.sub(b"0", tokens[1]) if normalize_digits else tokens[1]
-                    pos = tokens[4]
-                    type = tokens[7]
+                word = utils.DIGIT_RE.sub(b"0", tokens[1]) if normalize_digits else tokens[1]
+                pos = tokens[4]
+                type = tokens[7]
 
-                    pos_alphabet.add(pos)
-                    type_alphabet.add(type)
+                pos_alphabet.add(pos)
+                type_alphabet.add(type)
 
-                    if word in vocab:
-                        vocab[word] += 1
-                    else:
-                        vocab[word] = 1
+                if word in vocab:
+                    vocab[word] += 1
+                else:
+                    vocab[word] = 1
+
+        # if a singleton is in pretrained embedding dict, set the count to 2
+        if embedd_dict is not None:
+            for word in vocab.keys():
+                if word in embedd_dict or word.lower() in embedd_dict:
+                    vocab[word] += 1
 
         vocab_list = _START_VOCAB + sorted(vocab, key=vocab.get, reverse=True)
-        vocab_list = [word for word in vocab_list if word in _START_VOCAB or vocab[word] > min_occurence]
         logger.info("Total Vocabulary Size: %d" % len(vocab_list))
+        vocab_list = [word for word in vocab_list if word in _START_VOCAB or vocab[word] > min_occurence]
+        logger.info("Total Vocabulary Size (w.o rare words): %d" % len(vocab_list))
+
+        if data_paths is not None:
+            expand_vocab()
 
         if len(vocab_list) > max_vocabulary_size:
             vocab_list = vocab_list[:max_vocabulary_size]
