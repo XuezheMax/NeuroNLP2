@@ -70,7 +70,7 @@ class ChainCRF(nn.Module):
             output += self.b
 
         if mask is not None:
-            output *= mask.view(mask.size() + (1, 1))
+            output = output * mask.view(mask.size() + (1, 1))
 
         return output
 

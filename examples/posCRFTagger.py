@@ -62,7 +62,7 @@ def main():
     embedd_dict, embedd_dim = utils.load_word_embedding_dict('glove', "data/glove/glove.6B/glove.6B.100d.gz")
     logger.info("Creating Alphabets")
     word_alphabet, char_alphabet, pos_alphabet, \
-    type_alphabet = conllx_data.create_alphabets("data/alphabets/", train_path, data_paths=[dev_path, test_path],
+    type_alphabet = conllx_data.create_alphabets("data/alphabets/pos_crf/", train_path, data_paths=[dev_path, test_path],
                                                  max_vocabulary_size=50000, embedd_dict=embedd_dict)
 
     logger.info("Word Alphabet Size: %d" % word_alphabet.size())

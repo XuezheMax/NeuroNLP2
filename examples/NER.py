@@ -69,7 +69,7 @@ def main():
 
     logger.info("Creating Alphabets")
     word_alphabet, char_alphabet, pos_alphabet, \
-    chunk_alphabet, ner_alphabet = conll03_data.create_alphabets("data/alphabets/", train_path,
+    chunk_alphabet, ner_alphabet = conll03_data.create_alphabets("data/alphabets/ner/", train_path,
                                                                  data_paths=[dev_path, test_path],
                                                                  embedd_dict=embedd_dict,
                                                                  max_vocabulary_size=50000)
