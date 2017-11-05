@@ -106,6 +106,99 @@ class BiRecurrentConv(nn.Module):
                    (torch.eq(preds, target).type_as(output)).sum(), preds
 
 
+class BiRecurrentConvCRF(nn.Module):
+    def __init__(self, word_dim, num_words, char_dim, num_chars, num_filters, kernel_size,
+                 rnn_mode, hidden_size, num_layers, num_labels,
+                 embedd_word=None, embedd_char=None, p_in=0.2, p_rnn=0.5):
+        super(BiRecurrentConvCRF, self).__init__()
+
+        self.word_embedd = Embedding(num_words, word_dim, init_embedding=embedd_word)
+        self.char_embedd = Embedding(num_chars, char_dim, init_embedding=embedd_char)
+        self.conv1d = nn.Conv1d(char_dim, num_filters, kernel_size, padding=kernel_size - 1)
+        self.dropout_in = nn.Dropout(p=p_in)
+        self.dropout_rnn = nn.Dropout(p_rnn)
+
+        if rnn_mode == 'RNN':
+            RNN = nn.RNN
+        elif rnn_mode == 'LSTM':
+            RNN = nn.LSTM
+        elif rnn_mode == 'GRU':
+            RNN = nn.GRU
+        else:
+            raise ValueError('Unknown RNN mode: %s' % rnn_mode)
+
+        self.rnn = RNN(word_dim + num_filters, hidden_size, num_layers=num_layers,
+                       batch_first=True, bidirectional=True, dropout=p_rnn)
+
+        self.crf = ChainCRF(hidden_size * 2, num_labels)
+
+    def _get_rnn_output(self, input_word, input_char, mask=None, length=None, hx=None):
+        # hack length from mask
+        # we do not hack mask from length for special reasons.
+        # Thus, always provide mask if it is necessary.
+        if length is None and mask is not None:
+            length = mask.data.sum(dim=1).long()
+
+        # [batch, length, word_dim]
+        word = self.word_embedd(input_word)
+
+        # [batch, length, char_length, char_dim]
+        char = self.char_embedd(input_char)
+        char_size = char.size()
+        # first transform to [batch *length, char_length, char_dim]
+        # then transpose to [batch * length, char_dim, char_length]
+        char = char.view(char_size[0] * char_size[1], char_size[2], char_size[3]).transpose(1, 2)
+        # put into cnn [batch*length, char_filters, char_length]
+        # then put into maxpooling [batch * length, char_filters]
+        char, _ = self.conv1d(char).max(dim=2)
+        # reshape to [batch, length, char_filters]
+        char = char.view(char_size[0], char_size[1], -1)
+
+        # concatenate word and char [batch, length, word_dim+char_filter]
+        input = F.tanh(torch.cat([word, char], dim=2))
+        # apply dropout
+        input = self.dropout_in(input)
+        # prepare packed_sequence
+        if length is not None:
+            seq_input, hx, rev_order, mask = utils.prepare_rnn_seq(input, length, hx=hx, masks=mask, batch_first=True)
+            seq_output, hn = self.rnn(seq_input, hx=hx)
+            output, hn = utils.recover_rnn_seq(seq_output, rev_order, hx=hn, batch_first=True)
+        else:
+            # output from rnn [batch, length, hidden_size]
+            output, hn = self.rnn(input, hx=hx)
+        return self.dropout_rnn(output), hn, mask, length
+
+    def forward(self, input_word, input_char, mask=None, length=None, hx=None):
+        # output from rnn [batch, length, hidden_size]
+        output, _, mask, length = self._get_rnn_output(input_word, input_char, mask=mask, length=length, hx=hx)
+        # [batch, length, num_label,  num_label]
+        return self.crf(output, mask=mask), mask
+
+    def loss(self, input_word, input_char, target, mask=None, length=None, hx=None):
+        # output from rnn [batch, length, hidden_size]
+        output, _, mask, length = self._get_rnn_output(input_word, input_char, mask=mask, length=length, hx=hx)
+
+        if length is not None:
+            max_len = length.max()
+            target = target[:, :max_len]
+            target = target.contiguous()
+
+        # [batch, length, num_label,  num_label]
+        return self.crf.loss(output, target, mask=mask).sum() / target.size(0)
+
+    def decode(self, input_word, input_char, target=None, mask=None, length=None, hx=None, leading_symbolic=0):
+        # output from rnn [batch, length, hidden_size]
+        output, _, mask, length = self._get_rnn_output(input_word, input_char, mask=mask, length=length, hx=hx)
+        if target is None:
+            return self.crf.decode(output, mask=mask, leading_symbolic=leading_symbolic), None
+
+        if length is not None:
+            max_len = length.max()
+            target = target[:, :max_len]
+            target = target.contiguous()
+        preds = self.crf.decode(output, mask=mask, leading_symbolic=leading_symbolic)
+        return preds, (torch.eq(preds, target).type_as(output)).sum()
+
 class BiVarRecurrentConv(nn.Module):
     def __init__(self, word_dim, num_words, char_dim, num_chars, num_filters, kernel_size,
                  rnn_mode, hidden_size, num_layers, num_labels,
