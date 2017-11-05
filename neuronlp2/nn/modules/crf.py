@@ -99,7 +99,8 @@ class ChainCRF(nn.Module):
         if mask is not None:
             mask_transpose = mask.transpose(0, 1)
 
-        prev_label = torch.IntTensor(batch).zero_() - 1
+        batch_index = torch.arange(0, batch).long()
+        prev_label = torch.LongTensor(batch).zero_() - 1
         # shape = [batch, num_label]
         partition = None
         # shape = [batch]
@@ -118,7 +119,7 @@ class ChainCRF(nn.Module):
                     mask = mask_transpose[t].view(batch, 1)
                     partition = mask * partition_new + (1 - mask) * partition
 
-            tgt_energy += curr_energy[torch.arange(0, batch), prev_label, target[t]]
+            tgt_energy += curr_energy[batch_index, prev_label, target[t]]
             prev_label = target[t]
 
         return logsumexp(partition, dim=1) - tgt_energy
