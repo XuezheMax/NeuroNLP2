@@ -127,7 +127,7 @@ class ChainCRF(nn.Module):
                     partition = partition_new
                 else:
                     mask_t = mask_transpose[t]
-                    partition = mask_t * partition_new + (1 - mask_t) * partition
+                    partition = partition + (partition_new - partition) * mask_t
             tgt_energy += curr_energy[batch_index, prev_label, target_transpose[t].data]
             prev_label = target_transpose[t].data
 
@@ -149,7 +149,7 @@ class ChainCRF(nn.Module):
 
         """
 
-        energy = self.forward(input, mask=mask)
+        energy = self.forward(input, mask=mask).data
 
         # Input should be provided as (n_batch, n_time_steps, num_labels, num_labels)
         # For convenience, we need to dimshuffle to (n_time_steps, n_batch, num_labels, num_labels)
@@ -162,18 +162,26 @@ class ChainCRF(nn.Module):
 
         length, batch_size, num_label, _ = energy_transpose.size()
 
-        pi = torch.zeros([length, batch_size, num_label])
-        pointer = torch.IntTensor(length, batch_size, num_label).zero_()
-        pi[0] = energy_transpose[0, :, -1. :]
+        if input.is_cuda:
+            batch_index = torch.arange(0, batch_size).long().cuda()
+            pi = torch.zeros([length, batch_size, num_label]).cuda()
+            pointer = torch.cuda.LongTensor(length, batch_size, num_label).zero_()
+            back_pointer = torch.cuda.LongTensor(length, batch_size).zero_()
+        else:
+            batch_index = torch.arange(0, batch_size).long()
+            pi = torch.zeros([length, batch_size, num_label])
+            pointer = torch.LongTensor(length, batch_size, num_label).zero_()
+            back_pointer = torch.LongTensor(length, batch_size).zero_()
+
+        pi[0].copy_(energy_transpose[0, :, -1. :])
         pointer[0] = -1
         for t in range(1, length):
             pi_prev = pi[t - 1].view(batch_size, num_label, 1)
             pi[t], pointer[t] = torch.max(energy_transpose[t] + pi_prev, dim=1)
 
-        back_pointer = torch.IntTensor(length, batch_size).zero_()
         _, back_pointer[-1] = torch.max(pi[-1], dim=1)
         for t in reversed(range(length - 1)):
             pointer_last = pointer[t + 1]
-            back_pointer[t] = pointer_last[torch.arange(0, batch_size), back_pointer[t + 1]]
+            back_pointer[t] = pointer_last[batch_index, back_pointer[t + 1]]
 
         return back_pointer + leading_symbolic

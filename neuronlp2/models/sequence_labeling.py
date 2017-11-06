@@ -197,7 +197,7 @@ class BiRecurrentConvCRF(nn.Module):
             target = target[:, :max_len]
             target = target.contiguous()
 
-        preds = self.crf.decode(output, mask=mask, leading_symbolic=leading_symbolic)
+        preds = self.crf.decode(output, mask=mask.contiguous(), leading_symbolic=leading_symbolic)
         if mask is None:
             return preds, (torch.eq(preds, target).type_as(output)).sum()
         else:
