@@ -33,7 +33,7 @@ def main():
     parser.add_argument('--gamma', type=float, default=0.0, help='weight for regularization')
     parser.add_argument('--dropout', choices=['std', 'variational'], help='type of dropout', required=True)
     parser.add_argument('--p', type=float, default=0.5, help='dropout rate')
-    parser.add_argument('--schedule', nargs='+', type=int, help='schedule for learning rate decay')
+    parser.add_argument('--schedule', type=int, help='schedule for learning rate decay')
     parser.add_argument('--output_prediction', action='store_true', help='Output predictions to temp files')
     parser.add_argument('--embedding', choices=['glove', 'senna', 'sskip', 'polyglot'], help='Embedding for words',
                         required=True)
@@ -223,7 +223,7 @@ def main():
         print("best test corr: %d, total: %d, acc: %.2f%% (epoch: %d)" % (
             test_correct, test_total, test_correct * 100 / test_total, best_epoch))
 
-        if epoch in schedule:
+        if epoch % schedule == 0:
             lr = learning_rate / (1.0 + epoch * decay_rate)
             optim = SGD(network.parameters(), lr=lr, momentum=momentum, weight_decay=gamma, nesterov=True)
 
