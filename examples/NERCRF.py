@@ -6,6 +6,7 @@ Implementation of Bi-directional LSTM-CNNs-CRF model for NER.
 """
 
 import sys
+import os
 
 sys.path.append(".")
 sys.path.append("..")
@@ -21,6 +22,19 @@ from neuronlp2.models import BiRecurrentConvCRF
 from neuronlp2 import utils
 
 
+def evaluate(output_file):
+    os.system("data/conll2003/conlleval.v2 < %s > %s" % (output_file, "tmp/score"))
+    with open('tmp/score', 'r') as fin:
+        fin.readline()
+        line = fin.readline()
+        fields = line.split(";")
+        acc = float(fields[0].split(":")[1].strip()[:-1])
+        precision = float(fields[1].split(":")[1].strip()[:-1])
+        recall = float(fields[2].split(":")[1].strip()[:-1])
+        f1 = float(fields[3].split(":")[1].strip())
+    return acc, precision, recall, f1
+
+
 def main():
     parser = argparse.ArgumentParser(description='Tuning with bi-directional RNN-CNN-CRF')
     parser.add_argument('--mode', choices=['RNN', 'LSTM', 'GRU'], help='architecture of rnn', required=True)
@@ -34,7 +48,6 @@ def main():
     parser.add_argument('--dropout', choices=['std', 'variational'], help='type of dropout', required=True)
     parser.add_argument('--p', type=float, default=0.5, help='dropout rate')
     parser.add_argument('--schedule', type=int, help='schedule for learning rate decay')
-    parser.add_argument('--output_prediction', action='store_true', help='Output predictions to temp files')
     parser.add_argument('--embedding', choices=['glove', 'senna', 'sskip', 'polyglot'], help='Embedding for words',
                         required=True)
     parser.add_argument('--embedding_dict', help='path for embedding dict')
@@ -60,7 +73,6 @@ def main():
     gamma = args.gamma
     schedule = args.schedule
     p = args.p
-    output_predict = args.output_prediction
     embedding = args.embedding
     embedding_path = args.embedding_dict
 
@@ -134,10 +146,11 @@ def main():
     logger.info("training: l2: %f, (#training data: %d, batch: %d, dropout: %.2f)" % (gamma, num_data, batch_size, p))
 
     num_batches = num_data / batch_size + 1
-    dev_correct = 0.0
+    dev_f1 = 0.0
+    dev_acc = 0.0
+    dev_precision = 0.0
+    dev_recall = 0.0
     best_epoch = 0
-    test_correct = 0.0
-    test_total = 0
     for epoch in range(1, num_epochs + 1):
         print('Epoch %d (%s(%s), learning rate=%.4f, decay rate=%.4f): ' % (epoch, mode, args.dropout, lr, decay_rate))
         train_err = 0.
@@ -175,53 +188,44 @@ def main():
 
         # evaluate performance on dev data
         network.eval()
-        dev_corr = 0.0
-        dev_total = 0
-        if output_predict:
-            writer.start('tmp/dev%d' % epoch)
+        tmp_filename = 'tmp/dev%d' % epoch
+        writer.start(tmp_filename)
+
 
         for batch in conll03_data.iterate_batch_variable(data_dev, batch_size):
             word, char, pos, chunk, labels, masks, lengths = batch
-            preds, corr = network.decode(word, char, target=labels, mask=masks,
+            preds, _ = network.decode(word, char, target=labels, mask=masks,
                                          leading_symbolic=conll03_data.NUM_SYMBOLIC_TAGS)
-            num_tokens = masks.data.sum()
-            dev_corr += corr
-            dev_total += num_tokens
-            if output_predict:
-                writer.write(word.data.cpu().numpy(), pos.data.cpu().numpy(), chunk.data.cpu().numpy(),
-                             preds.cpu().numpy(), labels.data.cpu().numpy(), lengths.cpu().numpy())
-        print('dev corr: %d, total: %d, acc: %.2f%%' % (dev_corr, dev_total, dev_corr * 100 / dev_total))
-        if output_predict:
-            writer.close()
+            writer.write(word.data.cpu().numpy(), pos.data.cpu().numpy(), chunk.data.cpu().numpy(),
+                         preds.cpu().numpy(), labels.data.cpu().numpy(), lengths.cpu().numpy())
+        writer.close()
+        acc, precision, recall, f1 = evaluate(tmp_filename)
+        print('dev acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%%' % (acc, precision, recall, f1))
 
-        if dev_correct < dev_corr:
-            dev_correct = dev_corr
+        if dev_f1 < f1:
+            dev_f1 = f1
+            dev_acc = acc
+            dev_precision = precision
+            dev_recall = recall
             best_epoch = epoch
 
             # evaluate on test data when better performance detected
-            test_corr = 0.0
-            test_total = 0
-            if output_predict:
-                writer.start('tmp/test%d' % epoch)
+            tmp_filename = 'tmp/test%d' % epoch
+            writer.start(tmp_filename)
 
             for batch in conll03_data.iterate_batch_variable(data_test, batch_size):
                 word, char, pos, chunk, labels, masks, lengths = batch
-                preds, corr = network.decode(word, char, target=labels, mask=masks,
-                                             leading_symbolic=conll03_data.NUM_SYMBOLIC_TAGS)
-                num_tokens = masks.data.sum()
-                test_corr += corr
-                test_total += num_tokens
-                if output_predict:
-                    writer.write(word.data.cpu().numpy(), pos.data.cpu().numpy(), chunk.data.cpu().numpy(),
-                                 preds.cpu().numpy(), labels.data.cpu().numpy(), lengths.cpu().numpy())
-            test_correct = test_corr
-            if output_predict:
-                writer.close()
+                preds, _ = network.decode(word, char, target=labels, mask=masks,
+                                          leading_symbolic=conll03_data.NUM_SYMBOLIC_TAGS)
+                writer.write(word.data.cpu().numpy(), pos.data.cpu().numpy(), chunk.data.cpu().numpy(),
+                             preds.cpu().numpy(), labels.data.cpu().numpy(), lengths.cpu().numpy())
+            writer.close()
+            acc, precision, recall, f1 = evaluate(tmp_filename)
 
-        print("best dev  corr: %d, total: %d, acc: %.2f%% (epoch: %d)" % (
-            dev_correct, dev_total, dev_correct * 100 / dev_total, best_epoch))
-        print("best test corr: %d, total: %d, acc: %.2f%% (epoch: %d)" % (
-            test_correct, test_total, test_correct * 100 / test_total, best_epoch))
+        print("best dev  acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%% (epoch: %d)" % (
+            dev_acc, dev_precision, dev_recall, dev_f1, best_epoch))
+        print("best test acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%% (epoch: %d)" % (
+            acc, precision, recall, f1, best_epoch))
 
         if epoch % schedule == 0:
             lr = learning_rate / (1.0 + epoch * decay_rate)

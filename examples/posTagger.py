@@ -34,7 +34,7 @@ def main():
     parser.add_argument('--gamma', type=float, default=0.0, help='weight for regularization')
     parser.add_argument('--dropout', choices=['std', 'variational'], help='type of dropout', required=True)
     parser.add_argument('--p', type=float, default=0.5, help='dropout rate')
-    parser.add_argument('--schedule', nargs='+', type=int, help='schedule for learning rate decay')
+    parser.add_argument('--schedule', type=int, help='schedule for learning rate decay')
     parser.add_argument('--output_prediction', action='store_true', help='Output predictions to temp files')
     parser.add_argument('--train')  # "data/POS-penn/wsj/split1/wsj1.train.original"
     parser.add_argument('--dev')  # "data/POS-penn/wsj/split1/wsj1.dev.original"
