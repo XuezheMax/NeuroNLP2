@@ -107,12 +107,12 @@ class ChainCRF(nn.Module):
         if input.is_cuda:
             # shape = [batch]
             batch_index = torch.arange(0, batch).long().cuda()
-            prev_label = torch.cuda.LongTensor(batch).zero_() - 1
+            prev_label = torch.cuda.LongTensor(batch).fill_(self.num_labels - 1)
             tgt_energy = Variable(torch.zeros(batch)).cuda()
         else:
             # shape = [batch]
             batch_index = torch.arange(0, batch).long()
-            prev_label = torch.LongTensor(batch).zero_() - 1
+            prev_label = torch.LongTensor(batch).fill_(self.num_labels - 1)
             tgt_energy = Variable(torch.zeros(batch))
 
         for t in range(length):
@@ -128,7 +128,6 @@ class ChainCRF(nn.Module):
                 else:
                     mask_t = mask_transpose[t]
                     partition = mask_t * partition_new + (1 - mask_t) * partition
-
             tgt_energy += curr_energy[batch_index, prev_label, target_transpose[t].data]
             prev_label = target_transpose[t].data
 
