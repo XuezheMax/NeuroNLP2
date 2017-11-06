@@ -178,6 +178,7 @@ class BiRecurrentConvCRF(nn.Module):
         # output from rnn [batch, length, hidden_size]
         output, _, mask, length = self._get_rnn_output(input_word, input_char, mask=mask, length=length, hx=hx)
 
+        print(target)
         if length is not None:
             max_len = length.max()
             target = target[:, :max_len]

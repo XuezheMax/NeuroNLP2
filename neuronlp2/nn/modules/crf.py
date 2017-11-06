@@ -114,6 +114,7 @@ class ChainCRF(nn.Module):
             prev_label = torch.LongTensor(batch).zero_() - 1
             tgt_energy = torch.zeros(batch)
 
+        print(target)
         for t in range(length):
             # shape = [batch, num_label, num_label]
             curr_energy = energy_transpose[t]
