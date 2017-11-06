@@ -178,7 +178,6 @@ class BiRecurrentConvCRF(nn.Module):
         # output from rnn [batch, length, hidden_size]
         output, _, mask, length = self._get_rnn_output(input_word, input_char, mask=mask, length=length, hx=hx)
 
-        print(target)
         if length is not None:
             max_len = length.max()
             target = target[:, :max_len]
@@ -198,7 +197,10 @@ class BiRecurrentConvCRF(nn.Module):
             target = target[:, :max_len]
             target = target.contiguous()
         preds = self.crf.decode(output, mask=mask, leading_symbolic=leading_symbolic)
-        return preds, (torch.eq(preds, target).type_as(output)).sum()
+        if mask is None:
+            return preds, (torch.eq(preds, target).type_as(output)).sum()
+        else:
+            return preds, (torch.eq(preds, target).type_as(mask) * mask).sum()
 
 class BiVarRecurrentConv(nn.Module):
     def __init__(self, word_dim, num_words, char_dim, num_chars, num_filters, kernel_size,

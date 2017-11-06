@@ -3,6 +3,7 @@ __author__ = 'max'
 import math
 import torch
 import torch.nn as nn
+from torch.autograd import Variable
 from torch.nn.parameter import Parameter
 from neuronlp2.nlinalg import logsumexp, logdet
 
@@ -107,14 +108,13 @@ class ChainCRF(nn.Module):
             # shape = [batch]
             batch_index = torch.arange(0, batch).long().cuda()
             prev_label = torch.cuda.LongTensor(batch).zero_() - 1
-            tgt_energy = torch.zeros(batch).cuda()
+            tgt_energy = Variable(torch.zeros(batch)).cuda()
         else:
             # shape = [batch]
             batch_index = torch.arange(0, batch).long()
             prev_label = torch.LongTensor(batch).zero_() - 1
-            tgt_energy = torch.zeros(batch)
+            tgt_energy = Variable(torch.zeros(batch))
 
-        print(target)
         for t in range(length):
             # shape = [batch, num_label, num_label]
             curr_energy = energy_transpose[t]
@@ -131,7 +131,7 @@ class ChainCRF(nn.Module):
 
             print(batch_index)
             print(prev_label)
-            print(target[t].data)
+            print(target_transpose[t].data)
             tgt_energy += curr_energy[batch_index, prev_label, target_transpose[t].data]
             prev_label = target_transpose[t].data
 
