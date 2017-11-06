@@ -172,7 +172,7 @@ class ChainCRF(nn.Module):
             pointer = torch.LongTensor(length, batch_size, num_label).zero_()
             back_pointer = torch.LongTensor(length, batch_size).zero_()
 
-        pi[0] = energy_transpose[0, :, -1, :]
+        pi[0] = energy[:, 0, -1, leading_symbolic:-1]
         pointer[0] = -1
         for t in range(1, length):
             pi_prev = pi[t - 1]
