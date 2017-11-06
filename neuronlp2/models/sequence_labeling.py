@@ -201,7 +201,7 @@ class BiRecurrentConvCRF(nn.Module):
         if mask is None:
             return preds, torch.eq(preds, target.data).float().sum()
         else:
-            return preds, (torch.eq(preds, target.data).float() * mask).sum()
+            return preds, (torch.eq(preds, target.data).float() * mask.data).sum()
 
 class BiVarRecurrentConv(nn.Module):
     def __init__(self, word_dim, num_words, char_dim, num_chars, num_filters, kernel_size,
