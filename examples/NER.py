@@ -23,7 +23,7 @@ from neuronlp2 import utils
 
 
 def evaluate(output_file):
-    os.system("data/conll2003/conlleval.v2 < %s > %s" % (output_file, "tmp/score"))
+    os.system("examples/eval/conlleval.v2 < %s > %s" % (output_file, "tmp/score"))
     with open('tmp/score', 'r') as fin:
         fin.readline()
         line = fin.readline()
