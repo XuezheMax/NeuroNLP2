@@ -154,6 +154,10 @@ def main():
     dev_acc = 0.0
     dev_precision = 0.0
     dev_recall = 0.0
+    test_f1 = 0.0
+    test_acc = 0.0
+    test_precision = 0.0
+    test_recall = 0.0
     best_epoch = 0
     for epoch in range(1, num_epochs + 1):
         print('Epoch %d (%s(%s), learning rate=%.4f, decay rate=%.4f): ' % (epoch, mode, args.dropout, lr, decay_rate))
@@ -225,12 +229,12 @@ def main():
                 writer.write(word.data.cpu().numpy(), pos.data.cpu().numpy(), chunk.data.cpu().numpy(),
                              preds.data.cpu().numpy(), labels.data.cpu().numpy(), lengths.cpu().numpy())
             writer.close()
-            acc, precision, recall, f1 = evaluate(tmp_filename)
+            test_acc, test_precision, test_recall, test_f1 = evaluate(tmp_filename)
 
         print("best dev  acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%% (epoch: %d)" % (
             dev_acc, dev_precision, dev_recall, dev_f1, best_epoch))
         print("best test acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%% (epoch: %d)" % (
-            acc, precision, recall, f1, best_epoch))
+            test_acc, test_precision, test_recall, test_f1, best_epoch))
 
         if epoch % schedule == 0:
             lr = learning_rate / (1.0 + epoch * decay_rate)
