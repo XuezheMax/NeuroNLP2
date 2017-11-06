@@ -189,7 +189,7 @@ def main():
             dev_total += num_tokens
             if output_predict:
                 writer.write(word.data.cpu().numpy(), pos.data.cpu().numpy(), chunk.data.cpu().numpy(),
-                             preds.data.cpu().numpy(), labels.data.cpu().numpy(), lengths.cpu().numpy())
+                             preds.cpu().numpy(), labels.data.cpu().numpy(), lengths.cpu().numpy())
         print('dev corr: %d, total: %d, acc: %.2f%%' % (dev_corr, dev_total, dev_corr * 100 / dev_total))
         if output_predict:
             writer.close()
@@ -213,7 +213,7 @@ def main():
                 test_total += num_tokens
                 if output_predict:
                     writer.write(word.data.cpu().numpy(), pos.data.cpu().numpy(), chunk.data.cpu().numpy(),
-                                 preds.data.cpu().numpy(), labels.data.cpu().numpy(), lengths.cpu().numpy())
+                                 preds.cpu().numpy(), labels.data.cpu().numpy(), lengths.cpu().numpy())
             test_correct = test_corr
             if output_predict:
                 writer.close()
