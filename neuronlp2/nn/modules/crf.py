@@ -62,9 +62,10 @@ class ChainCRF(nn.Module):
 
         # compute out_s by tensor dot [batch, length, input_size] * [input_size, num_label]
         # this out_s should be [batch, length, num_label]
-        out_s = torch.matmul(input, self.W_s)
+        # out_s = torch.matmul(input, self.W_s)
 
-        output = out_t + out_s.view(batch, length, 1, self.num_labels)
+        # output = out_t + out_s.view(batch, length, 1, self.num_labels)
+        output = out_t
 
         if self.b is not None:
             output += self.b
@@ -172,7 +173,7 @@ class ChainCRF(nn.Module):
             pointer = torch.LongTensor(length, batch_size, num_label).zero_()
             back_pointer = torch.LongTensor(length, batch_size).zero_()
 
-        pi[0] = energy_transpose[0, :, -1. :]
+        pi[0] = energy_transpose[0, :, -1, :]
         pointer[0] = -1
         for t in range(1, length):
             pi_prev = pi[t - 1]
