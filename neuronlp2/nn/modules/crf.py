@@ -129,9 +129,6 @@ class ChainCRF(nn.Module):
                     mask_t = mask_transpose[t]
                     partition = mask_t * partition_new + (1 - mask_t) * partition
 
-            print(batch_index)
-            print(prev_label)
-            print(target_transpose[t].data)
             tgt_energy += curr_energy[batch_index, prev_label, target_transpose[t].data]
             prev_label = target_transpose[t].data
 
