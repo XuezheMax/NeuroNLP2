@@ -183,4 +183,4 @@ class ChainCRF(nn.Module):
             pointer_last = pointer[t + 1]
             back_pointer[t] = pointer_last[batch_index, back_pointer[t + 1]]
 
-        return back_pointer + leading_symbolic
+        return back_pointer.transpose(0, 1) + leading_symbolic
