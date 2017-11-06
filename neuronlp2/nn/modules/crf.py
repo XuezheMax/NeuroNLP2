@@ -95,10 +95,10 @@ class ChainCRF(nn.Module):
         energy_transpose = energy.transpose(0, 1)
         # shape = [length, batch]
         target_transpose = target.transpose(0, 1)
-        # shape = [length, batch]
+        # shape = [length, batch, 1]
         mask_transpose = None
         if mask is not None:
-            mask_transpose = mask.transpose(0, 1)
+            mask_transpose = mask.view(mask.size() + (1, )).transpose(0, 1)
 
 
         # shape = [batch, num_label]
@@ -119,15 +119,15 @@ class ChainCRF(nn.Module):
             # shape = [batch, num_label, num_label]
             curr_energy = energy_transpose[t]
             if t == 0:
-                partition = curr_energy[:, -1, :]
+                partition = curr_energy[:, -1, :].contiguous()
             else:
                 # shape = [batch, num_label]
-                partition_new = logsumexp(curr_energy + partition.contiguous().view(partition.size() + (1,)), dim=1)
+                partition_new = logsumexp(curr_energy + partition.view(partition.size() + (1,)), dim=1)
                 if mask_transpose is None:
                     partition = partition_new
                 else:
-                    mask = mask_transpose[t].view(batch, 1)
-                    partition = mask * partition_new + (1 - mask) * partition
+                    mask_t = mask_transpose[t]
+                    partition = mask_t * partition_new + (1 - mask_t) * partition
 
             print(batch_index)
             print(prev_label)
