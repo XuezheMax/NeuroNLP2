@@ -199,9 +199,9 @@ class BiRecurrentConvCRF(nn.Module):
 
         preds = self.crf.decode(output, mask=mask.contiguous(), leading_symbolic=leading_symbolic)
         if mask is None:
-            return preds, (torch.eq(preds, target).type_as(output)).sum()
+            return preds, torch.eq(preds, target.data).float().sum()
         else:
-            return preds, (torch.eq(preds, target).type_as(mask) * mask).sum()
+            return preds, (torch.eq(preds, target.data).float() * mask).sum()
 
 class BiVarRecurrentConv(nn.Module):
     def __init__(self, word_dim, num_words, char_dim, num_chars, num_filters, kernel_size,
