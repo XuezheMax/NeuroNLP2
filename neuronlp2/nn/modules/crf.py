@@ -27,7 +27,7 @@ class ChainCRF(nn.Module):
         self.pad_label_id = num_labels
 
         # transition weight tensor
-        self.W_t = Parameter(torch.Tensor(input_size, self.num_labels, self.num_labels))
+        self.W_t = Parameter(torch.Tensor(input_size, self.num_labels * self.num_labels))
         # state weight tensor
         self.W_s = Parameter(torch.Tensor(input_size, self.num_labels))
         if bias:
@@ -55,11 +55,10 @@ class ChainCRF(nn.Module):
             the energy tensor with shape = [batch, length, num_label, num_label]
 
         '''
-        # compute out_s by tensor dot: [batch, length, input_size] * [input_size, num_label, num_label]
+        # compute out_s by tensor dot: [batch, length, input_size] * [input_size, num_label * num_label]
         # the output should be [batch, length, num_label,  num_label]
         batch, length, _ = input.size()
-        out_t = torch.matmul(input, self.W_t.view(self.input_size, self.num_labels * self.num_labels))
-        out_t = out_t.view(batch, length, self.num_labels, self.num_labels)
+        out_t = torch.matmul(input, self.W_t).view(batch, length, self.num_labels, self.num_labels)
 
         # compute out_s by tensor dot [batch, length, input_size] * [input_size, num_label]
         # this out_s should be [batch, length, num_label]
@@ -164,19 +163,19 @@ class ChainCRF(nn.Module):
 
         if input.is_cuda:
             batch_index = torch.arange(0, batch_size).long().cuda()
-            pi = torch.zeros([length, batch_size, num_label]).cuda()
+            pi = torch.zeros([length, batch_size, num_label, 1]).cuda()
             pointer = torch.cuda.LongTensor(length, batch_size, num_label).zero_()
             back_pointer = torch.cuda.LongTensor(length, batch_size).zero_()
         else:
             batch_index = torch.arange(0, batch_size).long()
-            pi = torch.zeros([length, batch_size, num_label])
+            pi = torch.zeros([length, batch_size, num_label, 1])
             pointer = torch.LongTensor(length, batch_size, num_label).zero_()
             back_pointer = torch.LongTensor(length, batch_size).zero_()
 
-        pi[0].copy_(energy_transpose[0, :, -1. :])
+        pi[0] = energy_transpose[0, :, -1. :]
         pointer[0] = -1
         for t in range(1, length):
-            pi_prev = pi[t - 1].view(batch_size, num_label, 1)
+            pi_prev = pi[t - 1]
             pi[t], pointer[t] = torch.max(energy_transpose[t] + pi_prev, dim=1)
 
         _, back_pointer[-1] = torch.max(pi[-1], dim=1)
