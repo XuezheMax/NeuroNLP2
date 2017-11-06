@@ -122,7 +122,7 @@ class ChainCRF(nn.Module):
                 partition = curr_energy[:, -1, :]
             else:
                 # shape = [batch, num_label]
-                partition_new = logsumexp(curr_energy + partition.view(partition.size() + (1,)), dim=1)
+                partition_new = logsumexp(curr_energy + partition.contiguous().view(partition.size() + (1,)), dim=1)
                 if mask_transpose is None:
                     partition = partition_new
                 else:
