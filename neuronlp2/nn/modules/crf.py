@@ -131,8 +131,8 @@ class ChainCRF(nn.Module):
             print(batch_index)
             print(prev_label)
             print(target[t].data)
-            tgt_energy += curr_energy[batch_index, prev_label, target[t].data]
-            prev_label = target[t].data
+            tgt_energy += curr_energy[batch_index, prev_label, target_transpose[t].data]
+            prev_label = target_transpose[t].data
 
         return logsumexp(partition, dim=1) - tgt_energy
 
