@@ -108,7 +108,7 @@ class BiRecurrentConv(nn.Module):
 
 class BiRecurrentConvCRF(nn.Module):
     def __init__(self, word_dim, num_words, char_dim, num_chars, num_filters, kernel_size,
-                 rnn_mode, hidden_size, num_layers, num_labels,
+                 rnn_mode, hidden_size, tag_space, num_layers, num_labels,
                  embedd_word=None, embedd_char=None, p_in=0.2, p_rnn=0.5, bigram=False):
         super(BiRecurrentConvCRF, self).__init__()
 
@@ -130,7 +130,9 @@ class BiRecurrentConvCRF(nn.Module):
         self.rnn = RNN(word_dim + num_filters, hidden_size, num_layers=num_layers,
                        batch_first=True, bidirectional=True, dropout=p_rnn)
 
-        self.crf = ChainCRF(hidden_size * 2, num_labels, bigram=bigram)
+        self.dense = nn.Linear(hidden_size * 2, tag_space)
+
+        self.crf = ChainCRF(tag_space, num_labels, bigram=bigram)
 
     def _get_rnn_output(self, input_word, input_char, mask=None, length=None, hx=None):
         # hack length from mask
@@ -166,16 +168,17 @@ class BiRecurrentConvCRF(nn.Module):
         else:
             # output from rnn [batch, length, hidden_size]
             output, hn = self.rnn(input, hx=hx)
-        return self.dropout_rnn(output), hn, mask, length
+        # output size [batch, length, tag_space]
+        return self.dense(self.dropout_rnn(output)), hn, mask, length
 
     def forward(self, input_word, input_char, mask=None, length=None, hx=None):
-        # output from rnn [batch, length, hidden_size]
+        # output from rnn [batch, length, tag_space]
         output, _, mask, length = self._get_rnn_output(input_word, input_char, mask=mask, length=length, hx=hx)
         # [batch, length, num_label,  num_label]
         return self.crf(output, mask=mask), mask
 
     def loss(self, input_word, input_char, target, mask=None, length=None, hx=None):
-        # output from rnn [batch, length, hidden_size]
+        # output from rnn [batch, length, tag_space]
         output, _, mask, length = self._get_rnn_output(input_word, input_char, mask=mask, length=length, hx=hx)
 
         if length is not None:
@@ -187,7 +190,7 @@ class BiRecurrentConvCRF(nn.Module):
         return self.crf.loss(output, target, mask=mask.contiguous()).sum() / target.size(0)
 
     def decode(self, input_word, input_char, target=None, mask=None, length=None, hx=None, leading_symbolic=0):
-        # output from rnn [batch, length, hidden_size]
+        # output from rnn [batch, length, tag_space]
         output, _, mask, length = self._get_rnn_output(input_word, input_char, mask=mask, length=length, hx=hx)
         if target is None:
             return self.crf.decode(output, mask=mask, leading_symbolic=leading_symbolic), None
