@@ -9,7 +9,7 @@ from neuronlp2.nlinalg import logsumexp, logdet
 
 
 class ChainCRF(nn.Module):
-    def __init__(self, input_size, num_labels, bias=True, **kwargs):
+    def __init__(self, input_size, num_labels, bigram=True, **kwargs):
         '''
 
         Args:
@@ -17,23 +17,25 @@ class ChainCRF(nn.Module):
                 the dimension of the input.
             num_labels: int
                 the number of labels of the crf layer
-            bias: bool
-                if apply bias parameter.
+            bigram: bool
+                if apply bi-gram parameter.
             **kwargs:
         '''
         super(ChainCRF, self).__init__()
         self.input_size = input_size
         self.num_labels = num_labels + 1
         self.pad_label_id = num_labels
+        self.bigram = bigram
 
-        # transition weight tensor
-        self.W_t = Parameter(torch.Tensor(input_size, self.num_labels * self.num_labels))
+
         # state weight tensor
         self.W_s = Parameter(torch.Tensor(input_size, self.num_labels))
-        if bias:
-            self.b = Parameter(torch.Tensor(self.num_labels, self.num_labels))
+        self.b = Parameter(torch.Tensor(self.num_labels, self.num_labels))
+        if bigram:
+            # transition weight tensor
+            self.W_t = Parameter(torch.Tensor(input_size, self.num_labels * self.num_labels))
         else:
-            self.register_parameter('bias', None)
+            self.register_parameter('bigram', None)
 
         self.reset_parameters()
 
@@ -55,19 +57,20 @@ class ChainCRF(nn.Module):
             the energy tensor with shape = [batch, length, num_label, num_label]
 
         '''
-        # compute out_s by tensor dot: [batch, length, input_size] * [input_size, num_label * num_label]
-        # the output should be [batch, length, num_label,  num_label]
         batch, length, _ = input.size()
-        out_t = torch.matmul(input, self.W_t).view(batch, length, self.num_labels, self.num_labels)
 
         # compute out_s by tensor dot [batch, length, input_size] * [input_size, num_label]
-        # this out_s should be [batch, length, num_label]
+        # thus out_s should be [batch, length, num_label] --> [batch, length, num_label, 1]
         out_s = torch.matmul(input, self.W_s).view(batch, length, 1, self.num_labels)
 
-        output = out_t + out_s
+        # [batch, length, num_label, num_label]
+        output = self.b + out_s
 
-        if self.b is not None:
-            output += self.b
+        if self.bigram:
+            # compute out_s by tensor dot: [batch, length, input_size] * [input_size, num_label * num_label]
+            # the output should be [batch, length, num_label,  num_label]
+            out_t = torch.matmul(input, self.W_t).view(batch, length, self.num_labels, self.num_labels)
+            output = output + out_t
 
         if mask is not None:
             output = output * mask.view(mask.size() + (1, 1))
@@ -184,3 +187,6 @@ class ChainCRF(nn.Module):
             back_pointer[t] = pointer_last[batch_index, back_pointer[t + 1]]
 
         return back_pointer.transpose(0, 1) + leading_symbolic
+
+
+# class TreeCRF(nn.Module):

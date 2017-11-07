@@ -47,6 +47,7 @@ def main():
     parser.add_argument('--gamma', type=float, default=0.0, help='weight for regularization')
     parser.add_argument('--dropout', choices=['std', 'variational'], help='type of dropout', required=True)
     parser.add_argument('--p', type=float, default=0.5, help='dropout rate')
+    parser.add_argument('--bigram', action='store_true', help='bi-gram parameter for CRF')
     parser.add_argument('--schedule', type=int, help='schedule for learning rate decay')
     parser.add_argument('--embedding', choices=['glove', 'senna', 'sskip', 'polyglot'], help='Embedding for words',
                         required=True)
@@ -73,6 +74,7 @@ def main():
     gamma = args.gamma
     schedule = args.schedule
     p = args.p
+    bigram = args.bigram
     embedding = args.embedding
     embedding_path = args.embedding_dict
 
@@ -133,7 +135,7 @@ def main():
                                      char_dim, char_alphabet.size(),
                                      num_filters, window,
                                      mode, hidden_size, num_layers,
-                                     num_labels, embedd_word=word_table, p_rnn=p)
+                                     num_labels, embedd_word=word_table, p_rnn=p, bigram=bigram)
     else:
         raise NotImplementedError
 
@@ -142,7 +144,8 @@ def main():
 
     lr = learning_rate
     optim = SGD(network.parameters(), lr=lr, momentum=momentum, weight_decay=gamma, nesterov=True)
-    logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d" % (mode, num_layers, hidden_size, num_filters))
+    logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, crf=%s" % (
+        mode, num_layers, hidden_size, num_filters, 'bigram' if bigram else 'unigram'))
     logger.info("training: l2: %f, (#training data: %d, batch: %d, dropout: %.2f)" % (gamma, num_data, batch_size, p))
 
     num_batches = num_data / batch_size + 1

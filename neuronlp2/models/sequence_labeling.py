@@ -109,7 +109,7 @@ class BiRecurrentConv(nn.Module):
 class BiRecurrentConvCRF(nn.Module):
     def __init__(self, word_dim, num_words, char_dim, num_chars, num_filters, kernel_size,
                  rnn_mode, hidden_size, num_layers, num_labels,
-                 embedd_word=None, embedd_char=None, p_in=0.2, p_rnn=0.5):
+                 embedd_word=None, embedd_char=None, p_in=0.2, p_rnn=0.5, bigram=False):
         super(BiRecurrentConvCRF, self).__init__()
 
         self.word_embedd = Embedding(num_words, word_dim, init_embedding=embedd_word)
@@ -130,7 +130,7 @@ class BiRecurrentConvCRF(nn.Module):
         self.rnn = RNN(word_dim + num_filters, hidden_size, num_layers=num_layers,
                        batch_first=True, bidirectional=True, dropout=p_rnn)
 
-        self.crf = ChainCRF(hidden_size * 2, num_labels)
+        self.crf = ChainCRF(hidden_size * 2, num_labels, bigram=bigram)
 
     def _get_rnn_output(self, input_word, input_char, mask=None, length=None, hx=None):
         # hack length from mask
