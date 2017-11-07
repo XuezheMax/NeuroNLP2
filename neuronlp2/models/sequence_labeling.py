@@ -186,7 +186,7 @@ class BiRecurrentConvCRF(nn.Module):
             output, hn = self.rnn(input, hx=hx)
         output = self.dropout_rnn(output)
 
-        if self.dense:
+        if self.dense is not None:
             # output size [batch, length, tag_space]
             output = F.tanh(self.dense(output))
 
