@@ -169,7 +169,7 @@ class BiRecurrentConvCRF(nn.Module):
             # output from rnn [batch, length, hidden_size]
             output, hn = self.rnn(input, hx=hx)
         # output size [batch, length, tag_space]
-        return self.dense(self.dropout_rnn(output)), hn, mask, length
+        return self.dropout_rnn(self.dense(output)), hn, mask, length
 
     def forward(self, input_word, input_char, mask=None, length=None, hx=None):
         # output from rnn [batch, length, tag_space]
