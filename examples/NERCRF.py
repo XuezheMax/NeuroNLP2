@@ -99,7 +99,7 @@ def main():
     data_train = conll03_data.read_data_to_variable(train_path, word_alphabet, char_alphabet, pos_alphabet,
                                                     chunk_alphabet, ner_alphabet, use_gpu=use_gpu)
     num_data = sum(data_train[1])
-    num_labels = pos_alphabet.size()
+    num_labels = ner_alphabet.size()
 
     data_dev = conll03_data.read_data_to_variable(dev_path, word_alphabet, char_alphabet, pos_alphabet,
                                                   chunk_alphabet, ner_alphabet, use_gpu=use_gpu)
@@ -130,7 +130,7 @@ def main():
     char_dim = 30
     window = 3
     num_layers = 1
-    tag_space = 100
+    tag_space = 50
     if args.dropout == 'std':
         network = BiRecurrentConvCRF(embedd_dim, word_alphabet.size(),
                                      char_dim, char_alphabet.size(),

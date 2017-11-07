@@ -29,20 +29,25 @@ class ChainCRF(nn.Module):
 
 
         # state weight tensor
-        self.W_s = Parameter(torch.Tensor(input_size, self.num_labels))
-        self.b = Parameter(torch.Tensor(self.num_labels, self.num_labels))
+        self.state_nn = nn.Linear(input_size, self.num_labels)
+        self.trans_matrix = None
+        self.trans_nn = None
         if bigram:
             # transition weight tensor
-            self.W_t = Parameter(torch.Tensor(input_size, self.num_labels * self.num_labels))
+            self.trans_nn = nn.Linear(input_size, self.num_labels * self.num_labels)
+            self.register_parameter('trans_matrix', None)
         else:
-            self.register_parameter('bigram', None)
+            self.trans_matrix = Parameter(torch.Tensor(self.num_labels, self.num_labels))
 
         self.reset_parameters()
 
     def reset_parameters(self):
-        stdv = 1.0 / math.sqrt(self.input_size)
-        for weight in self.parameters():
-            weight.data.uniform_(-stdv, stdv)
+        self.state_nn.reset_parameters()
+        if self.bigram:
+            self.trans_nn.reset_parameters()
+        else:
+            stdv = 1.0 / math.sqrt(self.input_size)
+            self.trans_matrix.data.uniform_(-stdv, stdv)
 
     def forward(self, input, mask=None):
         '''
@@ -61,16 +66,16 @@ class ChainCRF(nn.Module):
 
         # compute out_s by tensor dot [batch, length, input_size] * [input_size, num_label]
         # thus out_s should be [batch, length, num_label] --> [batch, length, num_label, 1]
-        out_s = torch.matmul(input, self.W_s).view(batch, length, 1, self.num_labels)
+        out_s = self.state_nn(input).view(batch, length, 1, self.num_labels)
 
         if self.bigram:
             # compute out_s by tensor dot: [batch, length, input_size] * [input_size, num_label * num_label]
             # the output should be [batch, length, num_label,  num_label]
-            out_t = torch.matmul(input, self.W_t).view(batch, length, self.num_labels, self.num_labels)
-            output = out_t + out_s + self.b
+            out_t = self.trans_nn(input).view(batch, length, self.num_labels, self.num_labels)
+            output = out_t + out_s
         else:
             # [batch, length, num_label, num_label]
-            output = self.b + out_s
+            output = self.trans_matrix + out_s
 
         if mask is not None:
             output = output * mask.view(mask.size() + (1, 1))

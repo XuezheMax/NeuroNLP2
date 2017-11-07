@@ -97,7 +97,7 @@ def main():
     data_train = conll03_data.read_data_to_variable(train_path, word_alphabet, char_alphabet, pos_alphabet,
                                                     chunk_alphabet, ner_alphabet, use_gpu=use_gpu)
     num_data = sum(data_train[1])
-    num_labels = pos_alphabet.size()
+    num_labels = ner_alphabet.size()
 
     data_dev = conll03_data.read_data_to_variable(dev_path, word_alphabet, char_alphabet, pos_alphabet,
                                                   chunk_alphabet, ner_alphabet, use_gpu=use_gpu)
@@ -128,18 +128,19 @@ def main():
     char_dim = 30
     window = 3
     num_layers = 1
+    tag_space = 50
     if args.dropout == 'std':
         network = BiRecurrentConv(embedd_dim, word_alphabet.size(),
                                   char_dim, char_alphabet.size(),
                                   num_filters, window,
-                                  mode, hidden_size, num_layers,
-                                  num_labels, embedd_word=word_table, p_rnn=p)
+                                  mode, hidden_size, num_layers, num_labels,
+                                  tag_space=tag_space, embedd_word=word_table, p_rnn=p)
     else:
         network = BiVarRecurrentConv(embedd_dim, word_alphabet.size(),
                                      char_dim, char_alphabet.size(),
                                      num_filters, window,
-                                     mode, hidden_size, num_layers,
-                                     num_labels, embedd_word=word_table, p_rnn=p)
+                                     mode, hidden_size, num_layers, num_labels,
+                                     tag_space=tag_space, embedd_word=word_table, p_rnn=p)
     if use_gpu:
         network.cuda()
 

@@ -10,7 +10,7 @@ from ..nn import utils
 
 class BiRecurrentConv(nn.Module):
     def __init__(self, word_dim, num_words, char_dim, num_chars, num_filters, kernel_size,
-                 rnn_mode, hidden_size, num_layers, num_labels,
+                 rnn_mode, hidden_size, num_layers, num_labels, tag_space=0,
                  embedd_word=None, embedd_char=None, p_in=0.2, p_rnn=0.5):
         super(BiRecurrentConv, self).__init__()
 
@@ -32,7 +32,12 @@ class BiRecurrentConv(nn.Module):
         self.rnn = RNN(word_dim + num_filters, hidden_size, num_layers=num_layers,
                        batch_first=True, bidirectional=True, dropout=p_rnn)
 
-        self.dense = nn.Linear(hidden_size * 2, num_labels)
+        self.dense_tag = None
+        out_dim = hidden_size * 2
+        if tag_space:
+            self.dense_tag = nn.Linear(out_dim, tag_space)
+            out_dim = tag_space
+        self.dense_softmax = nn.Linear(out_dim, num_labels)
 
         self.logsoftmax = nn.LogSoftmax()
         self.nll_loss = nn.NLLLoss(size_average=False)
@@ -71,8 +76,13 @@ class BiRecurrentConv(nn.Module):
         else:
             # output from rnn [batch, length, hidden_size]
             output, hn = self.rnn(input, hx=hx)
-        # [batch, length, num_labels]
-        return self.dense(self.dropout_rnn(output)), hn, mask
+        output = self.dropout_rnn(output)
+
+        if self.dense_tag is not None:
+            # [batch, length, tag_space]
+            output = F.tanh(self.dense_tag(output))
+
+        return output, hn, mask
 
     def loss(self, input_word, input_char, target, mask=None, length=None, hx=None, leading_symbolic=0):
         # hack length from mask
@@ -82,6 +92,8 @@ class BiRecurrentConv(nn.Module):
             length = mask.data.sum(dim=1).long()
         # [batch, length, num_labels]
         output, _, mask = self.forward(input_word, input_char, mask=mask, length=length, hx=hx)
+        # [batch, length, num_labels]
+        output = self.dense_softmax(output)
         # preds = [batch, length]
         _, preds = torch.max(output[:, :, leading_symbolic:], dim=2)
         preds += leading_symbolic
@@ -217,7 +229,7 @@ class BiRecurrentConvCRF(nn.Module):
 
 class BiVarRecurrentConv(nn.Module):
     def __init__(self, word_dim, num_words, char_dim, num_chars, num_filters, kernel_size,
-                 rnn_mode, hidden_size, num_layers, num_labels,
+                 rnn_mode, hidden_size, num_layers, num_labels, tag_space=0,
                  embedd_word=None, embedd_char=None, p_in=0.2, p_rnn=0.5):
         super(BiVarRecurrentConv, self).__init__()
 
@@ -239,7 +251,12 @@ class BiVarRecurrentConv(nn.Module):
         self.rnn = RNN(word_dim + num_filters, hidden_size, num_layers=num_layers,
                        batch_first=True, bidirectional=True, dropout=p_rnn)
 
-        self.dense = nn.Linear(hidden_size * 2, num_labels)
+        self.dense_tag = None
+        out_dim = hidden_size * 2
+        if tag_space:
+            self.dense_tag = nn.Linear(out_dim, tag_space)
+            out_dim = tag_space
+        self.dense_softmax = nn.Linear(out_dim, num_labels)
 
         self.logsoftmax = nn.LogSoftmax()
         self.nll_loss = nn.NLLLoss(size_average=False)
@@ -266,13 +283,21 @@ class BiVarRecurrentConv(nn.Module):
         # [batch, length, dim] --> [batch, dim, length] --> [batch, length, dim]
         input = self.dropout_in(input.transpose(1, 2)).transpose(1, 2)
         # output from rnn [batch, length, hidden_size]
-        output, _ = self.rnn(input, mask, hx=hx)
-        # [batch, length, num_labels]
-        return self.dense(self.dropout_rnn(output.transpose(1, 2)).transpose(1, 2))
+        output, hn = self.rnn(input, mask, hx=hx)
+
+        output = self.dropout_rnn(output.transpose(1, 2)).transpose(1, 2)
+
+        if self.dense_tag is not None:
+            # [batch, length, tag_space]
+            output = F.tanh(self.dense_tag(output))
+
+        return output, hn, mask
 
     def loss(self, input_word, input_char, target, mask=None, hx=None, leading_symbolic=0):
         # [batch, length, num_labels]
-        output = self.forward(input_word, input_char, mask=mask, hx=hx)
+        output, _, _ = self.forward(input_word, input_char, mask=mask, hx=hx)
+        # [batch, length, num_labels]
+        output = self.dense_softmax(output)
         # preds = [batch, length]
         _, preds = torch.max(output[:, :, leading_symbolic:], dim=2)
         preds += leading_symbolic
