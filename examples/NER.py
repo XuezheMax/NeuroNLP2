@@ -41,6 +41,7 @@ def main():
     parser.add_argument('--num_epochs', type=int, default=100, help='Number of training epochs')
     parser.add_argument('--batch_size', type=int, default=16, help='Number of sentences in each batch')
     parser.add_argument('--hidden_size', type=int, default=128, help='Number of hidden units in RNN')
+    parser.add_argument('--tag_space', type=int, default=0, help='Dimension of tag space')
     parser.add_argument('--num_filters', type=int, default=30, help='Number of filters in CNN')
     parser.add_argument('--learning_rate', type=float, default=0.1, help='Learning rate')
     parser.add_argument('--decay_rate', type=float, default=0.1, help='Decay rate of learning rate')
@@ -128,7 +129,7 @@ def main():
     char_dim = 30
     window = 3
     num_layers = 1
-    tag_space = 50
+    tag_space = args.tag_space
     if args.dropout == 'std':
         network = BiRecurrentConv(embedd_dim, word_alphabet.size(),
                                   char_dim, char_alphabet.size(),
@@ -147,7 +148,8 @@ def main():
     lr = learning_rate
     # optim = Adam(network.parameters(), lr=lr, betas=(0.9, 0.9), weight_decay=gamma)
     optim = SGD(network.parameters(), lr=lr, momentum=momentum, weight_decay=gamma, nesterov=True)
-    logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d" % (mode, num_layers, hidden_size, num_filters))
+    logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, tag space=%d" % (
+        mode, num_layers, hidden_size, num_filters, tag_space))
     logger.info("training: l2: %f, (#training data: %d, batch: %d, dropout: %.2f)" % (gamma, num_data, batch_size, p))
 
     num_batches = num_data / batch_size + 1
