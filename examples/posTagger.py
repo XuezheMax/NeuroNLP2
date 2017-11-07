@@ -111,14 +111,14 @@ def main():
         network = BiRecurrentConv(embedd_dim, word_alphabet.size(),
                                   char_dim, char_alphabet.size(),
                                   num_filters, window,
-                                  mode, hidden_size, num_layers,
-                                  num_labels, embedd_word=word_table, p_rnn=p)
+                                  mode, hidden_size, num_layers, num_labels,
+                                  embedd_word=word_table, p_rnn=p)
     else:
         network = BiVarRecurrentConv(embedd_dim, word_alphabet.size(),
                                      char_dim, char_alphabet.size(),
                                      num_filters, window,
-                                     mode, hidden_size, num_layers,
-                                     num_labels, embedd_word=word_table, p_rnn=p)
+                                     mode, hidden_size, num_layers, num_labels,
+                                     embedd_word=word_table, p_rnn=p)
     if use_gpu:
         network.cuda()
 
