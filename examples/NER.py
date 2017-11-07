@@ -206,7 +206,7 @@ def main():
 
         # evaluate performance on dev data
         network.eval()
-        tmp_filename = 'tmp/dev%d' % epoch
+        tmp_filename = 'tmp/%s_dev%d' % (str(uid), epoch)
         writer.start(tmp_filename)
 
         for batch in conll03_data.iterate_batch_variable(data_dev, batch_size):
@@ -226,7 +226,7 @@ def main():
             best_epoch = epoch
 
             # evaluate on test data when better performance detected
-            tmp_filename = 'tmp/test%d' % epoch
+            tmp_filename = 'tmp/%s_test%d' % (str(uid), epoch)
             writer.start(tmp_filename)
 
             for batch in conll03_data.iterate_batch_variable(data_test, batch_size):
