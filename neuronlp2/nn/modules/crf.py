@@ -63,14 +63,14 @@ class ChainCRF(nn.Module):
         # thus out_s should be [batch, length, num_label] --> [batch, length, num_label, 1]
         out_s = torch.matmul(input, self.W_s).view(batch, length, 1, self.num_labels)
 
-        # [batch, length, num_label, num_label]
-        output = self.b + out_s
-
         if self.bigram:
             # compute out_s by tensor dot: [batch, length, input_size] * [input_size, num_label * num_label]
             # the output should be [batch, length, num_label,  num_label]
             out_t = torch.matmul(input, self.W_t).view(batch, length, self.num_labels, self.num_labels)
-            output = output + out_t
+            output = out_t + out_s + self.b
+        else:
+            # [batch, length, num_label, num_label]
+            output = self.b + out_s
 
         if mask is not None:
             output = output * mask.view(mask.size() + (1, 1))
