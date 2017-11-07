@@ -108,7 +108,7 @@ class BiRecurrentConv(nn.Module):
 
 class BiRecurrentConvCRF(nn.Module):
     def __init__(self, word_dim, num_words, char_dim, num_chars, num_filters, kernel_size,
-                 rnn_mode, hidden_size, num_layers, num_mlp, mlp_sizes, num_labels,
+                 rnn_mode, hidden_size, num_layers, num_labels, tag_space=0,
                  embedd_word=None, embedd_char=None, p_in=0.2, p_rnn=0.5, bigram=False):
         super(BiRecurrentConvCRF, self).__init__()
 
@@ -130,18 +130,11 @@ class BiRecurrentConvCRF(nn.Module):
         self.rnn = RNN(word_dim + num_filters, hidden_size, num_layers=num_layers,
                        batch_first=True, bidirectional=True, dropout=p_rnn)
 
-        self.mlp = []
+        self.dense = None
         out_dim = hidden_size * 2
-        if num_mlp:
-            assert num_mlp == len(mlp_sizes), 'size of mlp_sizes not euqal to number of mlp.'
-            in_dim = hidden_size * 2
-            out_dim = mlp_sizes[0]
-            for i in range(num_mlp):
-                dense = nn.Linear(in_dim, out_dim)
-                self.mlp.append(dense)
-                self.add_module('dense%d' % (i), dense)
-                in_dim = out_dim
-                out_dim = mlp_sizes[i + 1] if i + 1 < num_mlp else out_dim
+        if tag_space:
+            self.dense = nn.Linear(out_dim, tag_space)
+            out_dim = tag_space
 
         self.crf = ChainCRF(out_dim, num_labels, bigram=bigram)
 
@@ -180,9 +173,11 @@ class BiRecurrentConvCRF(nn.Module):
             # output from rnn [batch, length, hidden_size]
             output, hn = self.rnn(input, hx=hx)
         output = self.dropout_rnn(output)
-        # output size [batch, length, tag_space]
-        for dense in self.mlp:
-            output = F.tanh(dense(output))
+
+        if self.dense:
+            # output size [batch, length, tag_space]
+            output = F.tanh(self.dense(output))
+
         return output, hn, mask, length
 
     def forward(self, input_word, input_char, mask=None, length=None, hx=None):
