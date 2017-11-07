@@ -46,8 +46,7 @@ class ChainCRF(nn.Module):
         if self.bigram:
             self.trans_nn.reset_parameters()
         else:
-            stdv = 1.0 / math.sqrt(self.input_size)
-            self.trans_matrix.data.uniform_(-stdv, stdv)
+            self.trans_matrix.data.normal_(mean=0, std=1)
 
     def forward(self, input, mask=None):
         '''
