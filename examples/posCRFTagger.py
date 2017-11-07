@@ -109,12 +109,13 @@ def main():
     char_dim = 30
     window = 3
     num_layers = 1
+    num_mlp = 1
     tag_space = 100
     if args.dropout == 'std':
         network = BiRecurrentConvCRF(embedd_dim, word_alphabet.size(),
                                      char_dim, char_alphabet.size(),
                                      num_filters, window,
-                                     mode, hidden_size, tag_space, num_layers,
+                                     mode, hidden_size, num_layers, num_mlp, [tag_space],
                                      num_labels, embedd_word=word_table, p_rnn=p, bigram=bigram)
     else:
         raise NotImplementedError
