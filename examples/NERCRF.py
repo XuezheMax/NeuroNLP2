@@ -13,6 +13,7 @@ sys.path.append("..")
 
 import time
 import argparse
+import uuid
 
 import numpy as np
 import torch
@@ -21,10 +22,13 @@ from neuronlp2.io import get_logger, conll03_data, CoNLL03Writer
 from neuronlp2.models import BiRecurrentConvCRF
 from neuronlp2 import utils
 
+uid = uuid.uuid4().get_hex()[:6]
+
 
 def evaluate(output_file):
-    os.system("examples/eval/conlleval.v2 < %s > %s" % (output_file, "tmp/score"))
-    with open('tmp/score', 'r') as fin:
+    score_file = "tmp/score_%s" % str(uid)
+    os.system("examples/eval/conlleval.v2 < %s > %s" % (output_file, score_file))
+    with open(score_file, 'r') as fin:
         fin.readline()
         line = fin.readline()
         fields = line.split(";")
