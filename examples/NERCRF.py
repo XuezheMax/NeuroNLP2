@@ -131,7 +131,7 @@ def main():
     window = 3
     num_layers = 1
     tag_space = 100
-    num_mlp = 1
+    num_mlp = 0
     if args.dropout == 'std':
         network = BiRecurrentConvCRF(embedd_dim, word_alphabet.size(),
                                      char_dim, char_alphabet.size(),
