@@ -42,11 +42,12 @@ class ChainCRF(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        self.state_nn.reset_parameters()
+        nn.init.constant(self.state_nn.bias, 0.)
         if self.bigram:
-            self.trans_nn.reset_parameters()
+            nn.init.xavier_uniform(self.trans_nn.weight)
+            nn.init.constant(self.trans_nn.bias, 0.)
         else:
-            self.trans_matrix.data.normal_(mean=0, std=1)
+            nn.init.xavier_normal(self.trans_matrix)
 
     def forward(self, input, mask=None):
         '''
