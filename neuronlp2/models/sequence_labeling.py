@@ -80,7 +80,7 @@ class BiRecurrentConv(nn.Module):
 
         if self.dense_tag is not None:
             # [batch, length, tag_space]
-            output = F.tanh(self.dense_tag(output))
+            output = F.elu(self.dense_tag(output))
 
         return output, hn, mask
 
@@ -180,7 +180,7 @@ class BiVarRecurrentConv(nn.Module):
 
         if self.dense_tag is not None:
             # [batch, length, tag_space]
-            output = F.tanh(self.dense_tag(output))
+            output = F.elu(self.dense_tag(output))
 
         return output, hn, mask
 
@@ -277,7 +277,7 @@ class BiRecurrentConvCRF(nn.Module):
 
         if self.dense is not None:
             # output size [batch, length, tag_space]
-            output = F.tanh(self.dense(output))
+            output = F.elu(self.dense(output))
 
         return output, hn, mask, length
 
