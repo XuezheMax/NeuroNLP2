@@ -29,13 +29,13 @@ def eval(inputs, postags, pars_pred, types_pred, heads, types, masks, filename, 
             for j in range(1, max_length):
                 if masks[i, j] > 0.:
                     word = word_alphabet.get_instance(inputs[i, j])
-                    word = word.encode('utf8') if word else '<UNK>'
+                    word = word.encode('utf8')
 
                     pos = pos_alphabet.get_instance(postags[i, j])
-                    pos = pos.encode('utf8') if pos else '<UNK-POS>'
+                    pos = pos.encode('utf8')
 
                     type = type_alphabet.get_instance(types_pred[i, j])
-                    type = type.encode('utf8') if type else '<UNK-TYPE>'
+                    type = type.encode('utf8')
 
                     total += 1
                     ucorr += 1 if heads[i, j] == pars_pred[i, j] else 0
@@ -51,11 +51,11 @@ def eval(inputs, postags, pars_pred, types_pred, heads, types, masks, filename, 
     return ucorr, lcorr, total, ucorr_nopunc, lcorr_nopunc, total_nopunc
 
 
-def decode_MST(energies, masks, leading_symbolic):
+def decode_MST(energies, lengths, leading_symbolic):
     """
     decode best parsing tree with MST algorithm.
     :param energies: energies: numpy 4D tensor
-        energies of each edge. the shape is [batch_size, n_steps, n_steps, num_labels],
+        energies of each edge. the shape is [batch_size, num_labels, n_steps, n_steps],
         where the summy root is at index 0.
     :param masks: numpy 2D tensor
         masks in the shape [batch_size, n_steps].
@@ -214,19 +214,16 @@ def decode_MST(energies, masks, leading_symbolic):
     types = np.zeros([batch_size, max_length], dtype=np.int32)
     for i in range(batch_size):
         energy = energies[i]
-        mask = masks[i]
 
         # calc the realy length of this instance
-        length = 0
-        while length < max_length and mask[length] > 0.5:
-            length += 1
+        length = lengths[i]
 
         # calc real energy matrix shape = [length, length, num_labels - #symbolic] (remove the label for symbolic types).
-        energy = energy[:length, :length, leading_symbolic:]
+        energy = energy[leading_symbolic:, :length, :length]
         # get best label for each edge.
-        label_id_matrix = energy.argmax(axis=2) + leading_symbolic
+        label_id_matrix = energy.argmax(axis=0) + leading_symbolic
         # get original score matrix
-        orig_score_matrix = energy.max(axis=2)
+        orig_score_matrix = energy.max(axis=0)
         # initialize score matrix to original score matrix
         score_matrix = np.array(orig_score_matrix, copy=True)
 

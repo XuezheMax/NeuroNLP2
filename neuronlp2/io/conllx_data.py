@@ -32,14 +32,11 @@ PAD_ID_TAG = 0
 
 NUM_SYMBOLIC_TAGS = 3
 
-
-
 _buckets = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 140]
 
 
 def create_alphabets(alphabet_directory, train_path, data_paths=None, max_vocabulary_size=50000, embedd_dict=None,
                      min_occurence=1, normalize_digits=True):
-
     def expand_vocab():
         vocab_set = set(vocab_list)
         for data_path in data_paths:
@@ -283,7 +280,8 @@ def iterate_batch(data, batch_size, shuffle=False):
 
 
 def read_data_to_variable(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, max_size=None,
-                          normalize_digits=True, symbolic_root=False, symbolic_end=False, use_gpu=False):
+                          normalize_digits=True, symbolic_root=False, symbolic_end=False,
+                          use_gpu=False, volatile=False):
     data = read_data(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, max_size=max_size,
                      normalize_digits=normalize_digits, symbolic_root=symbolic_root, symbolic_end=symbolic_end)
     bucket_sizes = [len(data[b]) for b in range(len(_buckets))]
@@ -330,13 +328,21 @@ def read_data_to_variable(source_path, word_alphabet, char_alphabet, pos_alphabe
             # masks
             masks[i, :inst_size] = 1.0
 
-        words = Variable(torch.from_numpy(wid_inputs)).cuda() if use_gpu else Variable(torch.from_numpy(wid_inputs))
-        chars = Variable(torch.from_numpy(cid_inputs)).cuda() if use_gpu else Variable(torch.from_numpy(cid_inputs))
-        pos = Variable(torch.from_numpy(pid_inputs)).cuda() if use_gpu else Variable(torch.from_numpy(pid_inputs))
-        heads = Variable(torch.from_numpy(hid_inputs)).cuda() if use_gpu else Variable(torch.from_numpy(hid_inputs))
-        types = Variable(torch.from_numpy(tid_inputs)).cuda() if use_gpu else Variable(torch.from_numpy(tid_inputs))
-        masks = Variable(torch.from_numpy(masks)).cuda() if use_gpu else Variable(torch.from_numpy(masks))
-        lengths = torch.from_numpy(lengths).cuda() if use_gpu else torch.from_numpy(lengths)
+        words = Variable(torch.from_numpy(wid_inputs), volatile=volatile)
+        chars = Variable(torch.from_numpy(cid_inputs), volatile=volatile)
+        pos = Variable(torch.from_numpy(pid_inputs), volatile=volatile)
+        heads = Variable(torch.from_numpy(hid_inputs), volatile=volatile)
+        types = Variable(torch.from_numpy(tid_inputs), volatile=volatile)
+        masks = Variable(torch.from_numpy(masks), volatile=volatile)
+        lengths = torch.from_numpy(lengths)
+        if use_gpu:
+            words = words.cuda()
+            chars = chars.cuda()
+            pos = pos.cuda()
+            heads = heads.cuda()
+            types = types.cuda()
+            masks = masks.cuda()
+            lengths = lengths.cuda()
 
         data_variable.append((words, chars, pos, heads, types, masks, lengths))
 

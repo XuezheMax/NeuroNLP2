@@ -107,9 +107,9 @@ def main():
     num_labels = ner_alphabet.size()
 
     data_dev = conll03_data.read_data_to_variable(dev_path, word_alphabet, char_alphabet, pos_alphabet,
-                                                  chunk_alphabet, ner_alphabet, use_gpu=use_gpu)
+                                                  chunk_alphabet, ner_alphabet, use_gpu=use_gpu, volatile=True)
     data_test = conll03_data.read_data_to_variable(test_path, word_alphabet, char_alphabet, pos_alphabet,
-                                                   chunk_alphabet, ner_alphabet, use_gpu=use_gpu)
+                                                   chunk_alphabet, ner_alphabet, use_gpu=use_gpu, volatile=True)
     writer = CoNLL03Writer(word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet)
 
     def construct_word_embedding_table():

@@ -274,7 +274,7 @@ def iterate_batch(data, batch_size, shuffle=False):
 
 
 def read_data_to_variable(source_path, word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet,
-                          max_size=None, normalize_digits=True, use_gpu=False):
+                          max_size=None, normalize_digits=True, use_gpu=False, volatile=False):
     data = read_data(source_path, word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet,
                      max_size=max_size, normalize_digits=normalize_digits)
     bucket_sizes = [len(data[b]) for b in range(len(_buckets))]
@@ -321,13 +321,21 @@ def read_data_to_variable(source_path, word_alphabet, char_alphabet, pos_alphabe
             # masks
             masks[i, :inst_size] = 1.0
 
-        words = Variable(torch.from_numpy(wid_inputs)).cuda() if use_gpu else Variable(torch.from_numpy(wid_inputs))
-        chars = Variable(torch.from_numpy(cid_inputs)).cuda() if use_gpu else Variable(torch.from_numpy(cid_inputs))
-        pos = Variable(torch.from_numpy(pid_inputs)).cuda() if use_gpu else Variable(torch.from_numpy(pid_inputs))
-        chunks = Variable(torch.from_numpy(chid_inputs)).cuda() if use_gpu else Variable(torch.from_numpy(chid_inputs))
-        ners = Variable(torch.from_numpy(nid_inputs)).cuda() if use_gpu else Variable(torch.from_numpy(nid_inputs))
-        masks = Variable(torch.from_numpy(masks)).cuda() if use_gpu else Variable(torch.from_numpy(masks))
-        lengths = torch.from_numpy(lengths).cuda() if use_gpu else torch.from_numpy(lengths)
+        words = Variable(torch.from_numpy(wid_inputs), volatile=volatile)
+        chars = Variable(torch.from_numpy(cid_inputs), volatile=volatile)
+        pos = Variable(torch.from_numpy(pid_inputs), volatile=volatile)
+        chunks = Variable(torch.from_numpy(chid_inputs), volatile=volatile)
+        ners = Variable(torch.from_numpy(nid_inputs), volatile=volatile)
+        masks = Variable(torch.from_numpy(masks), volatile=volatile)
+        lengths = torch.from_numpy(lengths)
+        if use_gpu:
+            words = words.cuda()
+            chars = chars.cuda()
+            pos = pos.cuda()
+            chunks = chunks.cuda()
+            ners = ners.cuda()
+            masks = masks.cuda()
+            lengths = lengths.cuda()
 
         data_variable.append((words, chars, pos, chunks, ners, masks, lengths))
 

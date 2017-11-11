@@ -82,9 +82,9 @@ def main():
     num_labels = pos_alphabet.size()
 
     data_dev = conllx_data.read_data_to_variable(dev_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
-                                                 use_gpu=use_gpu)
+                                                 use_gpu=use_gpu, volatile=True)
     data_test = conllx_data.read_data_to_variable(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
-                                                  use_gpu=use_gpu)
+                                                  use_gpu=use_gpu, volatile=True)
 
     def construct_word_embedding_table():
         scale = np.sqrt(3.0 / embedd_dim)
