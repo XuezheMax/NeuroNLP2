@@ -299,7 +299,7 @@ class BiRecurrentConvCRF(nn.Module):
             mask = mask.contiguous()
 
         # [batch, length, num_label,  num_label]
-        return self.crf.loss(output, target, mask=mask).sum() / target.size(0)
+        return self.crf.loss(output, target, mask=mask).mean()
 
     def decode(self, input_word, input_char, target=None, mask=None, length=None, hx=None, leading_symbolic=0):
         # output from rnn [batch, length, tag_space]

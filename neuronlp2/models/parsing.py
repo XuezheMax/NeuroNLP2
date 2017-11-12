@@ -11,7 +11,7 @@ from ..nn import utils
 class BiRecurrentConvTreeCRF(nn.Module):
     def __init__(self, word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, num_filters, kernel_size,
                  rnn_mode, hidden_size, num_layers, num_labels, tag_space,
-                 embedd_word=None, embedd_pos=None, embedd_char=None,
+                 embedd_word=None, embedd_char=None, embedd_pos=None,
                  p_in=0.2, p_rnn=0.5, biaffine=False):
 
         super(BiRecurrentConvTreeCRF, self).__init__()
@@ -105,7 +105,7 @@ class BiRecurrentConvTreeCRF(nn.Module):
         if mask is not None:
             mask = mask.contiguous()
 
-        return self.crf.loss(output[0], output[1], heads, types, mask=mask, length=length).sum() / heads.size(0)
+        return self.crf.loss(output[0], output[1], heads, types, mask=mask, length=length).mean()
 
     def decode(self, input_word, input_char, input_pos, mask=None, length=None, hx=None, leading_symbolic=0):
         # output from rnn [batch, length, tag_space]
