@@ -293,15 +293,21 @@ class BiRecurrentConvCRF(nn.Module):
 
         if length is not None:
             max_len = length.max()
-            target = target[:, :max_len]
-            target = target.contiguous()
+            target = target[:, :max_len].contiguous()
+
+        if mask is not None:
+            mask = mask.contiguous()
 
         # [batch, length, num_label,  num_label]
-        return self.crf.loss(output, target, mask=mask.contiguous()).sum() / target.size(0)
+        return self.crf.loss(output, target, mask=mask).sum() / target.size(0)
 
     def decode(self, input_word, input_char, target=None, mask=None, length=None, hx=None, leading_symbolic=0):
         # output from rnn [batch, length, tag_space]
         output, _, mask, length = self._get_rnn_output(input_word, input_char, mask=mask, length=length, hx=hx)
+
+        if mask is not None:
+            mask = mask.contiguous()
+
         if target is None:
             return self.crf.decode(output, mask=mask, leading_symbolic=leading_symbolic), None
 
@@ -310,7 +316,7 @@ class BiRecurrentConvCRF(nn.Module):
             target = target[:, :max_len]
             target = target.contiguous()
 
-        preds = self.crf.decode(output, mask=mask.contiguous(), leading_symbolic=leading_symbolic)
+        preds = self.crf.decode(output, mask=mask, leading_symbolic=leading_symbolic)
         if mask is None:
             return preds, torch.eq(preds, target.data).float().sum()
         else:

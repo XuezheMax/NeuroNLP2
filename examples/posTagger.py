@@ -59,7 +59,7 @@ def main():
     p = args.p
     output_predict = args.output_prediction
 
-    embedd_dict, embedd_dim = utils.load_word_embedding_dict('glove', "data/glove/glove.6B/glove.6B.100d.gz")
+    embedd_dict, embedd_dim = utils.load_embedding_dict('glove', "data/glove/glove.6B/glove.6B.100d.gz")
     logger.info("Creating Alphabets")
     word_alphabet, char_alphabet, pos_alphabet, \
     type_alphabet = conllx_data.create_alphabets("data/alphabets/pos/", train_path, data_paths=[dev_path,test_path],

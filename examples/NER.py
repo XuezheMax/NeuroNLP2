@@ -81,7 +81,7 @@ def main():
     embedding = args.embedding
     embedding_path = args.embedding_dict
 
-    embedd_dict, embedd_dim = utils.load_word_embedding_dict(embedding, embedding_path)
+    embedd_dict, embedd_dim = utils.load_embedding_dict(embedding, embedding_path)
 
     logger.info("Creating Alphabets")
     word_alphabet, char_alphabet, pos_alphabet, \

@@ -8,7 +8,7 @@ import gzip
 from .io import utils
 
 
-def load_word_embedding_dict(embedding, embedding_path, normalize_digits=True):
+def load_embedding_dict(embedding, embedding_path, normalize_digits=True):
     """
     load word embeddings from file
     :param embedding:

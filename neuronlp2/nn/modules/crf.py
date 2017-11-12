@@ -231,6 +231,9 @@ class TreeCRF(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
+        nn.init.xavier_uniform(self.W_h)
+        nn.init.xavier_uniform(self.W_c)
+        nn.init.constant(self.b, 0.)
         if self.biaffine:
             nn.init.xavier_uniform(self.U)
 
@@ -291,6 +294,8 @@ class TreeCRF(nn.Module):
                 the tensor of target labels with shape [batch, length]
             mask:Tensor or None
                 the mask tensor with shape = [batch, length]
+            lengths: tensor or list of int
+                the length of each input shape = [batch]
 
         Returns: Tensor
                 A 1D tensor for minus log likelihood loss
