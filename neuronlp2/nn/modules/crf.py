@@ -307,21 +307,26 @@ class TreeCRF(nn.Module):
         # mask out invalid positions
         if mask is not None:
             A = A * mask.view(batch, 1, length, 1) * mask.view(batch, 1, 1, length)
+
         # sum along the label axis [batch, length, length]
         A = A.sum(dim=1)
-        # get D [batch, length, length]
-        D = Variable(A.data.new(A.size()).zero_()) + A.sum(dim=1, keepdim=True)
-        # zeros out all elements except diagonal.
-        D = D * Variable(torch.eye(length)).type_as(D)
+        # get D [batch, 1, length]
+        D = A.sum(dim=1, keepdim=True)
 
         # make sure L is positive-defined
-        rtol = 1e-6
-        atol = 1e-8
+        rtol = 1e-4
+        atol = 1e-6
         D += D * rtol + atol
+
+        # [batch, length, length]
+        D = Variable(A.data.new(A.size()).zero_()) + D
+        # zeros out all elements except diagonal.
+        D = D * Variable(torch.eye(length)).type_as(D)
 
         # compute laplacian matrix
         # [batch, length, length]
         L = D - A
+
         # compute lengths
         if lengths is None:
             if mask is None:
@@ -330,14 +335,16 @@ class TreeCRF(nn.Module):
                 lengths = mask.data.sum(dim=1).long()
 
         # compute partition Z(x) [batch]
-        z = Variable(L.data.new(batch))
+        z = Variable(energy.data.new(batch))
         for b in range(batch):
-            z[b] = logdet(L[b, 1:lengths[b], 1:lengths[b]])
+            Lx = L[b, 1:lengths[b], 1:lengths[b]]
+            # print(torch.log(torch.eig(Lx.data)[0]))
+            z[b] = logdet(Lx)
 
         # first create index matrix [length, batch]
         index = torch.zeros(length, batch) + torch.arange(0, length).view(length, 1)
-        index = index.type_as(D.data).long()
-        batch_index = torch.arange(0, batch).type_as(D.data).long()
+        index = index.type_as(energy.data).long()
+        batch_index = torch.arange(0, batch).type_as(energy.data).long()
         # compute target energy [length-1, batch]
         tgt_energy = energy[batch_index, types.data.t(), heads.data.t(), index][1:]
         # sum over dim=0 shape = [batch]
