@@ -32,7 +32,7 @@ class BiRecurrentConvTreeCRF(nn.Module):
         else:
             raise ValueError('Unknown RNN mode: %s' % rnn_mode)
 
-        self.rnn = RNN(word_dim + num_filters, hidden_size, num_layers=num_layers,
+        self.rnn = RNN(word_dim + num_filters + pos_dim, hidden_size, num_layers=num_layers,
                        batch_first=True, bidirectional=True, dropout=p_rnn)
 
         out_dim = hidden_size * 2
@@ -105,7 +105,7 @@ class BiRecurrentConvTreeCRF(nn.Module):
         if mask is not None:
             mask = mask.contiguous()
 
-        return self.crf.loss(output[0], output[1], heads, types, mask=mask, length=length).mean()
+        return self.crf.loss(output[0], output[1], heads, types, mask=mask, lengths=length).mean()
 
     def decode(self, input_word, input_char, input_pos, mask=None, length=None, hx=None, leading_symbolic=0):
         # output from rnn [batch, length, tag_space]

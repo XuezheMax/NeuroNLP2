@@ -275,7 +275,7 @@ class TreeCRF(nn.Module):
             output = out_h + out_c + self.b
 
         if mask is not None:
-            output = output * mask.view(batch, 1, self.num_labels, 1) * mask.view(batch, 1, 1, self.num_labels)
+            output = output * mask.view(batch, 1, length, 1) * mask.view(batch, 1, 1, length)
 
         # set diagonal elements to -inf
         output = output + Variable(torch.diag(output.data.new(length).fill_(-np.inf)))
@@ -306,17 +306,17 @@ class TreeCRF(nn.Module):
         A = torch.exp(energy)
         # mask out invalid positions
         if mask is not None:
-            A = A * mask.view(batch, 1, self.num_labels, 1) * mask.view(batch, 1, 1, self.num_labels)
+            A = A * mask.view(batch, 1, length, 1) * mask.view(batch, 1, 1, length)
         # sum along the label axis [batch, length, length]
         A = A.sum(dim=1)
         # get D [batch, length, length]
-        D = Variable(A.data.new(A.size()).zero_()) + A.sum(dim=1, keepdims=True)
+        D = Variable(A.data.new(A.size()).zero_()) + A.sum(dim=1, keepdim=True)
         # zeros out all elements except diagonal.
         D = D * Variable(torch.eye(length)).type_as(D)
 
         # make sure L is positive-defined
-        rtol = np.float32(1e-6)
-        atol = np.float32(1e-8)
+        rtol = 1e-6
+        atol = 1e-8
         D += D * rtol + atol
 
         # compute laplacian matrix
@@ -335,8 +335,9 @@ class TreeCRF(nn.Module):
             z[b] = logdet(L[b, 1:lengths[b], 1:lengths[b]])
 
         # first create index matrix [length, batch]
-        index = torch.zeros(length, batch) + torch.arange(0, length).long().view(length, 1)
-        batch_index = torch.arange(0, batch).long()
+        index = torch.zeros(length, batch) + torch.arange(0, length).view(length, 1)
+        index = index.type_as(D.data).long()
+        batch_index = torch.arange(0, batch).type_as(D.data).long()
         # compute target energy [length-1, batch]
         tgt_energy = energy[batch_index, types.data.t(), heads.data.t(), index][1:]
         # sum over dim=0 shape = [batch]

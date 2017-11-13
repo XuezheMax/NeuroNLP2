@@ -216,7 +216,7 @@ def get_batch(data, batch_size):
         tid_inputs[b, inst_size:] = PAD_ID_TAG
         # heads
         hid_inputs[b, :inst_size] = hids
-        hid_inputs[b, inst_size:] = -1
+        hid_inputs[b, inst_size:] = PAD_ID_TAG
         # masks
         masks[b, :inst_size] = 1.0
 
@@ -262,7 +262,7 @@ def iterate_batch(data, batch_size, shuffle=False):
             tid_inputs[i, inst_size:] = PAD_ID_TAG
             # heads
             hid_inputs[i, :inst_size] = hids
-            hid_inputs[i, inst_size:] = -1
+            hid_inputs[i, inst_size:] = PAD_ID_TAG
             # masks
             masks[i, :inst_size] = 1.0
 
@@ -324,7 +324,7 @@ def read_data_to_variable(source_path, word_alphabet, char_alphabet, pos_alphabe
             tid_inputs[i, inst_size:] = PAD_ID_TAG
             # heads
             hid_inputs[i, :inst_size] = hids
-            hid_inputs[i, inst_size:] = -1
+            hid_inputs[i, inst_size:] = PAD_ID_TAG
             # masks
             masks[i, :inst_size] = 1.0
 

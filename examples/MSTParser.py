@@ -36,7 +36,7 @@ def main():
     parser.add_argument('--dropout', choices=['std', 'variational'], help='type of dropout', required=True)
     parser.add_argument('--p', type=float, default=0.5, help='dropout rate')
     parser.add_argument('--biaffine', action='store_true', help='bi-gram parameter for CRF')
-    parser.add_argument('--schedule', type=int, help='schedule for learning rate decay')
+    parser.add_argument('--schedule', nargs='+', type=int, help='schedule for learning rate decay')
     parser.add_argument('--punctuation', nargs='+', type=str, help='List of punctuations')
     parser.add_argument('--word_embedding', choices=['glove', 'senna', 'sskip', 'polyglot'], help='Embedding for words',
                         required=True)
@@ -50,7 +50,7 @@ def main():
 
     args = parser.parse_args()
 
-    logger = get_logger("POSCRFTagger")
+    logger = get_logger("MSTParser")
 
     mode = args.mode
     train_path = args.train
@@ -72,7 +72,7 @@ def main():
     punctuation = args.punctuation
 
     word_embedding = args.word_embedding
-    word_path = args.word_dict
+    word_path = args.word_path
     char_embedding = args.char_embedding
     char_path = args.char_path
 
@@ -84,7 +84,7 @@ def main():
         char_dict, char_dim = utils.load_embedding_dict(char_embedding, char_path)
     logger.info("Creating Alphabets")
     word_alphabet, char_alphabet, pos_alphabet, \
-    type_alphabet = conllx_data.create_alphabets("data/alphabets/pos_crf/", train_path,
+    type_alphabet = conllx_data.create_alphabets("data/alphabets/mst/", train_path,
                                                  data_paths=[dev_path, test_path],
                                                  max_vocabulary_size=50000, embedd_dict=word_dict)
 
@@ -102,15 +102,15 @@ def main():
     use_gpu = torch.cuda.is_available()
 
     data_train = conllx_data.read_data_to_variable(train_path, word_alphabet, char_alphabet, pos_alphabet,
-                                                   type_alphabet, use_gpu=use_gpu)
+                                                   type_alphabet, use_gpu=use_gpu, symbolic_root=True)
     # data_train = conllx_data.read_data(train_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
     # num_data = sum([len(bucket) for bucket in data_train])
     num_data = sum(data_train[1])
 
     data_dev = conllx_data.read_data_to_variable(dev_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
-                                                 use_gpu=use_gpu, volatile=True)
+                                                 use_gpu=use_gpu, volatile=True, symbolic_root=True)
     data_test = conllx_data.read_data_to_variable(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
-                                                  use_gpu=use_gpu, volatile=True)
+                                                  use_gpu=use_gpu, volatile=True, symbolic_root=True)
 
     punct_set = None
     if punctuation is not None:

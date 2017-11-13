@@ -49,7 +49,7 @@ class CoNLLXReader(object):
             pos_ids.append(self.__pos_alphabet.get_index(conllx_data.ROOT_POS))
             types.append(conllx_data.ROOT_TYPE)
             type_ids.append(self.__type_alphabet.get_index(conllx_data.ROOT_TYPE))
-            heads.append(-1)
+            heads.append(0)
 
         for tokens in lines:
             chars = []
