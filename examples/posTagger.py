@@ -147,7 +147,7 @@ def main():
             word, char, labels, _, _, masks, lengths = conllx_data.get_batch_variable(data_train, batch_size)
 
             optim.zero_grad()
-            loss, corr, _ = network.loss(word, char, labels, mask=masks,
+            loss, corr, _ = network.loss(word, char, labels, mask=masks, length=lengths,
                                          leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
             loss.backward()
             optim.step()
@@ -178,7 +178,7 @@ def main():
         dev_total = 0
         for batch in conllx_data.iterate_batch_variable(data_dev, batch_size):
             word, char, labels, _, _, masks, lengths = batch
-            _, corr, preds = network.loss(word, char, labels, mask=masks,
+            _, corr, preds = network.loss(word, char, labels, mask=masks, length=lengths,
                                           leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
             num_tokens = masks.data.sum()
             dev_corr += corr.data[0]
@@ -194,7 +194,7 @@ def main():
             test_total = 0
             for batch in conllx_data.iterate_batch_variable(data_test, batch_size):
                 word, char, labels, _, _, masks, lengths = batch
-                _, corr, preds = network.loss(word, char, labels, mask=masks,
+                _, corr, preds = network.loss(word, char, labels, mask=masks, length=lengths,
                                               leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
                 num_tokens = masks.data.sum()
                 test_corr += corr.data[0]

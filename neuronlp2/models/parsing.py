@@ -102,9 +102,9 @@ class BiRecurrentConvBiAffine(nn.Module):
         output, mask, length = self.forward(input_word, input_char, input_pos, mask=mask, length=length, hx=hx)
         batch, _, max_len, _ = output.size()
 
-        if length is not None:
-            heads = heads[:, :max_len].contiguous()
-            types = types[:, :max_len].contiguous()
+        if length is not None and heads.size(1) != mask.size(1):
+            heads = heads[:, :max_len]
+            types = types[:, :max_len]
 
         # mask invalid position to -inf for log_softmax
         if mask is not None:
@@ -179,6 +179,65 @@ class BiRecurrentConvBiAffine(nn.Module):
                 length = mask.data.sum(dim=1).long().cpu().numpy()
 
         return parser.decode_MST(energy.data.cpu().numpy(), length, leading_symbolic)
+
+
+class BiVarRecurrentConvBiAffine(BiRecurrentConvBiAffine):
+    def __init__(self, word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, num_filters, kernel_size,
+                 rnn_mode, hidden_size, num_layers, num_labels, tag_space,
+                 embedd_word=None, embedd_char=None, embedd_pos=None,
+                 p_in=0.2, p_rnn=0.5, biaffine=False):
+        super(BiVarRecurrentConvBiAffine, self).__init__(word_dim, num_words, char_dim, num_chars, pos_dim, num_pos,
+                                                         num_filters, kernel_size, rnn_mode, hidden_size, num_layers,
+                                                         num_labels, tag_space,
+                                                         embedd_word=embedd_word, embedd_char=embedd_char,
+                                                         embedd_pos=embedd_pos,
+                                                         p_in=p_in, p_rnn=p_rnn, biaffine=biaffine)
+        self.dropout_in = nn.Dropout2d(p=p_in)
+        self.dropout_rnn = nn.Dropout2d(p_rnn)
+
+        if rnn_mode == 'RNN':
+            RNN = VarMaskedRNN
+        elif rnn_mode == 'LSTM':
+            RNN = VarMaskedLSTM
+        elif rnn_mode == 'GRU':
+            RNN = VarMaskedGRU
+        else:
+            raise ValueError('Unknown RNN mode: %s' % rnn_mode)
+
+        self.rnn = RNN(word_dim + num_filters, hidden_size, num_layers=num_layers,
+                       batch_first=True, bidirectional=True, dropout=p_rnn)
+
+    def _get_rnn_output(self, input_word, input_char, input_pos, mask=None, length=None, hx=None):
+        # [batch, length, word_dim]
+        word = self.word_embedd(input_word)
+
+        # [batch, length, char_length, char_dim]
+        char = self.char_embedd(input_char)
+        char_size = char.size()
+        # first transform to [batch *length, char_length, char_dim]
+        # then transpose to [batch * length, char_dim, char_length]
+        char = char.view(char_size[0] * char_size[1], char_size[2], char_size[3]).transpose(1, 2)
+        # put into cnn [batch*length, char_filters, char_length]
+        # then put into maxpooling [batch * length, char_filters]
+        char, _ = self.conv1d(char).max(dim=2)
+        # reshape to [batch, length, char_filters]
+        char = char.view(char_size[0], char_size[1], -1)
+
+        # concatenate word and char [batch, length, word_dim+char_filter]
+        input = F.tanh(torch.cat([word, char], dim=2))
+        # apply dropout
+        # [batch, length, dim] --> [batch, dim, length] --> [batch, length, dim]
+        input = self.dropout_in(input.transpose(1, 2)).transpose(1, 2)
+        # output from rnn [batch, length, hidden_size]
+        output, hn = self.rnn(input, mask, hx=hx)
+
+        output = self.dropout_rnn(output.transpose(1, 2)).transpose(1, 2)
+
+        # output size [batch, length, tag_space]
+        output_h = F.elu(self.dense_h(output))
+        output_c = F.elu(self.dense_c(output))
+
+        return (output_h, output_c), hn, mask, length
 
 
 class BiRecurrentConvTreeCRF(nn.Module):

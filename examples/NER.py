@@ -180,7 +180,7 @@ def main():
             word, char, _, _, labels, masks, lengths = conll03_data.get_batch_variable(data_train, batch_size)
 
             optim.zero_grad()
-            loss, corr, _ = network.loss(word, char, labels, mask=masks,
+            loss, corr, _ = network.loss(word, char, labels, mask=masks, length=lengths,
                                          leading_symbolic=conll03_data.NUM_SYMBOLIC_TAGS)
             loss.backward()
             optim.step()
@@ -212,7 +212,8 @@ def main():
 
         for batch in conll03_data.iterate_batch_variable(data_dev, batch_size):
             word, char, pos, chunk, labels, masks, lengths = batch
-            _, _, preds = network.loss(word, char, labels, mask=masks, leading_symbolic=conll03_data.NUM_SYMBOLIC_TAGS)
+            _, _, preds = network.loss(word, char, labels, mask=masks, length=lengths,
+                                       leading_symbolic=conll03_data.NUM_SYMBOLIC_TAGS)
             writer.write(word.data.cpu().numpy(), pos.data.cpu().numpy(), chunk.data.cpu().numpy(),
                          preds.data.cpu().numpy(), labels.data.cpu().numpy(), lengths.cpu().numpy())
         writer.close()
@@ -232,7 +233,7 @@ def main():
 
             for batch in conll03_data.iterate_batch_variable(data_test, batch_size):
                 word, char, pos, chunk, labels, masks, lengths = batch
-                _, _, preds = network.loss(word, char, labels, mask=masks,
+                _, _, preds = network.loss(word, char, labels, mask=masks, length=lengths,
                                               leading_symbolic=conll03_data.NUM_SYMBOLIC_TAGS)
                 writer.write(word.data.cpu().numpy(), pos.data.cpu().numpy(), chunk.data.cpu().numpy(),
                              preds.data.cpu().numpy(), labels.data.cpu().numpy(), lengths.cpu().numpy())

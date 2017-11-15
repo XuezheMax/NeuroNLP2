@@ -43,7 +43,7 @@ class BiRecurrentConv(nn.Module):
         self.logsoftmax = nn.LogSoftmax()
         self.nll_loss = nn.NLLLoss(size_average=False)
 
-    def forward(self, input_word, input_char, mask=None, length=None, hx=None):
+    def _get_rnn_output(self, input_word, input_char, mask=None, length=None, hx=None):
         # hack length from mask
         # we do not hack mask from length for special reasons.
         # Thus, always provide mask if it is necessary.
@@ -83,16 +83,17 @@ class BiRecurrentConv(nn.Module):
             # [batch, length, tag_space]
             output = F.elu(self.dense_tag(output))
 
-        return output, hn, mask
+        return output, hn, mask, length
+
+
+    def forward(self, input_word, input_char, mask=None, length=None, hx=None):
+        # output from rnn [batch, length, tag_space]
+        output, _, mask, length = self._get_rnn_output(input_word, input_char, mask=mask, length=length, hx=hx)
+        return output, mask, length
 
     def loss(self, input_word, input_char, target, mask=None, length=None, hx=None, leading_symbolic=0):
-        # hack length from mask
-        # we do not hack mask from length for special reasons.
-        # Thus, always provide mask if it is necessary.
-        if length is None and mask is not None:
-            length = mask.data.sum(dim=1).long()
         # [batch, length, num_labels]
-        output, _, mask = self.forward(input_word, input_char, mask=mask, length=length, hx=hx)
+        output, mask, length = self.forward(input_word, input_char, mask=mask, length=length, hx=hx)
         # [batch, length, num_labels]
         output = self.dense_softmax(output)
         # preds = [batch, length]
@@ -104,7 +105,7 @@ class BiRecurrentConv(nn.Module):
         output_size = (output_size[0] * output_size[1], output_size[2])
         output = output.view(output_size)
 
-        if length is not None:
+        if length is not None and target.size(1) != mask.size(1):
             max_len = length.max()
             target = target[:, :max_len]
             target = target.contiguous()
@@ -120,15 +121,15 @@ class BiRecurrentConv(nn.Module):
                    (torch.eq(preds, target).type_as(output)).sum(), preds
 
 
-class BiVarRecurrentConv(nn.Module):
+class BiVarRecurrentConv(BiRecurrentConv):
     def __init__(self, word_dim, num_words, char_dim, num_chars, num_filters, kernel_size,
                  rnn_mode, hidden_size, num_layers, num_labels, tag_space=0,
                  embedd_word=None, embedd_char=None, p_in=0.2, p_rnn=0.5):
-        super(BiVarRecurrentConv, self).__init__()
+        super(BiVarRecurrentConv, self).__init__(word_dim, num_words, char_dim, num_chars, num_filters, kernel_size,
+                                                 rnn_mode, hidden_size, num_layers, num_labels, tag_space=tag_space,
+                                                 embedd_word=embedd_word, embedd_char=embedd_char,
+                                                 p_in=p_in, p_rnn=p_rnn)
 
-        self.word_embedd = Embedding(num_words, word_dim, init_embedding=embedd_word)
-        self.char_embedd = Embedding(num_chars, char_dim, init_embedding=embedd_char)
-        self.conv1d = nn.Conv1d(char_dim, num_filters, kernel_size, padding=kernel_size - 1)
         self.dropout_in = nn.Dropout2d(p=p_in)
         self.dropout_rnn = nn.Dropout2d(p_rnn)
 
@@ -144,18 +145,7 @@ class BiVarRecurrentConv(nn.Module):
         self.rnn = RNN(word_dim + num_filters, hidden_size, num_layers=num_layers,
                        batch_first=True, bidirectional=True, dropout=p_rnn)
 
-        self.dense_tag = None
-        out_dim = hidden_size * 2
-        if tag_space:
-            self.dense_tag = nn.Linear(out_dim, tag_space)
-            out_dim = tag_space
-        self.dense_softmax = nn.Linear(out_dim, num_labels)
-
-        # TODO set dim for log_softmax and set reduce=False to NLLLoss
-        self.logsoftmax = nn.LogSoftmax()
-        self.nll_loss = nn.NLLLoss(size_average=False)
-
-    def forward(self, input_word, input_char, mask=None, hx=None):
+    def _get_rnn_output(self, input_word, input_char, mask=None, length=None, hx=None):
         # [batch, length, word_dim]
         word = self.word_embedd(input_word)
 
@@ -178,37 +168,14 @@ class BiVarRecurrentConv(nn.Module):
         input = self.dropout_in(input.transpose(1, 2)).transpose(1, 2)
         # output from rnn [batch, length, hidden_size]
         output, hn = self.rnn(input, mask, hx=hx)
-
+        # apply dropout for the output of rnn
         output = self.dropout_rnn(output.transpose(1, 2)).transpose(1, 2)
 
         if self.dense_tag is not None:
             # [batch, length, tag_space]
             output = F.elu(self.dense_tag(output))
 
-        return output, hn, mask
-
-    def loss(self, input_word, input_char, target, mask=None, hx=None, leading_symbolic=0):
-        # [batch, length, num_labels]
-        output, _, _ = self.forward(input_word, input_char, mask=mask, hx=hx)
-        # [batch, length, num_labels]
-        output = self.dense_softmax(output)
-        # preds = [batch, length]
-        _, preds = torch.max(output[:, :, leading_symbolic:], dim=2)
-        preds += leading_symbolic
-
-        output_size = output.size()
-        # [batch * length, num_labels]
-        output_size = (output_size[0] * output_size[1], output_size[2])
-        output = output.view(output_size)
-        if mask is not None:
-            # TODO for Pytorch 2.0.4, first take nllloss then mask (no need of broadcast for mask)
-            return self.nll_loss(self.logsoftmax(output) * mask.view(output_size[0], 1),
-                                 target.view(-1)) / mask.sum(), \
-               (torch.eq(preds, target).type_as(mask) * mask).sum(), preds
-        else:
-            num = output_size[0] * output_size[1]
-            return self.nll_loss(self.logsoftmax(output), target.view(-1)) / num, \
-                   (torch.eq(preds, target).type_as(output)).sum(), preds
+        return output, hn, mask, length
 
 
 class BiRecurrentConvCRF(nn.Module):
