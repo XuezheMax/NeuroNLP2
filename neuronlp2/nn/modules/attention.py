@@ -78,7 +78,7 @@ class Attention(nn.Module):
         out_d = torch.matmul(self.W_d, input_d.transpose(1, 2)).view(batch, self.num_labels, length_decoder, 1)
         # compute decoder part: [num_label, input_size_encoder] * [batch, input_size_encoder, length_encoder]
         # the output shape is [batch, num_label, length_encoder]
-        out_e = torch.matmul(self.W_c, input_e.transpose(1, 2)).view(batch, self.num_labels, 1, length_encoder)
+        out_e = torch.matmul(self.W_e, input_e.transpose(1, 2)).view(batch, self.num_labels, 1, length_encoder)
 
         # output shape [batch, num_label, length_decoder, length_encoder]
         if self.biaffine:

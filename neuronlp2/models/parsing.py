@@ -94,6 +94,7 @@ class BiRecurrentConvBiAffine(nn.Module):
         output, _, mask, length = self._get_rnn_output(input_word, input_char, input_pos,
                                                        mask=mask, length=length, hx=hx)
         # [batch, num_label, length, length]
+        mask = mask.contiguous()
         return self.attention(output[0], output[1], mask_d=mask, mask_e=mask), mask, length
 
     def loss(self, input_word, input_char, input_pos, heads, types,
@@ -108,12 +109,10 @@ class BiRecurrentConvBiAffine(nn.Module):
 
         # mask invalid position to -inf for log_softmax
         if mask is not None:
-            mask = mask.contiguous()
-            mask_opposite = (1.0 - mask).byte()
-            output.masked_fill_(mask_opposite.view(batch, 1, max_len, 1), -float('inf'))
-            output.masked_fill_(mask_opposite.view(batch, 1, 1, max_len), -float('inf'))
+            log_mask = torch.log(mask)
+            output = output + log_mask.view(batch, 1, max_len, 1) + log_mask.view(batch, 1, 1, max_len)
 
-        # TODO for Pytorch 2.0.4, need to set dim=1 for log_softmax
+        # TODO for Pytorch 2.0.4, need to set dim=1 for log_softmax or use softmax then take log
         # first convert output to [batch, num_labels * max_len, max_len] for log_softmax computation.
         # then convert back to [batch, num_labels, max_len, max_len]
         loss = self.logsoftmax(output.view(batch, self.num_labels * max_len, max_len))
@@ -121,9 +120,12 @@ class BiRecurrentConvBiAffine(nn.Module):
 
         # mask invalid position to 0 for sum loss
         if mask is not None:
-            mask_opposite = (1.0 - mask).byte()
-            loss.masked_fill_(mask_opposite.view(batch, 1, max_len, 1), 0.)
-            loss.masked_fill_(mask_opposite.view(batch, 1, 1, max_len), 0.)
+            # TODO masked_fill_ does not work for backprop, check for Pytorch 2.0.4
+            mask_opposite = 1.0 - mask
+            loss = torch.exp(loss) + mask_opposite.view(batch, 1, max_len, 1) + mask_opposite.view(batch, 1, 1, max_len)
+            loss = torch.log(loss)
+            print(loss)
+            raw_input()
             # number of valid positions which contribute to loss (remove the symbolic head for each sentence.
             num = mask.sum() - batch
         else:

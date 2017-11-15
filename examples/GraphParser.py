@@ -227,7 +227,7 @@ def main():
             loss.backward()
             optim.step()
 
-            num_inst = word.size(0)
+            num_inst = word.size(0) if obj == 'crf' else masks.data.sum() - word.size(0)
             train_err += loss.data[0] * num_inst
             train_total += num_inst
 
@@ -252,7 +252,7 @@ def main():
                 lr = adam_rate / (1.0 + epoch * decay_rate)
                 optim = Adam(network.parameters(), lr=lr, betas=(0.9, 0.9), weight_decay=gamma)
             else:
-                lr = learning_rate / (1.0 + epoch * decay_rate)
+                lr = learning_rate / (1.0 + (epoch - adam_epochs) * decay_rate)
                 optim = SGD(network.parameters(), lr=lr, momentum=momentum, weight_decay=gamma, nesterov=True)
 
 

@@ -15,9 +15,13 @@ def is_punctuation(word, pos, punct_set=None):
         return pos in punct_set
 
 
-def eval(inputs, postags, pars_pred, types_pred, heads, types, masks, filename, word_alphabet, pos_alphabet,
-                 type_alphabet, punct_set=None):
-    batch_size, max_length = inputs.shape
+def eval(inputs, postags, pars_pred, types_pred, heads, types, filename, word_alphabet, pos_alphabet,
+                 type_alphabet, masks=None, punct_set=None):
+    if masks is None:
+        batch_size, max_length = inputs.shape
+    else:
+        batch_size, max_length = masks.shape
+
     ucorr = 0.
     lcorr = 0.
     total = 0.
