@@ -2,7 +2,7 @@ from __future__ import print_function
 
 __author__ = 'max'
 """
-Implementation of Bi-directional LSTM-CNNs-TreeCRF model for MST dependency parsing.
+Implementation of Bi-directional LSTM-CNNs-TreeCRF model for Graph-based dependency parsing.
 """
 
 import sys
@@ -17,12 +17,12 @@ import numpy as np
 import torch
 from torch.optim import Adam, SGD
 from neuronlp2.io import get_logger, conllx_data
-from neuronlp2.models import BiRecurrentConvTreeCRF
+from neuronlp2.models import BiRecurrentConvTreeCRF, BiRecurrentConvBiAffine
 from neuronlp2 import utils
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Tuning with bi-directional RNN-CNN-CRF')
+    parser = argparse.ArgumentParser(description='Tuning with graph-based parsing')
     parser.add_argument('--mode', choices=['RNN', 'LSTM', 'GRU'], help='architecture of rnn', required=True)
     parser.add_argument('--num_epochs', type=int, default=200, help='Number of training epochs')
     parser.add_argument('--batch_size', type=int, default=64, help='Number of sentences in each batch')
@@ -30,13 +30,15 @@ def main():
     parser.add_argument('--tag_space', type=int, default=128, help='Dimension of tag space')
     parser.add_argument('--num_layers', type=int, default=1, help='Number of layers of RNN')
     parser.add_argument('--num_filters', type=int, default=50, help='Number of filters in CNN')
+    parser.add_argument('--objective', choices=['cross_entropy', 'crf'], default='cross_entropy',
+                        help='objective function of training procedure.')
     parser.add_argument('--learning_rate', type=float, default=0.01, help='Learning rate')
     parser.add_argument('--decay_rate', type=float, default=0.05, help='Decay rate of learning rate')
     parser.add_argument('--gamma', type=float, default=0.0, help='weight for regularization')
     parser.add_argument('--dropout', choices=['std', 'variational'], help='type of dropout', required=True)
     parser.add_argument('--p', type=float, default=0.5, help='dropout rate')
     parser.add_argument('--biaffine', action='store_true', help='bi-gram parameter for CRF')
-    parser.add_argument('--schedule', nargs='+', type=int, help='schedule for learning rate decay')
+    parser.add_argument('--schedule', type=int, help='schedule for learning rate decay')
     parser.add_argument('--punctuation', nargs='+', type=str, help='List of punctuations')
     parser.add_argument('--word_embedding', choices=['glove', 'senna', 'sskip', 'polyglot'], help='Embedding for words',
                         required=True)
@@ -50,9 +52,10 @@ def main():
 
     args = parser.parse_args()
 
-    logger = get_logger("MSTParser")
+    logger = get_logger("GraphParser")
 
     mode = args.mode
+    obj = args.objective
     train_path = args.train
     dev_path = args.dev
     test_path = args.test
@@ -156,26 +159,37 @@ def main():
     char_table = construct_char_embedding_table()
 
     window = 3
-    if args.dropout == 'std':
-        network = BiRecurrentConvTreeCRF(word_dim, num_words,
-                                         char_dim, num_chars,
-                                         pos_dim, num_pos,
-                                         num_filters, window,
-                                         mode, hidden_size, num_layers, num_types, tag_space,
-                                         embedd_word=word_table, embedd_char=char_table,
-                                         p_rnn=p, biaffine=biaffine)
+    if obj == 'cross_entropy':
+        if args.dropout == 'std':
+            network = BiRecurrentConvBiAffine(word_dim, num_words,
+                                              char_dim, num_chars,
+                                              pos_dim, num_pos,
+                                              num_filters, window,
+                                              mode, hidden_size, num_layers, num_types, tag_space,
+                                              embedd_word=word_table, embedd_char=char_table,
+                                              p_rnn=p, biaffine=biaffine)
+        else:
+            raise NotImplementedError
+    elif obj == 'crf':
+        if args.dropout == 'std':
+            raise NotImplementedError
+        else:
+            raise NotImplementedError
     else:
-        raise NotImplementedError
+        raise RuntimeError('Unknown objective: %s' % obj)
 
     if use_gpu:
         network.cuda()
 
+    adam_epochs = 10
     lr = learning_rate
+    adam_rate = 0.001
     # optim = SGD(network.parameters(), lr=lr, momentum=momentum, weight_decay=gamma, nesterov=True)
-    optim = Adam(network.parameters(), lr=0.001, betas=(0.9, 0.9), weight_decay=gamma)
+    optim = Adam(network.parameters(), lr=adam_rate, betas=(0.9, 0.9), weight_decay=gamma)
     logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, tag_space=%d, crf=%s" % (
         mode, num_layers, hidden_size, num_filters, tag_space, 'biaffine' if biaffine else 'affine'))
-    logger.info("training: l2: %f, (#training data: %d, batch: %d, dropout: %.2f)" % (gamma, num_data, batch_size, p))
+    logger.info("training: obj: %s, l2: %f, (#training data: %d, batch: %d, dropout: %.2f)" % (
+        obj, gamma, num_data, batch_size, p))
 
     num_batches = num_data / batch_size + 1
     dev_ucorrect = 0.0
@@ -191,7 +205,8 @@ def main():
     test_total_nopunc = 0
 
     for epoch in range(1, num_epochs + 1):
-        print('Epoch %d (%s(%s), learning rate=%.4f, decay rate=%.4f): ' % (epoch, mode, args.dropout, lr, decay_rate))
+        print('Epoch %d (%s(%s), learning rate=%.4f, decay rate=%.4f (schedule=%d)): ' % (
+            epoch, mode, args.dropout, lr, decay_rate, schedule))
         train_err = 0.
         train_total = 0.
 
@@ -225,10 +240,14 @@ def main():
         print('train: %d loss: %.4f, time: %.2fs' % (
             epoch * num_batches, train_err / train_total, time.time() - start_time))
 
-        if epoch in schedule:
-            lr = learning_rate / (1.0 + epoch * decay_rate)
+        if epoch % schedule == 0:
             # lr = lr * decay_rate
-            optim = SGD(network.parameters(), lr=lr, momentum=momentum, weight_decay=gamma, nesterov=True)
+            if epoch < adam_epochs:
+                lr = adam_rate / (1.0 + epoch * decay_rate)
+                optim = Adam(network.parameters(), lr=lr, betas=(0.9, 0.9), weight_decay=gamma)
+            else:
+                lr = learning_rate / (1.0 + epoch * decay_rate)
+                optim = SGD(network.parameters(), lr=lr, momentum=momentum, weight_decay=gamma, nesterov=True)
 
 
 if __name__ == '__main__':

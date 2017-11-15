@@ -8,6 +8,7 @@ from torch.autograd import Variable
 from torch.nn.parameter import Parameter
 from neuronlp2.nlinalg import logsumexp, logdet
 from neuronlp2.tasks import parser
+from .attention import Attention
 
 
 class ChainCRF(nn.Module):
@@ -217,25 +218,7 @@ class TreeCRF(nn.Module):
         super(TreeCRF, self).__init__()
         self.input_size = input_size
         self.num_labels = num_labels
-        self.biaffine = biaffine
-
-        self.W_h = Parameter(torch.Tensor(self.num_labels, self.input_size))
-        self.W_c = Parameter(torch.Tensor(self.num_labels, self.input_size))
-        self.b = Parameter(torch.Tensor(self.num_labels, 1, 1))
-        if self.biaffine:
-            self.U = Parameter(torch.Tensor(self.num_labels, self.input_size, self.input_size))
-        else:
-            self.U = None
-            self.register_parameter('biaffine_tensor', None)
-
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        nn.init.xavier_uniform(self.W_h)
-        nn.init.xavier_uniform(self.W_c)
-        nn.init.constant(self.b, 0.)
-        if self.biaffine:
-            nn.init.xavier_uniform(self.U)
+        self.attention = Attention(input_size, input_size, num_labels, biaffine=biaffine)
 
     def forward(self, input_h, input_c, mask=None):
         '''
@@ -255,31 +238,10 @@ class TreeCRF(nn.Module):
 
         '''
         batch, length, _ = input_h.size()
-
-        # compute head and child part: [num_label, input_size] * [batch, input_size, length]
-        # the output shape is [batch, num_label, length]
-        out_h = torch.matmul(self.W_h, input_h.transpose(1, 2)).view(batch, self.num_labels, length, 1)
-        out_c = torch.matmul(self.W_c, input_c.transpose(1, 2)).view(batch, self.num_labels, 1, length)
-
-        if self.biaffine:
-            # compute bi-affine part
-            # first [batch, 1, length, input_size] * [num_labels, input_size, input_size]
-            # output shape [batch, num_label, length, input_size]
-            output = torch.matmul(input_h.view(batch, 1, length, self.input_size), self.U)
-            # second [batch, num_label, length, input_size] * [batch, 1, input_size, length]
-            # output shape [batch, num_label, length, length]
-            output = torch.matmul(output, input_c.view(batch, 1, length, self.input_size).transpose(2, 3))
-
-            output = output + out_h + out_c + self.b
-        else:
-            output = out_h + out_c + self.b
-
-        if mask is not None:
-            output = output * mask.view(batch, 1, length, 1) * mask.view(batch, 1, 1, length)
-
+        # [batch, num_labels, length, length]
+        output = self.attention(input_h, input_c, mask_d=mask, mask_e=mask)
         # set diagonal elements to -inf
         output = output + Variable(torch.diag(output.data.new(length).fill_(-np.inf)))
-
         return output
 
     def loss(self, input_h, input_c, heads, types, mask=None, lengths=None):
@@ -352,32 +314,3 @@ class TreeCRF(nn.Module):
 
         return z - tgt_energy
 
-    def decode(self, input_h, input_c, mask=None, lengths=None, leading_symbolic=0):
-        '''
-
-        Args:
-            input_h: Tensor
-                the head input tensor with shape = [batch, length, input_size]
-            input_c: Tensor
-                the child input tensor with shape = [batch, length, input_size]
-            mask: Tensor or None
-                the mask tensor with shape = [batch, length]
-            lengths: Tensor or None
-                the length tensor with shape = [batch]
-            leading_symbolic: nt
-                number of symbolic labels leading in type alphabets (set it to 0 if you are not sure)
-
-        Returns: numpy.array, numpy.array
-            decoding results (heads, types) in shape [batch, length], [batch, length]
-
-        '''
-        batch, length, _ = input_h.size()
-        energy = self.forward(input_h, input_c, mask=mask).data
-        # compute lengths
-        if lengths is None:
-            if mask is None:
-                lengths = [length for _ in range(batch)]
-            else:
-                lengths = mask.data.sum(dim=1).cpu().numpy()
-
-        return parser.decode_MST(energy.data.cpu().numpy(), lengths, leading_symbolic)

@@ -134,7 +134,7 @@ def main():
     test_correct = 0.0
     test_total = 0
     for epoch in range(1, num_epochs + 1):
-        print('Epoch %d (%s(%s), learning rate=%.4f, decay rate=%.4f (%d)): ' % (
+        print('Epoch %d (%s(%s), learning rate=%.4f, decay rate=%.4f (schedule=%d)): ' % (
             epoch, mode, args.dropout, lr, decay_rate, schedule))
         train_err = 0.
         train_corr = 0.

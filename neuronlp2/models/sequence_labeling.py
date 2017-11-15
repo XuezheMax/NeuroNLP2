@@ -39,6 +39,7 @@ class BiRecurrentConv(nn.Module):
             out_dim = tag_space
         self.dense_softmax = nn.Linear(out_dim, num_labels)
 
+        # TODO set dim for log_softmax and set reduce=False to NLLLoss
         self.logsoftmax = nn.LogSoftmax()
         self.nll_loss = nn.NLLLoss(size_average=False)
 
@@ -109,6 +110,7 @@ class BiRecurrentConv(nn.Module):
             target = target.contiguous()
 
         if mask is not None:
+            # TODO for Pytorch 2.0.4, first take nllloss then mask (no need of broadcast for mask)
             return self.nll_loss(self.logsoftmax(output) * mask.contiguous().view(output_size[0], 1),
                                  target.view(-1)) / mask.sum(), \
                    (torch.eq(preds, target).type_as(mask) * mask).sum(), preds
@@ -149,6 +151,7 @@ class BiVarRecurrentConv(nn.Module):
             out_dim = tag_space
         self.dense_softmax = nn.Linear(out_dim, num_labels)
 
+        # TODO set dim for log_softmax and set reduce=False to NLLLoss
         self.logsoftmax = nn.LogSoftmax()
         self.nll_loss = nn.NLLLoss(size_average=False)
 
@@ -198,6 +201,7 @@ class BiVarRecurrentConv(nn.Module):
         output_size = (output_size[0] * output_size[1], output_size[2])
         output = output.view(output_size)
         if mask is not None:
+            # TODO for Pytorch 2.0.4, first take nllloss then mask (no need of broadcast for mask)
             return self.nll_loss(self.logsoftmax(output) * mask.view(output_size[0], 1),
                                  target.view(-1)) / mask.sum(), \
                (torch.eq(preds, target).type_as(mask) * mask).sum(), preds
