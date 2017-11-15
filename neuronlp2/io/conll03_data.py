@@ -25,7 +25,7 @@ PAD_ID_TAG = 0
 
 NUM_SYMBOLIC_TAGS = 1
 
-_buckets = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 140]
+_buckets = [5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100, 140]
 
 
 def create_alphabets(alphabet_directory, train_path, data_paths=None, max_vocabulary_size=50000, embedd_dict=None,
@@ -146,6 +146,7 @@ def create_alphabets(alphabet_directory, train_path, data_paths=None, max_vocabu
 def read_data(source_path, word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet, max_size=None,
               normalize_digits=True):
     data = [[] for _ in _buckets]
+    max_char_length = [0 for _ in _buckets]
     print('Reading data from %s' % source_path)
     counter = 0
     reader = CoNLL03Reader(source_path, word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet)
@@ -160,15 +161,19 @@ def read_data(source_path, word_alphabet, char_alphabet, pos_alphabet, chunk_alp
         for bucket_id, bucket_size in enumerate(_buckets):
             if inst_size < bucket_size:
                 data[bucket_id].append([sent.word_ids, sent.char_id_seqs, inst.pos_ids, inst.chunk_ids, inst.ner_ids])
+                max_len = max([len(char_seq) for char_seq in sent.char_seqs])
+                if max_char_length[bucket_id] < max_len:
+                    max_char_length[bucket_id] = max_len
                 break
 
         inst = reader.getNext(normalize_digits)
     reader.close()
     print("Total number of data: %d" % counter)
-    return data
+    return data, max_char_length
 
 
 def get_batch(data, batch_size):
+    data, max_char_length = data
     bucket_sizes = [len(data[b]) for b in range(len(_buckets))]
     total_size = float(sum(bucket_sizes))
     # A bucket scale is a list of increasing numbers from 0 to 1 that we'll use
@@ -182,9 +187,10 @@ def get_batch(data, batch_size):
     bucket_id = min([i for i in range(len(buckets_scale)) if buckets_scale[i] > random_number])
 
     bucket_length = _buckets[bucket_id]
+    char_length = min(utils.MAX_CHAR_LENGTH, max_char_length[bucket_id] + 2)
 
     wid_inputs = np.empty([batch_size, bucket_length], dtype=np.int64)
-    cid_inputs = np.empty([batch_size, bucket_length, utils.MAX_CHAR_LENGTH], dtype=np.int64)
+    cid_inputs = np.empty([batch_size, bucket_length, char_length], dtype=np.int64)
     pid_inputs = np.empty([batch_size, bucket_length], dtype=np.int64)
     chid_inputs = np.empty([batch_size, bucket_length], dtype=np.int64)
     nid_inputs = np.empty([batch_size, bucket_length], dtype=np.int64)
@@ -218,6 +224,7 @@ def get_batch(data, batch_size):
 
 
 def iterate_batch(data, batch_size, shuffle=False):
+    data, max_char_length = data
     bucket_sizes = [len(data[b]) for b in range(len(_buckets))]
     total_size = float(sum(bucket_sizes))
     bucket_indices = np.arange(len(_buckets))
@@ -230,8 +237,9 @@ def iterate_batch(data, batch_size, shuffle=False):
             continue
 
         bucket_length = _buckets[bucket_id]
+        char_length = min(utils.MAX_CHAR_LENGTH, max_char_length[bucket_id] + 2)
         wid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int64)
-        cid_inputs = np.empty([bucket_size, bucket_length, utils.MAX_CHAR_LENGTH], dtype=np.int64)
+        cid_inputs = np.empty([bucket_size, bucket_length, char_length], dtype=np.int64)
         pid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int64)
         chid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int64)
         nid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int64)
@@ -275,8 +283,9 @@ def iterate_batch(data, batch_size, shuffle=False):
 
 def read_data_to_variable(source_path, word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet,
                           max_size=None, normalize_digits=True, use_gpu=False, volatile=False):
-    data = read_data(source_path, word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet,
-                     max_size=max_size, normalize_digits=normalize_digits)
+    data, max_char_length = read_data(source_path, word_alphabet, char_alphabet, pos_alphabet,
+                                      chunk_alphabet, ner_alphabet,
+                                      max_size=max_size, normalize_digits=normalize_digits)
     bucket_sizes = [len(data[b]) for b in range(len(_buckets))]
 
     data_variable = []
@@ -288,8 +297,9 @@ def read_data_to_variable(source_path, word_alphabet, char_alphabet, pos_alphabe
             continue
 
         bucket_length = _buckets[bucket_id]
+        char_length = min(utils.MAX_CHAR_LENGTH, max_char_length[bucket_id] + 2)
         wid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int64)
-        cid_inputs = np.empty([bucket_size, bucket_length, utils.MAX_CHAR_LENGTH], dtype=np.int64)
+        cid_inputs = np.empty([bucket_size, bucket_length, char_length], dtype=np.int64)
         pid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int64)
         chid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int64)
         nid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int64)

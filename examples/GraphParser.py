@@ -17,7 +17,7 @@ import numpy as np
 import torch
 from torch.optim import Adam, SGD
 from neuronlp2.io import get_logger, conllx_data
-from neuronlp2.models import BiRecurrentConvTreeCRF, BiRecurrentConvBiAffine
+from neuronlp2.models import BiRecurrentConvTreeCRF, BiRecurrentConvBiAffine, BiVarRecurrentConvBiAffine
 from neuronlp2 import utils
 
 
@@ -169,7 +169,13 @@ def main():
                                               embedd_word=word_table, embedd_char=char_table,
                                               p_rnn=p, biaffine=biaffine)
         else:
-            raise NotImplementedError
+            network = BiVarRecurrentConvBiAffine(word_dim, num_words,
+                                                 char_dim, num_chars,
+                                                 pos_dim, num_pos,
+                                                 num_filters, window,
+                                                 mode, hidden_size, num_layers, num_types, tag_space,
+                                                 embedd_word=word_table, embedd_char=char_table,
+                                                 p_rnn=p, biaffine=biaffine)
     elif obj == 'crf':
         if args.dropout == 'std':
             raise NotImplementedError
