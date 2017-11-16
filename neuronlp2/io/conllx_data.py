@@ -412,7 +412,7 @@ def get_batch_variable(data, batch_size, unk_replace=0.):
     words = words[index]
     if unk_replace:
         ones = Variable(single.data.new(batch_size, bucket_length).fill_(1))
-        noise = Variable(single.data.new(batch_size, bucket_length).bernoulli_(unk_replace))
+        noise = Variable(masks.data.new(batch_size, bucket_length).bernoulli_(unk_replace).long())
         words = words * (ones - single[index] * noise)
 
     return words, chars[index], pos[index], heads[index], types[index], masks[index], lengths[index]
@@ -434,7 +434,7 @@ def iterate_batch_variable(data, batch_size, unk_replace=0., shuffle=False):
         words, chars, pos, heads, types, masks, single, lengths = data_variable[bucket_id]
         if unk_replace:
             ones = Variable(single.data.new(bucket_size, bucket_length).fill_(1))
-            noise = Variable(single.data.new(bucket_size, bucket_length).bernoulli_(unk_replace))
+            noise = Variable(masks.data.new(bucket_size, bucket_length).bernoulli_(unk_replace).long())
             words = words * (ones - single * noise)
 
         indices = None

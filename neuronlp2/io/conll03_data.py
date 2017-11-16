@@ -107,6 +107,7 @@ def create_alphabets(alphabet_directory, train_path, data_paths=None, max_vocabu
 
         vocab_list = _START_VOCAB + sorted(vocab, key=vocab.get, reverse=True)
         logger.info("Total Vocabulary Size: %d" % len(vocab_list))
+        logger.info("TOtal Singleton Size:  %d" % len(singletons))
         vocab_list = [word for word in vocab_list if word in _START_VOCAB or vocab[word] > min_occurence]
         logger.info("Total Vocabulary Size (w.o rare words): %d" % len(vocab_list))
 
@@ -138,7 +139,7 @@ def create_alphabets(alphabet_directory, train_path, data_paths=None, max_vocabu
     pos_alphabet.close()
     chunk_alphabet.close()
     ner_alphabet.close()
-    logger.info("Word Alphabet Size: %d" % word_alphabet.size())
+    logger.info("Word Alphabet Size (Singleton): %d (%d)" % (word_alphabet.size(), word_alphabet.singleton_size()))
     logger.info("Character Alphabet Size: %d" % char_alphabet.size())
     logger.info("POS Alphabet Size: %d" % pos_alphabet.size())
     logger.info("Chunk Alphabet Size: %d" % chunk_alphabet.size())
@@ -404,7 +405,7 @@ def get_batch_variable(data, batch_size, unk_replace=0.):
     words = words[index]
     if unk_replace:
         ones = Variable(single.data.new(batch_size, bucket_length).fill_(1))
-        noise = Variable(single.data.new(batch_size, bucket_length).bernoulli_(unk_replace))
+        noise = Variable(masks.data.new(batch_size, bucket_length).bernoulli_(unk_replace).long())
         words = words * (ones - single[index] * noise)
 
     return words, chars[index], pos[index], chunks[index], ners[index], masks[index], lengths[index]
@@ -426,7 +427,7 @@ def iterate_batch_variable(data, batch_size, unk_replace=0., shuffle=False):
         words, chars, pos, chunks, ners, masks, single, lengths = data_variable[bucket_id]
         if unk_replace:
             ones = Variable(single.data.new(bucket_size, bucket_length).fill_(1))
-            noise = Variable(single.data.new(bucket_size, bucket_length).bernoulli_(unk_replace))
+            noise = Variable(masks.data.new(bucket_size, bucket_length).bernoulli_(unk_replace).long())
             words = words * (ones - single * noise)
 
         indices = None
