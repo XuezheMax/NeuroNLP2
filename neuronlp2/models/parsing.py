@@ -108,28 +108,25 @@ class BiRecurrentConvBiAffine(nn.Module):
             types = types[:, :max_len]
 
         # mask invalid position to -inf for log_softmax
+        minus_inf = -1e8
         if mask is not None:
-            log_mask = torch.log(mask)
-            output = output + log_mask.view(batch, 1, max_len, 1) + log_mask.view(batch, 1, 1, max_len)
+            minus_mask = (1 - mask) * minus_inf
+            output = output + minus_mask.view(batch, 1, max_len, 1) + minus_mask.view(batch, 1, 1, max_len)
 
         # TODO for Pytorch 2.0.4, need to set dim=1 for log_softmax or use softmax then take log
-        # first convert output to [batch, num_labels * max_len, max_len] for log_softmax computation.
+        # first convert output to [num_labels * max_len, batch, max_len] for log_softmax computation.
         # then convert back to [batch, num_labels, max_len, max_len]
-        loss = self.logsoftmax(output.view(batch, self.num_labels * max_len, max_len))
-        loss = loss.view(batch, self.num_labels, max_len, max_len)
+        loss = self.logsoftmax(output.view(batch, self.num_labels * max_len, max_len).transpose(0, 1))
+        loss = loss.transpose(0, 1).view(batch, self.num_labels, max_len, max_len)
 
         # mask invalid position to 0 for sum loss
         if mask is not None:
-            # TODO masked_fill_ does not work for backprop, check for Pytorch 2.0.4
-            mask_opposite = 1.0 - mask
-            loss = torch.exp(loss) + mask_opposite.view(batch, 1, max_len, 1)
-            loss = loss * mask.view(batch, 1, 1, max_len) + mask_opposite.view(batch, 1, 1, max_len)
-            loss = torch.log(loss)
+            loss = loss * mask.view(batch, 1, max_len, 1) * mask.view(batch, 1, 1, max_len)
             # number of valid positions which contribute to loss (remove the symbolic head for each sentence.
-            num = mask.sum(dim=1) - 1
+            num = mask.sum() - batch
         else:
             # number of valid positions which contribute to loss (remove the symbolic head for each sentence.
-            num = float(max_len - 1)
+            num = float(max_len - 1) * batch
 
         # first create index matrix [length, batch]
         index = torch.zeros(max_len, batch) + torch.arange(0, max_len).view(max_len, 1)
@@ -149,9 +146,9 @@ class BiRecurrentConvBiAffine(nn.Module):
             _, preds = output_reduce.max(dim=1)
             types_pred = preds / max_len + leading_symbolic
             heads_preds = preds % max_len
-            return -(loss.sum(dim=0) / num).mean(), (heads_preds, types_pred)
+            return -loss.sum() / num, (heads_preds, types_pred)
         else:
-            return -(loss.sum(dim=0) / num).mean()
+            return -loss.sum() / num
 
     def decode(self, input_word, input_char, input_pos, mask=None, length=None, hx=None, leading_symbolic=0):
         output, _, _ = self.forward(input_word, input_char, input_pos, mask=mask, length=length, hx=hx)
