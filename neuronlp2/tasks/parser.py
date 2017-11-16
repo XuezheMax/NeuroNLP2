@@ -200,7 +200,7 @@ def decode_MST(energies, lengths, leading_symbolic):
 
     input_shape = energies.shape
     batch_size = input_shape[0]
-    max_length = input_shape[1]
+    max_length = input_shape[2]
 
     pars = np.zeros([batch_size, max_length], dtype=np.int32)
     types = np.zeros([batch_size, max_length], dtype=np.int32)
