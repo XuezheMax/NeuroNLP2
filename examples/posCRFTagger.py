@@ -159,14 +159,17 @@ def main():
             # update log
             if batch % 100 == 0:
                 sys.stdout.write("\b" * num_back)
+                sys.stdout.write(" " * num_back)
+                sys.stdout.write("\b" * num_back)
                 log_info = 'train: %d/%d loss: %.4f, time left (estimated): %.2fs' % (
                     batch, num_batches, train_err / train_total, time_left)
                 sys.stdout.write(log_info)
                 num_back = len(log_info)
 
         sys.stdout.write("\b" * num_back)
-        print('train: %d loss: %.4f, time: %.2fs' % (
-            epoch * num_batches, train_err / train_total, time.time() - start_time))
+        sys.stdout.write(" " * num_back)
+        sys.stdout.write("\b" * num_back)
+        print('train: %d loss: %.4f, time: %.2fs' % (num_batches, train_err / train_total, time.time() - start_time))
 
         # evaluate performance on dev data
         network.eval()
