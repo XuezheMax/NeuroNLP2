@@ -126,10 +126,10 @@ class BiRecurrentConvBiAffine(nn.Module):
             loss = loss * mask.view(batch, 1, 1, max_len) + mask_opposite.view(batch, 1, 1, max_len)
             loss = torch.log(loss)
             # number of valid positions which contribute to loss (remove the symbolic head for each sentence.
-            num = mask.sum() - batch
+            num = mask.sum(dim=1) - 1
         else:
             # number of valid positions which contribute to loss (remove the symbolic head for each sentence.
-            num = float(batch * (max_len - 1))
+            num = float(max_len - 1)
 
         # first create index matrix [length, batch]
         index = torch.zeros(max_len, batch) + torch.arange(0, max_len).view(max_len, 1)
@@ -149,9 +149,9 @@ class BiRecurrentConvBiAffine(nn.Module):
             _, preds = output_reduce.max(dim=1)
             types_pred = preds / max_len + leading_symbolic
             heads_preds = preds % max_len
-            return -loss.sum() / num, (heads_preds, types_pred)
+            return -(loss.sum(dim=0) / num).mean(), (heads_preds, types_pred)
         else:
-            return -loss.sum() / num
+            return -(loss.sum(dim=0) / num).mean()
 
     def decode(self, input_word, input_char, input_pos, mask=None, length=None, hx=None, leading_symbolic=0):
         output, _, _ = self.forward(input_word, input_char, input_pos, mask=mask, length=length, hx=hx)
