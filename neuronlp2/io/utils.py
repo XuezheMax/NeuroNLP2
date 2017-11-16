@@ -1,7 +1,7 @@
 __author__ = 'max'
 
 import re
-MAX_CHAR_LENGTH = 45
+MAX_CHAR_LENGTH = 40
 NUM_CHAR_PAD = 2
 
 # Regular expressions used to normalize digits.
