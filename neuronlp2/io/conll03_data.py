@@ -57,7 +57,7 @@ def create_alphabets(alphabet_directory, train_path, data_paths=None, max_vocabu
                         vocab_list.append(word)
 
     logger = get_logger("Create Alphabets")
-    word_alphabet = Alphabet('word', defualt_value=True)
+    word_alphabet = Alphabet('word', defualt_value=True, singleton=True)
     char_alphabet = Alphabet('character', defualt_value=True)
     pos_alphabet = Alphabet('pos')
     chunk_alphabet = Alphabet('chunk')
@@ -96,6 +96,8 @@ def create_alphabets(alphabet_directory, train_path, data_paths=None, max_vocabu
                     vocab[word] += 1
                 else:
                     vocab[word] = 1
+        # collect singletons
+        singletons = set([word for word, count in vocab.items() if count == 1])
 
         # if a singleton is in pretrained embedding dict, set the count to 2
         if embedd_dict is not None:
@@ -115,12 +117,8 @@ def create_alphabets(alphabet_directory, train_path, data_paths=None, max_vocabu
             vocab_list = vocab_list[:max_vocabulary_size]
         for word in vocab_list:
             word_alphabet.add(word)
-
-        logger.info("Word Alphabet Size: %d" % word_alphabet.size())
-        logger.info("Character Alphabet Size: %d" % char_alphabet.size())
-        logger.info("POS Alphabet Size: %d" % pos_alphabet.size())
-        logger.info("Chunk Alphabet Size: %d" % chunk_alphabet.size())
-        logger.info("NER Alphabet Size: %d" % ner_alphabet.size())
+            if word in singletons:
+                word_alphabet.add_singleton(word_alphabet.get_index(word))
 
         word_alphabet.save(alphabet_directory)
         char_alphabet.save(alphabet_directory)
@@ -140,6 +138,11 @@ def create_alphabets(alphabet_directory, train_path, data_paths=None, max_vocabu
     pos_alphabet.close()
     chunk_alphabet.close()
     ner_alphabet.close()
+    logger.info("Word Alphabet Size: %d" % word_alphabet.size())
+    logger.info("Character Alphabet Size: %d" % char_alphabet.size())
+    logger.info("POS Alphabet Size: %d" % pos_alphabet.size())
+    logger.info("Chunk Alphabet Size: %d" % chunk_alphabet.size())
+    logger.info("NER Alphabet Size: %d" % ner_alphabet.size())
     return word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet
 
 
@@ -172,7 +175,7 @@ def read_data(source_path, word_alphabet, char_alphabet, pos_alphabet, chunk_alp
     return data, max_char_length
 
 
-def get_batch(data, batch_size):
+def get_batch(data, batch_size, word_alphabet=None, unk_replace=0.):
     data, max_char_length = data
     bucket_sizes = [len(data[b]) for b in range(len(_buckets))]
     total_size = float(sum(bucket_sizes))
@@ -196,6 +199,7 @@ def get_batch(data, batch_size):
     nid_inputs = np.empty([batch_size, bucket_length], dtype=np.int64)
 
     masks = np.zeros([batch_size, bucket_length], dtype=np.float32)
+    single = np.zeros([batch_size, bucket_length], dtype=np.int64)
 
     for b in range(batch_size):
         wids, cid_seqs, pids, chids, nids = random.choice(data[bucket_id])
@@ -220,10 +224,19 @@ def get_batch(data, batch_size):
         # masks
         masks[b, :inst_size] = 1.0
 
+        if unk_replace:
+            for j, wid in enumerate(wids):
+                if word_alphabet.is_singleton(wid):
+                    single[b, j] = 1
+
+    if unk_replace:
+        noise = np.random.binomial(1, unk_replace, size=[batch_size, bucket_length])
+        wid_inputs = wid_inputs * (1 - noise * single)
+
     return wid_inputs, cid_inputs, pid_inputs, chid_inputs, nid_inputs, masks
 
 
-def iterate_batch(data, batch_size, shuffle=False):
+def iterate_batch(data, batch_size, word_alphabet=None, unk_replace=0., shuffle=False):
     data, max_char_length = data
     bucket_sizes = [len(data[b]) for b in range(len(_buckets))]
     total_size = float(sum(bucket_sizes))
@@ -245,6 +258,7 @@ def iterate_batch(data, batch_size, shuffle=False):
         nid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int64)
 
         masks = np.zeros([bucket_size, bucket_length], dtype=np.float32)
+        single = np.zeros([bucket_size, bucket_length], dtype=np.int64)
 
         for i, inst in enumerate(data[bucket_id]):
             wids, cid_seqs, pids, chids, nids = inst
@@ -267,6 +281,14 @@ def iterate_batch(data, batch_size, shuffle=False):
             nid_inputs[i, inst_size:] = PAD_ID_TAG
             # masks
             masks[i, :inst_size] = 1.0
+            if unk_replace:
+                for j, wid in enumerate(wids):
+                    if word_alphabet.is_singleton(wid):
+                        single[i, j] = 1
+
+        if unk_replace:
+            noise = np.random.binomial(1, unk_replace, size=[bucket_size, bucket_length])
+            wid_inputs = wid_inputs * (1 - noise * single)
 
         indices = None
         if shuffle:
@@ -305,6 +327,7 @@ def read_data_to_variable(source_path, word_alphabet, char_alphabet, pos_alphabe
         nid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int64)
 
         masks = np.zeros([bucket_size, bucket_length], dtype=np.float32)
+        single = np.zeros([bucket_size, bucket_length], dtype=np.int64)
 
         lengths = np.empty(bucket_size, dtype=np.int64)
 
@@ -330,6 +353,9 @@ def read_data_to_variable(source_path, word_alphabet, char_alphabet, pos_alphabe
             nid_inputs[i, inst_size:] = PAD_ID_TAG
             # masks
             masks[i, :inst_size] = 1.0
+            for j, wid in enumerate(wids):
+                if word_alphabet.is_singleton(wid):
+                    single[i, j] = 1
 
         words = Variable(torch.from_numpy(wid_inputs), volatile=volatile)
         chars = Variable(torch.from_numpy(cid_inputs), volatile=volatile)
@@ -337,6 +363,7 @@ def read_data_to_variable(source_path, word_alphabet, char_alphabet, pos_alphabe
         chunks = Variable(torch.from_numpy(chid_inputs), volatile=volatile)
         ners = Variable(torch.from_numpy(nid_inputs), volatile=volatile)
         masks = Variable(torch.from_numpy(masks), volatile=volatile)
+        single = Variable(torch.from_numpy(single), volatile=volatile)
         lengths = torch.from_numpy(lengths)
         if use_gpu:
             words = words.cuda()
@@ -345,14 +372,15 @@ def read_data_to_variable(source_path, word_alphabet, char_alphabet, pos_alphabe
             chunks = chunks.cuda()
             ners = ners.cuda()
             masks = masks.cuda()
+            single = single.cuda()
             lengths = lengths.cuda()
 
-        data_variable.append((words, chars, pos, chunks, ners, masks, lengths))
+        data_variable.append((words, chars, pos, chunks, ners, masks, single, lengths))
 
     return data_variable, bucket_sizes
 
 
-def get_batch_variable(data, batch_size):
+def get_batch_variable(data, batch_size, unk_replace=0.):
     data_variable, bucket_sizes = data
     total_size = float(sum(bucket_sizes))
     # A bucket scale is a list of increasing numbers from 0 to 1 that we'll use
@@ -364,17 +392,25 @@ def get_batch_variable(data, batch_size):
     # in [0, 1] and use the corresponding interval in train_buckets_scale.
     random_number = np.random.random_sample()
     bucket_id = min([i for i in range(len(buckets_scale)) if buckets_scale[i] > random_number])
+    bucket_length = _buckets[bucket_id]
 
-    words, chars, pos, chunks, ners, masks, lengths = data_variable[bucket_id]
+    words, chars, pos, chunks, ners, masks, single, lengths = data_variable[bucket_id]
     bucket_size = bucket_sizes[bucket_id]
-    index = torch.randperm(bucket_size).long()[:min(bucket_size, batch_size)]
+    batch_size = min(bucket_size, batch_size)
+    index = torch.randperm(bucket_size).long()[:batch_size]
     if words.is_cuda:
         index = index.cuda()
 
-    return words[index], chars[index], pos[index], chunks[index], ners[index], masks[index], lengths[index]
+    words = words[index]
+    if unk_replace:
+        ones = Variable(single.data.new(batch_size, bucket_length).fill_(1))
+        noise = Variable(single.data.new(batch_size, bucket_length).bernoulli_(unk_replace))
+        words = words * (ones - single[index] * noise)
+
+    return words, chars[index], pos[index], chunks[index], ners[index], masks[index], lengths[index]
 
 
-def iterate_batch_variable(data, batch_size, shuffle=False):
+def iterate_batch_variable(data, batch_size, unk_replace=0., shuffle=False):
     data_variable, bucket_sizes = data
 
     bucket_indices = np.arange(len(_buckets))
@@ -383,10 +419,15 @@ def iterate_batch_variable(data, batch_size, shuffle=False):
 
     for bucket_id in bucket_indices:
         bucket_size = bucket_sizes[bucket_id]
+        bucket_length = _buckets[bucket_id]
         if bucket_size == 0:
             continue
 
-        words, chars, pos, chunks, ners, masks, lengths = data_variable[bucket_id]
+        words, chars, pos, chunks, ners, masks, single, lengths = data_variable[bucket_id]
+        if unk_replace:
+            ones = Variable(single.data.new(bucket_size, bucket_length).fill_(1))
+            noise = Variable(single.data.new(bucket_size, bucket_length).bernoulli_(unk_replace))
+            words = words * (ones - single * noise)
 
         indices = None
         if shuffle:

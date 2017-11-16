@@ -44,6 +44,8 @@ def main():
     args_parser.add_argument('--p', type=float, default=0.5, help='dropout rate')
     args_parser.add_argument('--biaffine', action='store_true', help='bi-gram parameter for CRF')
     args_parser.add_argument('--schedule', type=int, help='schedule for learning rate decay')
+    args_parser.add_argument('--unk_replace', type=float, default=0.,
+                             help='The rate to replace a singleton word with UNK')
     args_parser.add_argument('--punctuation', nargs='+', type=str, help='List of punctuations')
     args_parser.add_argument('--word_embedding', choices=['glove', 'senna', 'sskip', 'polyglot'],
                              help='Embedding for words', required=True)
@@ -76,6 +78,7 @@ def main():
     gamma = args.gamma
     schedule = args.schedule
     p = args.p
+    unk_replace = args.unk_replace
     biaffine = args.biaffine
     punctuation = args.punctuation
 
@@ -205,8 +208,8 @@ def main():
         optim = SGD(network.parameters(), lr=lr, momentum=momentum, weight_decay=gamma, nesterov=True)
     logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, tag_space=%d, crf=%s" % (
         mode, num_layers, hidden_size, num_filters, tag_space, 'biaffine' if biaffine else 'affine'))
-    logger.info("training: obj: %s, l2: %f, (#training data: %d, batch: %d, dropout: %.2f)" % (
-        obj, gamma, num_data, batch_size, p))
+    logger.info("training: obj: %s, l2: %f, (#training data: %d, batch: %d, dropout: %.2f, unk replace: %.2f)" % (
+        obj, gamma, num_data, batch_size, p, unk_replace))
 
     num_batches = num_data / batch_size + 1
     dev_ucorrect = 0.0
@@ -231,7 +234,8 @@ def main():
         num_back = 0
         network.train()
         for batch in range(1, num_batches + 1):
-            word, char, pos, heads, types, masks, lengths = conllx_data.get_batch_variable(data_train, batch_size)
+            word, char, pos, heads, types, masks, lengths = conllx_data.get_batch_variable(data_train, batch_size,
+                                                                                           unk_replace=unk_replace)
 
             optim.zero_grad()
             loss = network.loss(word, char, pos, heads, types, mask=masks, length=lengths)
@@ -283,8 +287,8 @@ def main():
             heads = heads.data.cpu().numpy()
             types = types.data.cpu().numpy()
 
-            pred_writer.write(word, pos, heads_pred, types_pred, lengths)
-            gold_writer.write(word, pos, heads, types, lengths)
+            pred_writer.write(word, pos, heads_pred, types_pred, lengths, symbolic_root=True)
+            gold_writer.write(word, pos, heads, types, lengths, symbolic_root=True)
 
             ucorr, lcorr, total, \
             ucorr_nopunc, lcorr_nopunc, total_nopunc = parser.eval(word, pos, heads_pred, types_pred, heads, types,
@@ -333,8 +337,8 @@ def main():
                 heads = heads.data.cpu().numpy()
                 types = types.data.cpu().numpy()
 
-                pred_writer.write(word, pos, heads_pred, types_pred, lengths)
-                gold_writer.write(word, pos, heads, types, lengths)
+                pred_writer.write(word, pos, heads_pred, types_pred, lengths, symbolic_root=True)
+                gold_writer.write(word, pos, heads, types, lengths, symbolic_root=True)
 
                 ucorr, lcorr, total, \
                 ucorr_nopunc, lcorr_nopunc, total_nopunc = parser.eval(word, pos, heads_pred, types_pred, heads, types,

@@ -8,7 +8,7 @@ import os
 from .logger import get_logger
 
 class Alphabet(object):
-    def __init__(self, name, defualt_value=False, keep_growing=True):
+    def __init__(self, name, defualt_value=False, keep_growing=True, singleton=False):
         self.__name = name
 
         self.instance2index = {}
@@ -16,6 +16,7 @@ class Alphabet(object):
         self.default_value = defualt_value
         self.offset = 1 if self.default_value else 0
         self.keep_growing = keep_growing
+        self.singletons = set() if singleton else None
 
         # Index 0 is occupied by default, all else following.
         self.default_index = 0 if self.default_value else None
@@ -29,6 +30,24 @@ class Alphabet(object):
             self.instances.append(instance)
             self.instance2index[instance] = self.next_index
             self.next_index += 1
+
+    def add_singleton(self, id):
+        if self.singletons is None:
+            raise RuntimeError('Alphabet %s does not have singleton.' % self.__name)
+        else:
+            self.singletons.add(id)
+
+    def add_singletons(self, ids):
+        if self.singletons is None:
+            raise RuntimeError('Alphabet %s does not have singleton.' % self.__name)
+        else:
+            self.singletons.update(ids)
+
+    def is_singleton(self, id):
+        if self.singletons is None:
+            raise RuntimeError('Alphabet %s does not have singleton.' % self.__name)
+        else:
+            return id in self.singletons
 
     def get_index(self, instance):
         try:
@@ -57,6 +76,9 @@ class Alphabet(object):
     def size(self):
         return len(self.instances) + self.offset
 
+    def singleton_size(self):
+        return len(self.singletons)
+
     def items(self):
         return self.instance2index.items()
 
@@ -72,11 +94,19 @@ class Alphabet(object):
         self.keep_growing = True
 
     def get_content(self):
-        return {'instance2index': self.instance2index, 'instances': self.instances}
+        if self.singletons is None:
+            return {'instance2index': self.instance2index, 'instances': self.instances}
+        else:
+            return {'instance2index': self.instance2index, 'instances': self.instances,
+                    'singletions': list(self.singletons)}
 
     def __from_json(self, data):
         self.instances = data["instances"]
         self.instance2index = data["instance2index"]
+        if 'singletions' in data:
+            self.singletons = set(data['singletions'])
+        else:
+            self.singletons = None
 
     def save(self, output_directory, name=None):
         """
