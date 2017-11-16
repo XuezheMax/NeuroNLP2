@@ -273,12 +273,6 @@ def main():
         dev_lcorr_nopunc = 0.0
         dev_total = 0
         dev_total_nopunc = 0
-        test_ucorrect = 0.0
-        test_lcorrect = 0.0
-        test_ucorrect_nopunct = 0.0
-        test_lcorrect_nopunct = 0.0
-        test_total = 0
-        test_total_nopunc = 0
         for batch in conllx_data.iterate_batch_variable(data_dev, batch_size):
             word, char, pos, heads, types, masks, lengths = batch
             heads_pred, types_pred = network.decode_mst(word, char, pos, mask=masks, length=lengths,
