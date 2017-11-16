@@ -117,7 +117,7 @@ class BiRecurrentConvBiAffine(nn.Module):
         # first convert output to [num_labels * max_len, batch, max_len] for log_softmax computation.
         # then convert back to [batch, num_labels, max_len, max_len]
         loss = self.logsoftmax(output.view(batch, self.num_labels * max_len, max_len).transpose(0, 1))
-        loss = loss.transpose(0, 1).view(batch, self.num_labels, max_len, max_len)
+        loss = loss.transpose(0, 1).contiguous().view(batch, self.num_labels, max_len, max_len)
 
         # mask invalid position to 0 for sum loss
         if mask is not None:
