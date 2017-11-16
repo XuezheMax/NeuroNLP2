@@ -122,10 +122,9 @@ class BiRecurrentConvBiAffine(nn.Module):
         if mask is not None:
             # TODO masked_fill_ does not work for backprop, check for Pytorch 2.0.4
             mask_opposite = 1.0 - mask
-            loss = torch.exp(loss) + mask_opposite.view(batch, 1, max_len, 1) + mask_opposite.view(batch, 1, 1, max_len)
+            loss = torch.exp(loss) + mask_opposite.view(batch, 1, max_len, 1)
+            loss = loss * mask.view(batch, 1, 1, max_len) + mask_opposite.view(batch, 1, 1, max_len)
             loss = torch.log(loss)
-            print(loss)
-            raw_input()
             # number of valid positions which contribute to loss (remove the symbolic head for each sentence.
             num = mask.sum() - batch
         else:
@@ -150,9 +149,9 @@ class BiRecurrentConvBiAffine(nn.Module):
             _, preds = output_reduce.max(dim=1)
             types_pred = preds / max_len + leading_symbolic
             heads_preds = preds % max_len
-            return loss.sum() / num, (heads_preds, types_pred)
+            return -loss.sum() / num, (heads_preds, types_pred)
         else:
-            return loss.sum() / num
+            return -loss.sum() / num
 
     def decode(self, input_word, input_char, input_pos, mask=None, length=None, hx=None, leading_symbolic=0):
         output, _, _ = self.forward(input_word, input_char, input_pos, mask=mask, length=length, hx=hx)

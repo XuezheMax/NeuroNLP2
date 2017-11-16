@@ -193,7 +193,7 @@ def get_batch(data, batch_size):
     bucket_id = min([i for i in range(len(buckets_scale)) if buckets_scale[i] > random_number])
 
     bucket_length = _buckets[bucket_id]
-    char_length = min(utils.MAX_CHAR_LENGTH, max_char_length[bucket_id] + 1)
+    char_length = min(utils.MAX_CHAR_LENGTH, max_char_length[bucket_id] + utils.NUM_CHAR_PAD)
 
     wid_inputs = np.empty([batch_size, bucket_length], dtype=np.int64)
     cid_inputs = np.empty([batch_size, bucket_length, char_length], dtype=np.int64)
@@ -243,7 +243,7 @@ def iterate_batch(data, batch_size, shuffle=False):
             continue
 
         bucket_length = _buckets[bucket_id]
-        char_length = min(utils.MAX_CHAR_LENGTH, max_char_length[bucket_id] + 1)
+        char_length = min(utils.MAX_CHAR_LENGTH, max_char_length[bucket_id] + utils.NUM_CHAR_PAD)
         wid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int64)
         cid_inputs = np.empty([bucket_size, bucket_length, char_length], dtype=np.int64)
         pid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int64)
@@ -304,7 +304,7 @@ def read_data_to_variable(source_path, word_alphabet, char_alphabet, pos_alphabe
             continue
 
         bucket_length = _buckets[bucket_id]
-        char_length = min(utils.MAX_CHAR_LENGTH, max_char_length[bucket_id] + 1)
+        char_length = min(utils.MAX_CHAR_LENGTH, max_char_length[bucket_id] + utils.NUM_CHAR_PAD)
         wid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int64)
         cid_inputs = np.empty([bucket_size, bucket_length, char_length], dtype=np.int64)
         pid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int64)

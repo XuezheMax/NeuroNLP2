@@ -188,10 +188,13 @@ def main():
         network.cuda()
 
     adam_epochs = 10
-    lr = learning_rate
     adam_rate = 0.001
-    # optim = SGD(network.parameters(), lr=lr, momentum=momentum, weight_decay=gamma, nesterov=True)
-    optim = Adam(network.parameters(), lr=adam_rate, betas=(0.9, 0.9), weight_decay=gamma)
+    if adam_epochs > 0:
+        lr = adam_rate
+        optim = Adam(network.parameters(), lr=adam_rate, betas=(0.9, 0.9), weight_decay=gamma)
+    else:
+        lr = learning_rate
+        optim = SGD(network.parameters(), lr=lr, momentum=momentum, weight_decay=gamma, nesterov=True)
     logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, tag_space=%d, crf=%s" % (
         mode, num_layers, hidden_size, num_filters, tag_space, 'biaffine' if biaffine else 'affine'))
     logger.info("training: obj: %s, l2: %f, (#training data: %d, batch: %d, dropout: %.2f)" % (
@@ -235,7 +238,7 @@ def main():
             time_left = (num_batches - batch) * time_ave
 
             # update log
-            if batch % 100 == 0:
+            if batch % 1 == 0:
                 sys.stdout.write("\b" * num_back)
                 log_info = 'train: %d/%d loss: %.4f, time left (estimated): %.2fs' % (
                     batch, num_batches, train_err / train_total, time_left)
