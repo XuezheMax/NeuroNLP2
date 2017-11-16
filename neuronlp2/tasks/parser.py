@@ -15,43 +15,31 @@ def is_punctuation(word, pos, punct_set=None):
         return pos in punct_set
 
 
-def eval(inputs, postags, pars_pred, types_pred, heads, types, filename, word_alphabet, pos_alphabet,
-                 type_alphabet, masks=None, punct_set=None):
-    if masks is None:
-        batch_size, max_length = inputs.shape
-    else:
-        batch_size, max_length = masks.shape
-
+def eval(words, postags, heads_pred, types_pred, heads, types, word_alphabet, pos_alphabet, lengths, punct_set=None):
+    batch_size, _ = words.shape
     ucorr = 0.
     lcorr = 0.
     total = 0.
     ucorr_nopunc = 0.
     lcorr_nopunc = 0.
     total_nopunc = 0.
-    with open(filename, 'a') as file:
-        for i in range(batch_size):
-            for j in range(1, max_length):
-                if masks[i, j] > 0.:
-                    word = word_alphabet.get_instance(inputs[i, j])
-                    word = word.encode('utf8')
+    for i in range(batch_size):
+        for j in range(1, lengths[i]):
+            word = word_alphabet.get_instance(words[i, j])
+            word = word.encode('utf8')
 
-                    pos = pos_alphabet.get_instance(postags[i, j])
-                    pos = pos.encode('utf8')
+            pos = pos_alphabet.get_instance(postags[i, j])
+            pos = pos.encode('utf8')
 
-                    type = type_alphabet.get_instance(types_pred[i, j])
-                    type = type.encode('utf8')
+            total += 1
+            ucorr += 1 if heads[i, j] == heads_pred[i, j] else 0
+            lcorr += 1 if heads[i, j] == heads_pred[i, j] and types[i, j] == types_pred[i, j] else 0
 
-                    total += 1
-                    ucorr += 1 if heads[i, j] == pars_pred[i, j] else 0
-                    lcorr += 1 if heads[i, j] == pars_pred[i, j] and types[i, j] == types_pred[i, j] else 0
+            if not is_punctuation(word, pos, punct_set):
+                total_nopunc += 1
+                ucorr_nopunc += 1 if heads[i, j] == heads_pred[i, j] else 0
+                lcorr_nopunc += 1 if heads[i, j] == heads_pred[i, j] and types[i, j] == types_pred[i, j] else 0
 
-                    if not is_punctuation(word, pos, punct_set):
-                        total_nopunc += 1
-                        ucorr_nopunc += 1 if heads[i, j] == pars_pred[i, j] else 0
-                        lcorr_nopunc += 1 if heads[i, j] == pars_pred[i, j] and types[i, j] == types_pred[i, j] else 0
-
-                    file.write('%d\t%s\t_\t_\t%s\t_\t%d\t%s\n' % (j, word, pos, pars_pred[i, j], type))
-            file.write('\n')
     return ucorr, lcorr, total, ucorr_nopunc, lcorr_nopunc, total_nopunc
 
 

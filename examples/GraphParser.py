@@ -12,6 +12,7 @@ sys.path.append("..")
 
 import time
 import argparse
+import uuid
 
 import numpy as np
 import torch
@@ -19,38 +20,42 @@ from torch.optim import Adam, SGD
 from neuronlp2.io import get_logger, conllx_data
 from neuronlp2.models import BiRecurrentConvTreeCRF, BiRecurrentConvBiAffine, BiVarRecurrentConvBiAffine
 from neuronlp2 import utils
+from neuronlp2.io import CoNLLXWriter
+from neuronlp2.tasks import parser
+
+uid = uuid.uuid4().get_hex()[:6]
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Tuning with graph-based parsing')
-    parser.add_argument('--mode', choices=['RNN', 'LSTM', 'GRU'], help='architecture of rnn', required=True)
-    parser.add_argument('--num_epochs', type=int, default=200, help='Number of training epochs')
-    parser.add_argument('--batch_size', type=int, default=64, help='Number of sentences in each batch')
-    parser.add_argument('--hidden_size', type=int, default=256, help='Number of hidden units in RNN')
-    parser.add_argument('--tag_space', type=int, default=128, help='Dimension of tag space')
-    parser.add_argument('--num_layers', type=int, default=1, help='Number of layers of RNN')
-    parser.add_argument('--num_filters', type=int, default=50, help='Number of filters in CNN')
-    parser.add_argument('--objective', choices=['cross_entropy', 'crf'], default='cross_entropy',
-                        help='objective function of training procedure.')
-    parser.add_argument('--learning_rate', type=float, default=0.01, help='Learning rate')
-    parser.add_argument('--decay_rate', type=float, default=0.05, help='Decay rate of learning rate')
-    parser.add_argument('--gamma', type=float, default=0.0, help='weight for regularization')
-    parser.add_argument('--dropout', choices=['std', 'variational'], help='type of dropout', required=True)
-    parser.add_argument('--p', type=float, default=0.5, help='dropout rate')
-    parser.add_argument('--biaffine', action='store_true', help='bi-gram parameter for CRF')
-    parser.add_argument('--schedule', type=int, help='schedule for learning rate decay')
-    parser.add_argument('--punctuation', nargs='+', type=str, help='List of punctuations')
-    parser.add_argument('--word_embedding', choices=['glove', 'senna', 'sskip', 'polyglot'], help='Embedding for words',
-                        required=True)
-    parser.add_argument('--word_path', help='path for word embedding dict')
-    parser.add_argument('--char_embedding', choices=['random', 'polyglot'], help='Embedding for characters',
-                        required=True)
-    parser.add_argument('--char_path', help='path for character embedding dict')
-    parser.add_argument('--train')  # "data/POS-penn/wsj/split1/wsj1.train.original"
-    parser.add_argument('--dev')  # "data/POS-penn/wsj/split1/wsj1.dev.original"
-    parser.add_argument('--test')  # "data/POS-penn/wsj/split1/wsj1.test.original"
+    args_parser = argparse.ArgumentParser(description='Tuning with graph-based parsing')
+    args_parser.add_argument('--mode', choices=['RNN', 'LSTM', 'GRU'], help='architecture of rnn', required=True)
+    args_parser.add_argument('--num_epochs', type=int, default=200, help='Number of training epochs')
+    args_parser.add_argument('--batch_size', type=int, default=64, help='Number of sentences in each batch')
+    args_parser.add_argument('--hidden_size', type=int, default=256, help='Number of hidden units in RNN')
+    args_parser.add_argument('--tag_space', type=int, default=128, help='Dimension of tag space')
+    args_parser.add_argument('--num_layers', type=int, default=1, help='Number of layers of RNN')
+    args_parser.add_argument('--num_filters', type=int, default=50, help='Number of filters in CNN')
+    args_parser.add_argument('--objective', choices=['cross_entropy', 'crf'], default='cross_entropy',
+                             help='objective function of training procedure.')
+    args_parser.add_argument('--learning_rate', type=float, default=0.01, help='Learning rate')
+    args_parser.add_argument('--decay_rate', type=float, default=0.05, help='Decay rate of learning rate')
+    args_parser.add_argument('--gamma', type=float, default=0.0, help='weight for regularization')
+    args_parser.add_argument('--dropout', choices=['std', 'variational'], help='type of dropout', required=True)
+    args_parser.add_argument('--p', type=float, default=0.5, help='dropout rate')
+    args_parser.add_argument('--biaffine', action='store_true', help='bi-gram parameter for CRF')
+    args_parser.add_argument('--schedule', type=int, help='schedule for learning rate decay')
+    args_parser.add_argument('--punctuation', nargs='+', type=str, help='List of punctuations')
+    args_parser.add_argument('--word_embedding', choices=['glove', 'senna', 'sskip', 'polyglot'],
+                             help='Embedding for words', required=True)
+    args_parser.add_argument('--word_path', help='path for word embedding dict')
+    args_parser.add_argument('--char_embedding', choices=['random', 'polyglot'], help='Embedding for characters',
+                             required=True)
+    args_parser.add_argument('--char_path', help='path for character embedding dict')
+    args_parser.add_argument('--train')  # "data/POS-penn/wsj/split1/wsj1.train.original"
+    args_parser.add_argument('--dev')  # "data/POS-penn/wsj/split1/wsj1.dev.original"
+    args_parser.add_argument('--test')  # "data/POS-penn/wsj/split1/wsj1.test.original"
 
-    args = parser.parse_args()
+    args = args_parser.parse_args()
 
     logger = get_logger("GraphParser")
 
@@ -187,6 +192,9 @@ def main():
     if use_gpu:
         network.cuda()
 
+    pred_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
+    gold_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
+
     adam_epochs = 10
     adam_rate = 0.001
     if adam_epochs > 0:
@@ -251,6 +259,115 @@ def main():
         sys.stdout.write(" " * num_back)
         sys.stdout.write("\b" * num_back)
         print('train: %d loss: %.4f, time: %.2fs' % (num_batches, train_err / train_total, time.time() - start_time))
+
+        # evaluate performance on dev data
+        network.eval()
+        pred_filename = 'tmp/%spred_dev%d' % (str(uid), epoch)
+        pred_writer.start(pred_filename)
+        gold_filename = 'tmp/%sgold_dev%d' % (str(uid), epoch)
+        gold_writer.start(gold_filename)
+
+        dev_ucorr = 0.0
+        dev_lcorr = 0.0
+        dev_ucorr_nopunc = 0.0
+        dev_lcorr_nopunc = 0.0
+        dev_total = 0
+        dev_total_nopunc = 0
+        test_ucorrect = 0.0
+        test_lcorrect = 0.0
+        test_ucorrect_nopunct = 0.0
+        test_lcorrect_nopunct = 0.0
+        test_total = 0
+        test_total_nopunc = 0
+        for batch in conllx_data.iterate_batch_variable(data_dev, batch_size):
+            word, char, pos, heads, types, masks, lengths = batch
+            heads_pred, types_pred = network.decode_mst(word, char, pos, mask=masks, length=lengths,
+                                                        leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
+
+            pred_writer.write(word.data.cpu().numpy(), pos.data.cpu().numpy(),
+                              heads_pred, types_pred, lengths)
+            gold_writer.write(word.data.cpu().numpy(), pos.data.cpu().numpy(),
+                              heads.cpu().numpy(), types.cpu().numpy(), lengths)
+
+            ucorr, lcorr, total, \
+            ucorr_nopunc, lcorr_nopunc, total_nopunc = parser.eval(word, pos, heads_pred, types_pred, heads, types,
+                                                                   word_alphabet, pos_alphabet, lengths,
+                                                                   punct_set=punct_set)
+            dev_ucorr += ucorr
+            dev_lcorr += lcorr
+            dev_total += total
+
+            dev_ucorr_nopunc += ucorr_nopunc
+            dev_lcorr_nopunc += lcorr_nopunc
+            dev_total_nopunc += total_nopunc
+
+        pred_writer.close()
+        gold_writer.close()
+        print('W. Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%' % (
+            dev_ucorr, dev_lcorr, dev_total, dev_ucorr * 100 / dev_total, dev_lcorr * 100 / dev_total))
+        print('Wo Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%' % (
+            dev_ucorr_nopunc, dev_lcorr_nopunc, dev_total_nopunc, dev_ucorr_nopunc * 100 / dev_total_nopunc,
+            dev_lcorr_nopunc * 100 / dev_total_nopunc))
+
+        if dev_ucorrect_nopunct <= dev_ucorr_nopunc:
+            dev_ucorrect_nopunct = dev_ucorr_nopunc
+            dev_lcorrect_nopunct = dev_lcorr_nopunc
+            dev_ucorrect = dev_ucorr
+            dev_lcorrect = dev_lcorr
+            best_epoch = epoch
+
+            pred_filename = 'tmp/%spred_test%d' % (str(uid), epoch)
+            pred_writer.start(pred_filename)
+            gold_filename = 'tmp/%sgold_test%d' % (str(uid), epoch)
+            gold_writer.start(gold_filename)
+            test_ucorr = 0.0
+            test_lcorr = 0.0
+            test_ucorr_nopunc = 0.0
+            test_lcorr_nopunc = 0.0
+            test_total = 0
+            test_total_nopunc = 0
+            for batch in conllx_data.iterate_batch_variable(data_test, batch_size):
+                word, char, pos, heads, types, masks, lengths = batch
+                heads_pred, types_pred = network.decode_mst(word, char, pos, mask=masks, length=lengths,
+                                                            leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
+
+                pred_writer.write(word.data.cpu().numpy(), pos.data.cpu().numpy(),
+                                  heads_pred, types_pred, lengths)
+                gold_writer.write(word.data.cpu().numpy(), pos.data.cpu().numpy(),
+                                  heads.cpu().numpy(), types.cpu().numpy(), lengths)
+
+                ucorr, lcorr, total, \
+                ucorr_nopunc, lcorr_nopunc, total_nopunc = parser.eval(word, pos, heads_pred, types_pred, heads, types,
+                                                                       word_alphabet, pos_alphabet, lengths,
+                                                                       punct_set=punct_set)
+                test_ucorr += ucorr
+                test_lcorr += lcorr
+                test_total += total
+
+                test_ucorr_nopunc += ucorr_nopunc
+                test_lcorr_nopunc += lcorr_nopunc
+                test_total_nopunc += total_nopunc
+
+            pred_writer.close()
+            gold_writer.close()
+            test_ucorrect = test_ucorr
+            test_lcorrect = test_lcorr
+            test_ucorrect_nopunct = test_ucorr_nopunc
+            test_lcorrect_nopunct = test_lcorr_nopunc
+
+        print('best dev  W. Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%% (epoch: %d)' % (
+            dev_ucorrect, dev_lcorrect, dev_total,
+            dev_ucorrect * 100 / dev_total, dev_lcorrect * 100 / dev_total, best_epoch))
+        print('best dev  Wo Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%% (epoch: %d)' % (
+            dev_ucorrect_nopunct, dev_lcorrect_nopunct, dev_total_nopunc,
+            dev_ucorrect_nopunct * 100 / dev_total_nopunc, dev_lcorrect_nopunct * 100 / dev_total_nopunc, best_epoch))
+        print('best test W. Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%% (epoch: %d)' % (
+            test_ucorrect, test_lcorrect, test_total,
+            test_ucorrect * 100 / test_total, test_lcorrect * 100 / test_total, best_epoch))
+        print('best test Wo Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%% (epoch: %d)' % (
+            test_ucorrect_nopunct, test_lcorrect_nopunct, test_total_nopunc,
+            test_ucorrect_nopunct * 100 / test_total_nopunc, test_lcorrect_nopunct * 100 / test_total_nopunc,
+            best_epoch))
 
         if epoch % schedule == 0:
             # lr = lr * decay_rate

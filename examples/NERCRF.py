@@ -208,7 +208,6 @@ def main():
         tmp_filename = 'tmp/%s_dev%d' % (str(uid), epoch)
         writer.start(tmp_filename)
 
-
         for batch in conll03_data.iterate_batch_variable(data_dev, batch_size):
             word, char, pos, chunk, labels, masks, lengths = batch
             preds, _ = network.decode(word, char, target=labels, mask=masks,
