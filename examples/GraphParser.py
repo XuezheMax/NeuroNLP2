@@ -246,7 +246,7 @@ def main():
             time_left = (num_batches - batch) * time_ave
 
             # update log
-            if batch % 1 == 0:
+            if batch % 10 == 0:
                 sys.stdout.write("\b" * num_back)
                 sys.stdout.write(" " * num_back)
                 sys.stdout.write("\b" * num_back)
@@ -283,11 +283,14 @@ def main():
             word, char, pos, heads, types, masks, lengths = batch
             heads_pred, types_pred = network.decode_mst(word, char, pos, mask=masks, length=lengths,
                                                         leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
+            word = word.data.cpu().numpy()
+            pos = pos.data.cpu().numpy()
+            lengths = lengths.cpu().numpy()
+            heads = heads.data.cpu().numpy()
+            types = types.data.cpu().numpy()
 
-            pred_writer.write(word.data.cpu().numpy(), pos.data.cpu().numpy(),
-                              heads_pred, types_pred, lengths)
-            gold_writer.write(word.data.cpu().numpy(), pos.data.cpu().numpy(),
-                              heads.cpu().numpy(), types.cpu().numpy(), lengths)
+            pred_writer.write(word, pos, heads_pred, types_pred, lengths)
+            gold_writer.write(word, pos, heads, types, lengths)
 
             ucorr, lcorr, total, \
             ucorr_nopunc, lcorr_nopunc, total_nopunc = parser.eval(word, pos, heads_pred, types_pred, heads, types,
@@ -330,11 +333,14 @@ def main():
                 word, char, pos, heads, types, masks, lengths = batch
                 heads_pred, types_pred = network.decode_mst(word, char, pos, mask=masks, length=lengths,
                                                             leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
+                word = word.data.cpu().numpy()
+                pos = pos.data.cpu().numpy()
+                lengths = lengths.cpu().numpy()
+                heads = heads.data.cpu().numpy()
+                types = types.data.cpu().numpy()
 
-                pred_writer.write(word.data.cpu().numpy(), pos.data.cpu().numpy(),
-                                  heads_pred, types_pred, lengths)
-                gold_writer.write(word.data.cpu().numpy(), pos.data.cpu().numpy(),
-                                  heads.cpu().numpy(), types.cpu().numpy(), lengths)
+                pred_writer.write(word, pos, heads_pred, types_pred, lengths)
+                gold_writer.write(word, pos, heads, types, lengths)
 
                 ucorr, lcorr, total, \
                 ucorr_nopunc, lcorr_nopunc, total_nopunc = parser.eval(word, pos, heads_pred, types_pred, heads, types,
