@@ -35,6 +35,8 @@ def main():
     args_parser.add_argument('--tag_space', type=int, default=128, help='Dimension of tag space')
     args_parser.add_argument('--num_layers', type=int, default=1, help='Number of layers of RNN')
     args_parser.add_argument('--num_filters', type=int, default=50, help='Number of filters in CNN')
+    args_parser.add_argument('--pos_dim', type=int, default=50, help='Dimension of POS embeddings')
+    args_parser.add_argument('--char_dim', type=int, default=50, help='Dimension of Character embeddings')
     args_parser.add_argument('--objective', choices=['cross_entropy', 'crf'], default='cross_entropy',
                              help='objective function of training procedure.')
     args_parser.add_argument('--learning_rate', type=float, default=0.01, help='Learning rate')
@@ -87,10 +89,10 @@ def main():
     char_embedding = args.char_embedding
     char_path = args.char_path
 
-    pos_dim = 50
+    pos_dim = args.pos_dim
     word_dict, word_dim = utils.load_embedding_dict(word_embedding, word_path)
     char_dict = None
-    char_dim = 50
+    char_dim = args.char_dim
     if char_embedding != 'random':
         char_dict, char_dim = utils.load_embedding_dict(char_embedding, char_path)
     logger.info("Creating Alphabets")

@@ -28,6 +28,7 @@ def main():
     parser.add_argument('--batch_size', type=int, default=16, help='Number of sentences in each batch')
     parser.add_argument('--hidden_size', type=int, default=128, help='Number of hidden units in RNN')
     parser.add_argument('--num_filters', type=int, default=30, help='Number of filters in CNN')
+    parser.add_argument('--char_dim', type=int, default=30, help='Dimension of Character embeddings')
     parser.add_argument('--learning_rate', type=float, default=0.01, help='Learning rate')
     parser.add_argument('--decay_rate', type=float, default=0.1, help='Decay rate of learning rate')
     parser.add_argument('--gamma', type=float, default=0.0, help='weight for regularization')
@@ -107,7 +108,7 @@ def main():
     word_table = construct_word_embedding_table()
     logger.info("constructing network...")
 
-    char_dim = 30
+    char_dim = args.char_dim
     window = 3
     num_layers = 1
     if args.dropout == 'std':
