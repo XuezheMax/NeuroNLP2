@@ -293,7 +293,7 @@ def main():
             ucorr, lcorr, total, \
             ucorr_nopunc, lcorr_nopunc, total_nopunc = parser.eval(word, pos, heads_pred, types_pred, heads, types,
                                                                    word_alphabet, pos_alphabet, lengths,
-                                                                   punct_set=punct_set)
+                                                                   punct_set=punct_set, symbolic_root=True)
             dev_ucorr += ucorr
             dev_lcorr += lcorr
             dev_total += total
@@ -343,7 +343,7 @@ def main():
                 ucorr, lcorr, total, \
                 ucorr_nopunc, lcorr_nopunc, total_nopunc = parser.eval(word, pos, heads_pred, types_pred, heads, types,
                                                                        word_alphabet, pos_alphabet, lengths,
-                                                                       punct_set=punct_set)
+                                                                       punct_set=punct_set, symbolic_root=True)
                 test_ucorr += ucorr
                 test_lcorr += lcorr
                 test_total += total

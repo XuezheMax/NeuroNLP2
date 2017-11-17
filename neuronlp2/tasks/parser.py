@@ -15,7 +15,8 @@ def is_punctuation(word, pos, punct_set=None):
         return pos in punct_set
 
 
-def eval(words, postags, heads_pred, types_pred, heads, types, word_alphabet, pos_alphabet, lengths, punct_set=None):
+def eval(words, postags, heads_pred, types_pred, heads, types, word_alphabet, pos_alphabet, lengths,
+         punct_set=None, symbolic_root=False, symbolic_end=False):
     batch_size, _ = words.shape
     ucorr = 0.
     lcorr = 0.
@@ -23,8 +24,10 @@ def eval(words, postags, heads_pred, types_pred, heads, types, word_alphabet, po
     ucorr_nopunc = 0.
     lcorr_nopunc = 0.
     total_nopunc = 0.
+    start = 1 if symbolic_root else 0
+    end = 1 if symbolic_end else 0
     for i in range(batch_size):
-        for j in range(1, lengths[i]):
+        for j in range(start, lengths[i] - end):
             word = word_alphabet.get_instance(words[i, j])
             word = word.encode('utf8')
 

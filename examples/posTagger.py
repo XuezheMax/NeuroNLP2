@@ -34,7 +34,7 @@ def main():
     parser.add_argument('--dropout', choices=['std', 'variational'], help='type of dropout', required=True)
     parser.add_argument('--p', type=float, default=0.5, help='dropout rate')
     parser.add_argument('--schedule', type=int, help='schedule for learning rate decay')
-    parser.add_argument('--output_prediction', action='store_true', help='Output predictions to temp files')
+    parser.add_argument('--unk_replace', type=float, default=0., help='The rate to replace a singleton word with UNK')
     parser.add_argument('--train')  # "data/POS-penn/wsj/split1/wsj1.train.original"
     parser.add_argument('--dev')  # "data/POS-penn/wsj/split1/wsj1.dev.original"
     parser.add_argument('--test')  # "data/POS-penn/wsj/split1/wsj1.test.original"
@@ -57,7 +57,7 @@ def main():
     gamma = args.gamma
     schedule = args.schedule
     p = args.p
-    output_predict = args.output_prediction
+    unk_replace = args.unk_replace
 
     embedd_dict, embedd_dim = utils.load_embedding_dict('glove', "data/glove/glove.6B/glove.6B.100d.gz")
     logger.info("Creating Alphabets")
@@ -126,7 +126,8 @@ def main():
     # optim = Adam(network.parameters(), lr=lr, betas=(0.9, 0.9), weight_decay=gamma)
     optim = SGD(network.parameters(), lr=lr, momentum=momentum, weight_decay=gamma, nesterov=True)
     logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d" % (mode, num_layers, hidden_size, num_filters))
-    logger.info("training: l2: %f, (#training data: %d, batch: %d, dropout: %.2f)" % (gamma, num_data, batch_size, p))
+    logger.info("training: l2: %f, (#training data: %d, batch: %d, dropout: %.2f, unk replace: %.2f)" % (
+        gamma, num_data, batch_size, p, unk_replace))
 
     num_batches = num_data / batch_size + 1
     dev_correct = 0.0
@@ -144,7 +145,8 @@ def main():
         num_back = 0
         network.train()
         for batch in range(1, num_batches + 1):
-            word, char, labels, _, _, masks, lengths = conllx_data.get_batch_variable(data_train, batch_size)
+            word, char, labels, _, _, masks, lengths = conllx_data.get_batch_variable(data_train, batch_size,
+                                                                                      unk_replace=unk_replace)
 
             optim.zero_grad()
             loss, corr, _ = network.loss(word, char, labels, mask=masks, length=lengths,
