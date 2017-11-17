@@ -71,19 +71,26 @@ def load_embedding_dict(embedding, embedding_path, normalize_digits=True):
             file.readline()
             for line in file:
                 line = line.strip()
-                line = line.decode('utf-8')
-                if len(line) == 0:
-                    continue
+                try:
+                    line = line.decode('utf-8')
+                    if len(line) == 0:
+                        continue
 
-                tokens = line.split()
-                if embedd_dim < 0:
-                    embedd_dim = len(tokens) - 1
-                embedd = np.empty([1, embedd_dim], dtype=np.float32)
-                start = len(tokens) - embedd_dim
-                word = ' '.join(tokens[0:start])
-                embedd[:] = tokens[start:]
-                word = utils.DIGIT_RE.sub(b"0", word) if normalize_digits else word
-                embedd_dict[word] = embedd
+                    tokens = line.split()
+                    if len(tokens) < embedd_dim:
+                        continue
+
+                    if embedd_dim < 0:
+                        embedd_dim = len(tokens) - 1
+
+                    embedd = np.empty([1, embedd_dim], dtype=np.float32)
+                    start = len(tokens) - embedd_dim
+                    word = ' '.join(tokens[0:start])
+                    embedd[:] = tokens[start:]
+                    word = utils.DIGIT_RE.sub(b"0", word) if normalize_digits else word
+                    embedd_dict[word] = embedd
+                except UnicodeDecodeError:
+                    continue
         return embedd_dict, embedd_dim
     elif embedding == 'polyglot':
         words, embeddings = pickle.load(open(embedding_path, 'rb'))
