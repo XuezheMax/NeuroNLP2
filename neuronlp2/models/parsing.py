@@ -67,10 +67,10 @@ class BiRecurrentConvBiAffine(nn.Module):
         # then put into maxpooling [batch * length, char_filters]
         char, _ = self.conv1d(char).max(dim=2)
         # reshape to [batch, length, char_filters]
-        char = char.view(char_size[0], char_size[1], -1)
+        char = torch.tanh(char).view(char_size[0], char_size[1], -1)
 
         # concatenate word and char [batch, length, word_dim+char_filter]
-        input = F.elu(torch.cat([word, char, pos], dim=2))
+        input = torch.cat([word, char, pos], dim=2)
         # apply dropout
         input = self.dropout_in(input)
         # prepare packed_sequence
@@ -240,10 +240,10 @@ class BiVarRecurrentConvBiAffine(BiRecurrentConvBiAffine):
         # then put into maxpooling [batch * length, char_filters]
         char, _ = self.conv1d(char).max(dim=2)
         # reshape to [batch, length, char_filters]
-        char = char.view(char_size[0], char_size[1], -1)
+        char = torch.tanh(char).view(char_size[0], char_size[1], -1)
 
         # concatenate word and char [batch, length, word_dim+char_filter]
-        input = F.elu(torch.cat([word, char], dim=2))
+        input = torch.cat([word, char], dim=2)
         # apply dropout
         # [batch, length, dim] --> [batch, dim, length] --> [batch, length, dim]
         input = self.dropout_in(input.transpose(1, 2)).transpose(1, 2)
