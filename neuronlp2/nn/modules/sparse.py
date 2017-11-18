@@ -66,7 +66,7 @@ class Embedding(nn.Module):
 
         input_size = input.size()
         if input.dim() > 2:
-            num_inputs = np.prod(input_size[:-1])
+            num_inputs = int(np.prod(input_size[:-1]))
             input = input.view(num_inputs, input_size[-1])
 
         output_size = input_size + (self.embedding_dim, )
