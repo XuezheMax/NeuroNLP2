@@ -202,9 +202,9 @@ def decode_MST(energies, lengths, leading_symbolic=0, labeled=True):
             l = par[l]
 
     if labeled:
-        assert energies.dim == 4, 'dimension of energies is not equal to 4'
+        assert energies.ndim == 4, 'dimension of energies is not equal to 4'
     else:
-        assert energies.dim == 3, 'dimension of energies is not equal to 3'
+        assert energies.ndim == 3, 'dimension of energies is not equal to 3'
     input_shape = energies.shape
     batch_size = input_shape[0]
     max_length = input_shape[2]
