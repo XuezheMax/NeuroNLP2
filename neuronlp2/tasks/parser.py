@@ -222,11 +222,12 @@ def decode_MST(energies, lengths, leading_symbolic=0, labeled=True):
             energy = energy[leading_symbolic:, :length, :length]
             # get best label for each edge.
             label_id_matrix = energy.argmax(axis=0) + leading_symbolic
+            energy = energy.max(axis=0)
         else:
             energy = energy[:length, :length]
             label_id_matrix = None
         # get original score matrix
-        orig_score_matrix = energy.max(axis=0)
+        orig_score_matrix = energy
         # initialize score matrix to original score matrix
         score_matrix = np.array(orig_score_matrix, copy=True)
 
