@@ -227,8 +227,6 @@ class BiRecurrentConvBiAffine(nn.Module):
         heads_numpy, _ = parser.decode_MST(out_arc.data.cpu().numpy(), length,
                                            leading_symbolic=leading_symbolic, labeled=False)
         heads = torch.from_numpy(heads_numpy).type_as(input_word.data).long()
-        print(heads)
-        raw_input()
 
         types = self._decode_types(out_type, heads, leading_symbolic)
         print(types)
