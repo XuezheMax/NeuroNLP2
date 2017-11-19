@@ -263,7 +263,7 @@ def decode_MST(energies, lengths, leading_symbolic=0, labeled=True):
             if labeled and ch != 0:
                 type[ch] = label_id_matrix[pr, ch]
 
-        par[:, 0] = 0
+        par[0] = 0
         pars[i] = par
         if labeled:
             types[i] = type
