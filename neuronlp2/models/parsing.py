@@ -230,7 +230,7 @@ class BiRecurrentConvBiAffine(nn.Module):
 
         types = self._decode_types(out_type, heads, leading_symbolic)
 
-        return heads_numpy, types.data.cpu.numpy()
+        return heads_numpy, types.data.cpu().numpy()
 
 
 class BiVarRecurrentConvBiAffine(BiRecurrentConvBiAffine):
