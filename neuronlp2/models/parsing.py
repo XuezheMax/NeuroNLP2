@@ -167,7 +167,7 @@ class BiRecurrentConvBiAffine(nn.Module):
         # create batch index [batch]
         batch_index = torch.arange(0, batch).type_as(type_h.data).long()
         # get vector for heads [batch, length, type_space],
-        type_h = type_h[batch_index, heads.data.t()].transpose(0, 1).contiguous()
+        type_h = type_h[batch_index, heads.t()].transpose(0, 1).contiguous()
         # compute output for type [batch, length, num_labels]
         out_type = self.bilinear(type_h, type_c)
         # remove the first #leading_symbolic types.
@@ -187,7 +187,7 @@ class BiRecurrentConvBiAffine(nn.Module):
         # predition shape = [batch, length]
         _, heads = out_arc.max(dim=1)
 
-        types = self._decode_types(out_type, heads, leading_symbolic)
+        types = self._decode_types(out_type, heads.data, leading_symbolic)
 
         return heads.data.cpu().numpy(), types.data.cpu().numpy()
 
@@ -226,8 +226,9 @@ class BiRecurrentConvBiAffine(nn.Module):
 
         heads_numpy, _ = parser.decode_MST(out_arc.data.cpu().numpy(), length,
                                            leading_symbolic=leading_symbolic, labeled=False)
-        heads = Variable(torch.from_numpy(heads_numpy)).long()
+        heads = torch.from_numpy(heads_numpy).type_as(input_word.data).long()
         print(heads)
+        raw_input()
 
         types = self._decode_types(out_type, heads, leading_symbolic)
         print(types)
