@@ -293,7 +293,7 @@ def main():
         dev_total_nopunc = 0
         for batch in conllx_data.iterate_batch_variable(data_dev, batch_size):
             word, char, pos, heads, types, masks, lengths = batch
-            heads_pred, types_pred = network.decode(word, char, pos, mask=masks, length=lengths,
+            heads_pred, types_pred = network.decode_mst(word, char, pos, mask=masks, length=lengths,
                                                         leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
             word = word.data.cpu().numpy()
             pos = pos.data.cpu().numpy()

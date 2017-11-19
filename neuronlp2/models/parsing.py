@@ -180,7 +180,6 @@ class BiRecurrentConvBiAffine(nn.Module):
         # out_arc shape [batch, length, length]
         out_arc, out_type, mask, length = self.forward(input_word, input_char, input_pos,
                                                        mask=mask, length=length, hx=hx)
-        print(out_arc.size())
         batch, max_len, _ = out_arc.size()
         # set diagonal elements to -inf
         out_arc = out_arc + Variable(torch.diag(out_arc.data.new(max_len).fill_(-np.inf)))
@@ -230,6 +229,7 @@ class BiRecurrentConvBiAffine(nn.Module):
         heads = Variable(torch.from_numpy(heads_numpy).long().type_as(input_word.data))
 
         types = self._decode_types(out_type, heads, leading_symbolic)
+        print(types)
 
         return heads_numpy, types.data.cpu().numpy()
 
