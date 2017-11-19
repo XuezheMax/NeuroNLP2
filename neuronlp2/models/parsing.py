@@ -103,7 +103,7 @@ class BiRecurrentConvBiAffine(nn.Module):
                                                           mask=mask, length=length, hx=hx)
         mask = mask.contiguous()
         # [batch, length, length]
-        out_arc = self.attention(arc[0], arc[1], mask_d=mask, mask_e=mask).squeeze()
+        out_arc = self.attention(arc[0], arc[1], mask_d=mask, mask_e=mask).squeeze(dim=1)
         return out_arc, type, mask, length
 
     def loss(self, input_word, input_char, input_pos, heads, types,
