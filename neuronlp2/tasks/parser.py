@@ -46,7 +46,7 @@ def eval(words, postags, heads_pred, types_pred, heads, types, word_alphabet, po
     return ucorr, lcorr, total, ucorr_nopunc, lcorr_nopunc, total_nopunc
 
 
-def decode_MST(energies, lengths, leading_symbolic):
+def decode_MST(energies, lengths, leading_symbolic=0, labeled=True):
     """
     decode best parsing tree with MST algorithm.
     :param energies: energies: numpy 4D tensor
@@ -201,12 +201,16 @@ def decode_MST(energies, lengths, leading_symbolic):
             final_edges[ch] = pr
             l = par[l]
 
+    if labeled:
+        assert energies.dim == 4, 'dimension of energies is not equal to 4'
+    else:
+        assert energies.dim == 4, 'dimension of energies is not equal to 3'
     input_shape = energies.shape
     batch_size = input_shape[0]
     max_length = input_shape[2]
 
     pars = np.zeros([batch_size, max_length], dtype=np.int32)
-    types = np.zeros([batch_size, max_length], dtype=np.int32)
+    types = np.zeros([batch_size, max_length], dtype=np.int32) if labeled else None
     for i in range(batch_size):
         energy = energies[i]
 
@@ -214,9 +218,13 @@ def decode_MST(energies, lengths, leading_symbolic):
         length = lengths[i]
 
         # calc real energy matrix shape = [length, length, num_labels - #symbolic] (remove the label for symbolic types).
-        energy = energy[leading_symbolic:, :length, :length]
-        # get best label for each edge.
-        label_id_matrix = energy.argmax(axis=0) + leading_symbolic
+        if labeled:
+            energy = energy[leading_symbolic:, :length, :length]
+            # get best label for each edge.
+            label_id_matrix = energy.argmax(axis=0) + leading_symbolic
+        else:
+            energy = energy[:length, :length]
+            label_id_matrix = None
         # get original score matrix
         orig_score_matrix = energy.max(axis=0)
         # initialize score matrix to original score matrix
@@ -243,15 +251,19 @@ def decode_MST(energies, lengths, leading_symbolic):
         final_edges = dict()
         chuLiuEdmonds()
         par = np.zeros([max_length], np.int32)
-        type = np.ones([max_length], np.int32)
-        type[0] = 0
+        if labeled:
+            type = np.ones([max_length], np.int32)
+            type[0] = 0
+        else:
+            type = None
 
         for ch, pr in final_edges.items():
             par[ch] = pr
-            if ch != 0:
+            if labeled and ch != 0:
                 type[ch] = label_id_matrix[pr, ch]
 
         pars[i] = par
-        types[i] = type
+        if labeled:
+            types[i] = type
 
     return pars, types

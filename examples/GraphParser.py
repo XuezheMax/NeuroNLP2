@@ -18,7 +18,7 @@ import numpy as np
 import torch
 from torch.optim import Adam, SGD
 from neuronlp2.io import get_logger, conllx_data
-from neuronlp2.models import BiRecurrentConvTreeCRF, BiRecurrentConvBiAffine, BiVarRecurrentConvBiAffine
+from neuronlp2.models import BiRecurrentConvBiAffine, BiVarRecurrentConvBiAffine
 from neuronlp2 import utils
 from neuronlp2.io import CoNLLXWriter
 from neuronlp2.tasks import parser
@@ -32,7 +32,8 @@ def main():
     args_parser.add_argument('--num_epochs', type=int, default=200, help='Number of training epochs')
     args_parser.add_argument('--batch_size', type=int, default=64, help='Number of sentences in each batch')
     args_parser.add_argument('--hidden_size', type=int, default=256, help='Number of hidden units in RNN')
-    args_parser.add_argument('--tag_space', type=int, default=128, help='Dimension of tag space')
+    args_parser.add_argument('--arc_space', type=int, default=128, help='Dimension of tag space')
+    args_parser.add_argument('--type_space', type=int, default=128, help='Dimension of tag space')
     args_parser.add_argument('--num_layers', type=int, default=1, help='Number of layers of RNN')
     args_parser.add_argument('--num_filters', type=int, default=50, help='Number of filters in CNN')
     args_parser.add_argument('--pos_dim', type=int, default=50, help='Dimension of POS embeddings')
@@ -71,7 +72,8 @@ def main():
     num_epochs = args.num_epochs
     batch_size = args.batch_size
     hidden_size = args.hidden_size
-    tag_space = args.tag_space
+    arc_space = args.arc_space
+    type_space = args.type_space
     num_layers = args.num_layers
     num_filters = args.num_filters
     learning_rate = args.learning_rate
@@ -175,7 +177,8 @@ def main():
                                               char_dim, num_chars,
                                               pos_dim, num_pos,
                                               num_filters, window,
-                                              mode, hidden_size, num_layers, num_types, tag_space,
+                                              mode, hidden_size, num_layers,
+                                              num_types, arc_space, type_space,
                                               embedd_word=word_table, embedd_char=char_table,
                                               p_rnn=p, biaffine=biaffine)
         else:
@@ -183,7 +186,8 @@ def main():
                                                  char_dim, num_chars,
                                                  pos_dim, num_pos,
                                                  num_filters, window,
-                                                 mode, hidden_size, num_layers, num_types, tag_space,
+                                                 mode, hidden_size, num_layers,
+                                                 num_types, arc_space, type_space,
                                                  embedd_word=word_table, embedd_char=char_table,
                                                  p_rnn=p, biaffine=biaffine)
     elif obj == 'crf':
@@ -209,8 +213,8 @@ def main():
         lr = learning_rate
         optim = SGD(network.parameters(), lr=lr, momentum=momentum, weight_decay=gamma, nesterov=True)
     logger.info("Embedding dim: word=%d, char=%d, pos=%d" % (word_dim, char_dim, pos_dim))
-    logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, tag_space=%d, %s" % (
-        mode, num_layers, hidden_size, num_filters, tag_space, 'biaffine' if biaffine else 'affine'))
+    logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, arc_space=%d, type_space=%d, %s" % (
+        mode, num_layers, hidden_size, num_filters, arc_space, type_space, 'biaffine' if biaffine else 'affine'))
     logger.info("training: obj: %s, l2: %f, (#training data: %d, batch: %d, dropout: %.2f, unk replace: %.2f)" % (
         obj, gamma, num_data, batch_size, p, unk_replace))
 
