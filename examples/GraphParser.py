@@ -208,6 +208,7 @@ def main():
     else:
         lr = learning_rate
         optim = SGD(network.parameters(), lr=lr, momentum=momentum, weight_decay=gamma, nesterov=True)
+    logger.info("Embedding dim: word=%d, char=%d, pos=%d" % (word_dim, char_dim, pos_dim))
     logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, tag_space=%d, %s" % (
         mode, num_layers, hidden_size, num_filters, tag_space, 'biaffine' if biaffine else 'affine'))
     logger.info("training: obj: %s, l2: %f, (#training data: %d, batch: %d, dropout: %.2f, unk replace: %.2f)" % (
