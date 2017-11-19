@@ -235,8 +235,9 @@ def main():
         print('Epoch %d (%s(%s), learning rate=%.4f, decay rate=%.4f (schedule=%d)): ' % (
             epoch, mode, args.dropout, lr, decay_rate, schedule))
         train_err = 0.
+        train_err_arc = 0.
+        train_err_type = 0.
         train_total = 0.
-
         start_time = time.time()
         num_back = 0
         network.train()
@@ -245,12 +246,15 @@ def main():
                                                                                            unk_replace=unk_replace)
 
             optim.zero_grad()
-            loss = network.loss(word, char, pos, heads, types, mask=masks, length=lengths)
+            loss_arc, loss_type = network.loss(word, char, pos, heads, types, mask=masks, length=lengths)
+            loss = loss_arc + loss_type
             loss.backward()
             optim.step()
 
             num_inst = word.size(0) if obj == 'crf' else masks.data.sum() - word.size(0)
             train_err += loss.data[0] * num_inst
+            train_err_arc += loss_arc.data[0] * num_inst
+            train_err_type += loss_type.data[0] * num_inst
             train_total += num_inst
 
             time_ave = (time.time() - start_time) / batch
@@ -261,15 +265,18 @@ def main():
                 sys.stdout.write("\b" * num_back)
                 sys.stdout.write(" " * num_back)
                 sys.stdout.write("\b" * num_back)
-                log_info = 'train: %d/%d loss: %.4f, time left (estimated): %.2fs' % (
-                    batch, num_batches, train_err / train_total, time_left)
+                log_info = 'train: %d/%d loss: %.4f, arc: %.4f, type: %.4f, time left (estimated): %.2fs' % (
+                    batch, num_batches, train_err / train_total,
+                    train_err_arc / train_total, train_err_type / train_total, time_left)
                 sys.stdout.write(log_info)
                 num_back = len(log_info)
 
         sys.stdout.write("\b" * num_back)
         sys.stdout.write(" " * num_back)
         sys.stdout.write("\b" * num_back)
-        print('train: %d loss: %.4f, time: %.2fs' % (num_batches, train_err / train_total, time.time() - start_time))
+        print('train: %d loss: %.4f, arc: %.4f, type: %.4f, time: %.2fs' % (
+            num_batches, train_err / train_total, train_err_arc / train_total, train_err_type / train_total,
+            time.time() - start_time))
 
         # evaluate performance on dev data
         network.eval()
