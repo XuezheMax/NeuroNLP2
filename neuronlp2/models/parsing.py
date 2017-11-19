@@ -123,7 +123,7 @@ class BiRecurrentConvBiAffine(nn.Module):
         # create batch index [batch]
         batch_index = torch.arange(0, batch).type_as(out_arc.data).long()
         # get vector for heads [batch, length, type_space],
-        type_h = type_h[batch_index, heads.data.t()].transpose(0, 1)
+        type_h = type_h[batch_index, heads.data.t()].transpose(0, 1).contiguous()
         # compute output for type [batch, length, num_labels]
         out_type = self.bilinear(type_h, type_c)
 
