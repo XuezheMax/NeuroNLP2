@@ -229,7 +229,6 @@ class BiRecurrentConvBiAffine(nn.Module):
         heads = torch.from_numpy(heads_numpy).type_as(input_word.data).long()
 
         types = self._decode_types(out_type, heads, leading_symbolic)
-        print(types)
 
         return heads_numpy, types.data.cpu().numpy()
 
