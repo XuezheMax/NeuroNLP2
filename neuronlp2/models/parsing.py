@@ -107,7 +107,7 @@ class BiRecurrentConvBiAffine(nn.Module):
         return out_arc, type, mask, length
 
     def loss(self, input_word, input_char, input_pos, heads, types,
-             mask=None, length=None, hx=None, leading_symbolic=0):
+             mask=None, length=None, hx=None):
         # out_arc shape [batch, length, length]
         out_arc, out_type, mask, length = self.forward(input_word, input_char, input_pos,
                                                        mask=mask, length=length, hx=hx)
@@ -320,15 +320,112 @@ class StackPtrNet(nn.Module):
         else:
             raise ValueError('Unknown RNN mode: %s' % rnn_mode)
 
-        self.rnn = RNN(word_dim + num_filters + pos_dim, hidden_size, num_layers=num_layers,
-                       batch_first=True, bidirectional=True, dropout=p_rnn)
+        self.encoder = RNN(word_dim + num_filters + pos_dim, hidden_size, num_layers=num_layers,
+                           batch_first=True, bidirectional=True, dropout=p_rnn)
+
+        self.decoder = RNN(word_dim + num_filters + pos_dim, hidden_size, num_layers=num_layers,
+                           batch_first=True, bidirectional=True, dropout=p_rnn)
 
         out_dim = hidden_size * 2
-        self.arc_h = nn.Linear(out_dim, arc_space)
-        self.arc_c = nn.Linear(out_dim, arc_space)
+        self.arc_h = nn.Linear(out_dim, arc_space)  # arc dense for decoder
+        self.arc_c = nn.Linear(out_dim, arc_space)  # arc dense for encoder
         self.attention = Attention(arc_space, arc_space, 1, biaffine=biaffine)
 
-        self.type_h = nn.Linear(out_dim, type_space)
-        self.type_c = nn.Linear(out_dim, type_space)
+        self.type_h = nn.Linear(out_dim, type_space)  # type dense for decoder
+        self.type_c = nn.Linear(out_dim, type_space)  # type dense for encoder
         self.bilinear = BiLinear(type_space, type_space, self.num_labels)
         self.logsoftmax = nn.LogSoftmax()
+
+    def _get_encoder_output(self, input_word, input_char, input_pos, mask=None, length=None, hx=None):
+        # hack length from mask
+        # we do not hack mask from length for special reasons.
+        # Thus, always provide mask if it is necessary.
+        if length is None and mask is not None:
+            length = mask.data.sum(dim=1).long()
+
+        # [batch, length, word_dim]
+        word = self.word_embedd(input_word)
+        # [batch, length, pos_dim]
+        pos = self.pos_embedd(input_pos)
+
+        # [batch, length, char_length, char_dim]
+        char = self.char_embedd(input_char)
+        char_size = char.size()
+        # first transform to [batch *length, char_length, char_dim]
+        # then transpose to [batch * length, char_dim, char_length]
+        char = char.view(char_size[0] * char_size[1], char_size[2], char_size[3]).transpose(1, 2)
+        # put into cnn [batch*length, char_filters, char_length]
+        # then put into maxpooling [batch * length, char_filters]
+        char, _ = self.conv1d(char).max(dim=2)
+        # reshape to [batch, length, char_filters]
+        char = torch.tanh(char).view(char_size[0], char_size[1], -1)
+
+        # concatenate word and char [batch, length, word_dim+char_filter]
+        input_embedd = torch.cat([word, char, pos], dim=2)
+        # apply dropout
+        input = self.dropout_in(input_embedd)
+        # prepare packed_sequence
+        if length is not None:
+            seq_input, hx, rev_order, mask = utils.prepare_rnn_seq(input, length, hx=hx, masks=mask, batch_first=True)
+            seq_output, hn = self.encoder(seq_input, hx=hx)
+            output, hn = utils.recover_rnn_seq(seq_output, rev_order, hx=hn, batch_first=True)
+        else:
+            # output from rnn [batch, length, hidden_size]
+            output, hn = self.encoder(input, hx=hx)
+        output = self.dropout_rnn(output)
+
+        # output size [batch, length, arc_space]
+        arc_c = F.elu(self.arc_c(output))
+
+        # output size [batch, length, type_space]
+        type_c = F.elu(self.type_c(output))
+
+        return input_embedd, arc_c, type_c, hn, mask, length
+
+    def _get_decoder_output(self, input_embedd, heads_stack, hx, mask_d=None, length_d=None):
+        # hack length from mask
+        # we do not hack mask from length for special reasons.
+        # Thus, always provide mask if it is necessary.
+        if length_d is None and mask_d is not None:
+            length_d = mask_d.data.sum(dim=1).long()
+
+        batch, _, _ = input_embedd.size()
+        # create batch index [batch]
+        batch_index = torch.arange(0, batch).type_as(input_embedd.data).long()
+        # get vector for heads [batch, length_decoder, input_dim],
+        input_embedd = input_embedd[batch_index, heads_stack.t()].transpose(0, 1)
+        # apply dropout
+        input = self.dropout_in(input_embedd)
+        # prepare packed_sequence
+        if length_d is not None:
+            seq_input, hx, rev_order, mask_d = utils.prepare_rnn_seq(input, length_d, hx=hx, masks=mask_d,
+                                                                     batch_first=True)
+            seq_output, hn = self.decoder(seq_input, hx=hx)
+            # output from rnn [batch, length_decoder, hidden_size]
+            output, hn = utils.recover_rnn_seq(seq_output, rev_order, hx=hn, batch_first=True)
+        else:
+            # output from rnn [batch, length_decoder, hidden_size]
+            output, hn = self.decoder(input, hx=hx)
+        output = self.dropout_rnn(output)
+
+        # output size [batch, length_decoder, arc_space]
+        arc_h = F.elu(self.arc_h(output))
+
+        # output size [batch, length_decoder, type_space]
+        type_h = F.elu(self.type_h(output))
+
+        return arc_h, type_h, hn, mask_d, length_d
+
+    def forward(self, input_word, input_char, input_pos, mask=None, length=None, hx=None):
+        raise RuntimeError('Stack Pointer Network does not implement forward')
+
+    def loss(self, input_word, input_char, input_pos, heads, types,
+             mask=None, length=None, hx=None):
+        # output from encoder [batch, length, tag_space]
+        input_embedd, arc_c, type_c, hn, mask, length = self._get_encoder_output(input_word, input_char, input_pos,
+                                                                                 mask=mask, length=length, hx=hx)
+
+        heads_stack, types_stack, mask_d, length_d = self._get_stack_inputs(heads, types, mask=mask, length=length)
+        # output from decoder [batch, length_decoder, tag_space]
+        arc_h, type_h, _, mask_d, length_d = self._get_decoder_output(input_embedd, heads_stack, hn,
+                                                                      mask_d=mask_d, length_d=length_d)

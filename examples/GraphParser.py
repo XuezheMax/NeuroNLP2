@@ -44,7 +44,8 @@ def main():
     args_parser.add_argument('--decay_rate', type=float, default=0.05, help='Decay rate of learning rate')
     args_parser.add_argument('--gamma', type=float, default=0.0, help='weight for regularization')
     args_parser.add_argument('--dropout', choices=['std', 'variational'], help='type of dropout', required=True)
-    args_parser.add_argument('--p', type=float, default=0.5, help='dropout rate')
+    args_parser.add_argument('--p_rnn', type=float, default=0.5, help='dropout rate for RNN')
+    args_parser.add_argument('--p_in', type=float, default=0.2, help='dropout rate for input embeddings')
     args_parser.add_argument('--biaffine', action='store_true', help='bi-gram parameter for CRF')
     args_parser.add_argument('--schedule', type=int, help='schedule for learning rate decay')
     args_parser.add_argument('--unk_replace', type=float, default=0.,
@@ -81,7 +82,8 @@ def main():
     decay_rate = args.decay_rate
     gamma = args.gamma
     schedule = args.schedule
-    p = args.p
+    p_rnn = args.p_rnn
+    p_in= args.p_in
     unk_replace = args.unk_replace
     biaffine = args.biaffine
     punctuation = args.punctuation
@@ -180,7 +182,7 @@ def main():
                                               mode, hidden_size, num_layers,
                                               num_types, arc_space, type_space,
                                               embedd_word=word_table, embedd_char=char_table,
-                                              p_rnn=p, biaffine=biaffine)
+                                              p_in=p_in, p_rnn=p_rnn, biaffine=biaffine)
         else:
             network = BiVarRecurrentConvBiAffine(word_dim, num_words,
                                                  char_dim, num_chars,
@@ -189,7 +191,7 @@ def main():
                                                  mode, hidden_size, num_layers,
                                                  num_types, arc_space, type_space,
                                                  embedd_word=word_table, embedd_char=char_table,
-                                                 p_rnn=p, biaffine=biaffine)
+                                                 p_in=p_in, p_rnn=p_rnn, biaffine=biaffine)
     elif obj == 'crf':
         if args.dropout == 'std':
             raise NotImplementedError
