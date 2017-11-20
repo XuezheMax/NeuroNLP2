@@ -221,7 +221,7 @@ def main():
         mode, num_layers, hidden_size, num_filters, arc_space, type_space, 'biaffine' if biaffine else 'affine'))
     logger.info("train: obj: %s, l2: %f, (#data: %d, batch: %d, dropout(in, rnn): (%.2f, %.2f), unk replace: %.2f)" % (
         obj, gamma, num_data, batch_size, p_in, p_rnn, unk_replace))
-    logger.info("decoding algorithm %s" % decoding)
+    logger.info("decoding algorithm: %s" % decoding)
 
     num_batches = num_data / batch_size + 1
     dev_ucorrect = 0.0
