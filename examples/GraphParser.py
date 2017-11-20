@@ -40,6 +40,7 @@ def main():
     args_parser.add_argument('--char_dim', type=int, default=50, help='Dimension of Character embeddings')
     args_parser.add_argument('--objective', choices=['cross_entropy', 'crf'], default='cross_entropy',
                              help='objective function of training procedure.')
+    args_parser.add_argument('--decode', choices=['mst', 'greedy'], help='decoding algorithm', required=True)
     args_parser.add_argument('--learning_rate', type=float, default=0.01, help='Learning rate')
     args_parser.add_argument('--decay_rate', type=float, default=0.05, help='Decay rate of learning rate')
     args_parser.add_argument('--gamma', type=float, default=0.0, help='weight for regularization')
@@ -67,6 +68,7 @@ def main():
 
     mode = args.mode
     obj = args.objective
+    decoding = args.decode
     train_path = args.train
     dev_path = args.dev
     test_path = args.test
@@ -219,6 +221,7 @@ def main():
         mode, num_layers, hidden_size, num_filters, arc_space, type_space, 'biaffine' if biaffine else 'affine'))
     logger.info("train: obj: %s, l2: %f, (#data: %d, batch: %d, dropout(in, rnn): (%.2f, %.2f), unk replace: %.2f)" % (
         obj, gamma, num_data, batch_size, p_in, p_rnn, unk_replace))
+    logger.info("decoding algorithm %s" % decoding)
 
     num_batches = num_data / batch_size + 1
     dev_ucorrect = 0.0
@@ -232,6 +235,13 @@ def main():
     test_lcorrect_nopunct = 0.0
     test_total = 0
     test_total_nopunc = 0
+
+    if decoding == 'greedy':
+        decode = network.decode
+    elif decoding == 'mst':
+        decode = network.decode_mst
+    else:
+        raise ValueError('Unknown decoding algorithm: %s' % decoding)
 
     for epoch in range(1, num_epochs + 1):
         print('Epoch %d (%s(%s), learning rate=%.4f, decay rate=%.4f (schedule=%d)): ' % (
@@ -295,8 +305,8 @@ def main():
         dev_total_nopunc = 0
         for batch in conllx_data.iterate_batch_variable(data_dev, batch_size):
             word, char, pos, heads, types, masks, lengths = batch
-            heads_pred, types_pred = network.decode_mst(word, char, pos, mask=masks, length=lengths,
-                                                        leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
+            heads_pred, types_pred = decode(word, char, pos, mask=masks, length=lengths,
+                                            leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
             word = word.data.cpu().numpy()
             pos = pos.data.cpu().numpy()
             lengths = lengths.cpu().numpy()
@@ -345,8 +355,8 @@ def main():
             test_total_nopunc = 0
             for batch in conllx_data.iterate_batch_variable(data_test, batch_size):
                 word, char, pos, heads, types, masks, lengths = batch
-                heads_pred, types_pred = network.decode_mst(word, char, pos, mask=masks, length=lengths,
-                                                            leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
+                heads_pred, types_pred = decode(word, char, pos, mask=masks, length=lengths,
+                                                leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
                 word = word.data.cpu().numpy()
                 pos = pos.data.cpu().numpy()
                 lengths = lengths.cpu().numpy()
