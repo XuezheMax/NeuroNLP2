@@ -83,7 +83,7 @@ def main():
     gamma = args.gamma
     schedule = args.schedule
     p_rnn = args.p_rnn
-    p_in= args.p_in
+    p_in = args.p_in
     unk_replace = args.unk_replace
     biaffine = args.biaffine
     punctuation = args.punctuation
@@ -217,8 +217,8 @@ def main():
     logger.info("Embedding dim: word=%d, char=%d, pos=%d" % (word_dim, char_dim, pos_dim))
     logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, arc_space=%d, type_space=%d, %s" % (
         mode, num_layers, hidden_size, num_filters, arc_space, type_space, 'biaffine' if biaffine else 'affine'))
-    logger.info("training: obj: %s, l2: %f, (#training data: %d, batch: %d, dropout: %.2f, unk replace: %.2f)" % (
-        obj, gamma, num_data, batch_size, p, unk_replace))
+    logger.info("train: obj: %s, l2: %f, (#data: %d, batch: %d, dropout(in, rnn): (%.2f, %.2f), unk replace: %.2f)" % (
+        obj, gamma, num_data, batch_size, p_in, p_rnn, unk_replace))
 
     num_batches = num_data / batch_size + 1
     dev_ucorrect = 0.0
