@@ -336,12 +336,12 @@ class StackPtrNet(nn.Module):
         self.bilinear = BiLinear(type_space, type_space, self.num_labels)
         self.logsoftmax = nn.LogSoftmax()
 
-    def _get_encoder_output(self, input_word, input_char, input_pos, mask=None, length=None, hx=None):
+    def _get_encoder_output(self, input_word, input_char, input_pos, mask_e=None, length_e=None, hx=None):
         # hack length from mask
         # we do not hack mask from length for special reasons.
         # Thus, always provide mask if it is necessary.
-        if length is None and mask is not None:
-            length = mask.data.sum(dim=1).long()
+        if length_e is None and mask_e is not None:
+            length_e = mask_e.data.sum(dim=1).long()
 
         # [batch, length, word_dim]
         word = self.word_embedd(input_word)
@@ -365,8 +365,9 @@ class StackPtrNet(nn.Module):
         # apply dropout
         input = self.dropout_in(input_embedd)
         # prepare packed_sequence
-        if length is not None:
-            seq_input, hx, rev_order, mask = utils.prepare_rnn_seq(input, length, hx=hx, masks=mask, batch_first=True)
+        if length_e is not None:
+            seq_input, hx, rev_order, mask_e = utils.prepare_rnn_seq(input, length_e, hx=hx, masks=mask_e,
+                                                                     batch_first=True)
             seq_output, hn = self.encoder(seq_input, hx=hx)
             output, hn = utils.recover_rnn_seq(seq_output, rev_order, hx=hn, batch_first=True)
         else:
@@ -380,7 +381,7 @@ class StackPtrNet(nn.Module):
         # output size [batch, length, type_space]
         type_c = F.elu(self.type_c(output))
 
-        return input_embedd, arc_c, type_c, hn, mask, length
+        return input_embedd, arc_c, type_c, hn, mask_e, length_e
 
     def _get_decoder_output(self, input_embedd, heads_stack, hx, mask_d=None, length_d=None):
         # hack length from mask
@@ -419,13 +420,65 @@ class StackPtrNet(nn.Module):
     def forward(self, input_word, input_char, input_pos, mask=None, length=None, hx=None):
         raise RuntimeError('Stack Pointer Network does not implement forward')
 
-    def loss(self, input_word, input_char, input_pos, heads, types,
-             mask=None, length=None, hx=None):
-        # output from encoder [batch, length, tag_space]
-        input_embedd, arc_c, type_c, hn, mask, length = self._get_encoder_output(input_word, input_char, input_pos,
-                                                                                 mask=mask, length=length, hx=hx)
+    def loss(self, input_word, input_char, input_pos, stacked_heads, children, stacked_types,
+             mask_e=None, length_e=None, mask_d=None, length_d=None, hx=None):
 
-        heads_stack, types_stack, mask_d, length_d = self._get_stack_inputs(heads, types, mask=mask, length=length)
+        # output from encoder [batch, length_encoder, tag_space]
+        input_embedd, arc_c, type_c, hn, mask_e, _ = self._get_encoder_output(input_word, input_char, input_pos,
+                                                                              mask_e=mask_e, length_e=length_e, hx=hx)
+
+        batch, max_len_e, _ = arc_c.size()
         # output from decoder [batch, length_decoder, tag_space]
-        arc_h, type_h, _, mask_d, length_d = self._get_decoder_output(input_embedd, heads_stack, hn,
-                                                                      mask_d=mask_d, length_d=length_d)
+        arc_h, type_h, _, mask_d, _ = self._get_decoder_output(input_embedd, stacked_heads, hn,
+                                                               mask_d=mask_d, length_d=length_d)
+        _, max_len_d, _ = arc_h.size()
+
+        if mask_d is not None and children.size(1) != mask_d.size(1):
+            children = children[:, :max_len_d]
+            stacked_types = stacked_types[:, :max_len_d]
+
+        mask_e = mask_e.contiguous()
+        mask_d = mask_d.contiguous()
+        # [batch, length_decoder, length_encoder]
+        out_arc = self.attention(arc_h, arc_c, mask_d=mask_d, mask_e=mask_e).squeeze(dim=1)
+
+        # create batch index [batch]
+        batch_index = torch.arange(0, batch).type_as(out_arc.data).long()
+        # get vector for heads [batch, length_decoder, type_space],
+        type_c = type_c[batch_index, children.t()].transpose(0, 1).contiguous()
+        # compute output for type [batch, length_decoder, num_labels]
+        out_type = self.bilinear(type_h, type_c)
+
+        # mask invalid position to -inf for log_softmax
+        if mask_e is not None:
+            minus_inf = -1e8
+            minus_mask_d = (1 - mask_d) * minus_inf
+            minus_mask_e = (1 - mask_e) * minus_inf
+            out_arc = out_arc + minus_mask_d.view(batch, max_len_d, 1) + minus_mask_e.view(batch, 1, max_len_e)
+
+        # TODO for Pytorch 2.0.4, need to set dim=1 for log_softmax or use softmax then take log
+        # first convert out_arc to [length_encoder, length_decoder, batch] for log_softmax computation.
+        # then convert back to [batch, length_decoder, length_encoder]
+        loss_arc = self.logsoftmax(out_arc.transpose(0, 2)).transpose(0, 2)
+        # convert out_type to [num_labels, length_decoder, batch] for log_softmax computation.
+        # then convert back to [batch, length_decoder, num_labels]
+        loss_type = self.logsoftmax(out_type.transpose(0, 2)).transpose(0, 2)
+
+        # mask invalid position to 0 for sum loss
+        if mask_e is not None:
+            loss_arc = loss_arc * mask_d.view(batch, max_len_d, 1) * mask_e.view(batch, 1, max_len_e)
+            loss_type = loss_type * mask_d.view(batch, max_len_d, 1)
+            # number of valid positions which contribute to loss (remove the symbolic head for each sentence.
+            num = mask_d.sum()
+        else:
+            # number of valid positions which contribute to loss (remove the symbolic head for each sentence.
+            num = float(max_len_d * batch)
+
+        # first create index matrix [length, batch]
+        head_index = torch.zeros(max_len_d, batch) + torch.arange(0, max_len_d).view(max_len_d, 1)
+        head_index = head_index.type_as(out_arc.data).long()
+        # [length_decoder, batch]
+        loss_arc = loss_arc[batch_index, head_index, children.data.t()]
+        loss_type = loss_type[batch_index, head_index, stacked_types.data.t()]
+
+        return -loss_arc.sum() / num, -loss_type.sum() / num
