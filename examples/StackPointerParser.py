@@ -17,8 +17,8 @@ import uuid
 import numpy as np
 import torch
 from torch.optim import Adam, SGD
-from neuronlp2.io import get_logger, conllx_data
-from neuronlp2.models import BiRecurrentConvBiAffine, BiVarRecurrentConvBiAffine
+from neuronlp2.io import get_logger, conllx_stacked_data
+from neuronlp2.models import StackPtrNet
 from neuronlp2 import utils
 from neuronlp2.io import CoNLLXWriter
 from neuronlp2.tasks import parser
@@ -38,9 +38,6 @@ def main():
     args_parser.add_argument('--num_filters', type=int, default=50, help='Number of filters in CNN')
     args_parser.add_argument('--pos_dim', type=int, default=50, help='Dimension of POS embeddings')
     args_parser.add_argument('--char_dim', type=int, default=50, help='Dimension of Character embeddings')
-    args_parser.add_argument('--objective', choices=['cross_entropy', 'crf'], default='cross_entropy',
-                             help='objective function of training procedure.')
-    args_parser.add_argument('--decode', choices=['mst', 'greedy'], help='decoding algorithm', required=True)
     args_parser.add_argument('--learning_rate', type=float, default=0.01, help='Learning rate')
     args_parser.add_argument('--decay_rate', type=float, default=0.05, help='Decay rate of learning rate')
     args_parser.add_argument('--gamma', type=float, default=0.0, help='weight for regularization')
@@ -48,10 +45,12 @@ def main():
     args_parser.add_argument('--p_rnn', type=float, default=0.5, help='dropout rate for RNN')
     args_parser.add_argument('--p_in', type=float, default=0.2, help='dropout rate for input embeddings')
     args_parser.add_argument('--biaffine', action='store_true', help='bi-gram parameter for CRF')
+    args_parser.add_argument('--left2right', action='store_true', help='apply left to right prior order.')
     args_parser.add_argument('--schedule', type=int, help='schedule for learning rate decay')
     args_parser.add_argument('--unk_replace', type=float, default=0.,
                              help='The rate to replace a singleton word with UNK')
     args_parser.add_argument('--punctuation', nargs='+', type=str, help='List of punctuations')
+    args_parser.add_argument('--beam', type=int, default=1, help='Beam size for decoding')
     args_parser.add_argument('--word_embedding', choices=['glove', 'senna', 'sskip', 'polyglot'],
                              help='Embedding for words', required=True)
     args_parser.add_argument('--word_path', help='path for word embedding dict')
@@ -64,11 +63,9 @@ def main():
 
     args = args_parser.parse_args()
 
-    logger = get_logger("GraphParser")
+    logger = get_logger("PtrParser")
 
     mode = args.mode
-    obj = args.objective
-    decoding = args.decode
     train_path = args.train
     dev_path = args.dev
     test_path = args.test
@@ -88,6 +85,8 @@ def main():
     p_in = args.p_in
     unk_replace = args.unk_replace
     biaffine = args.biaffine
+    left2right = args.left2right
+    beam = args.beam
     punctuation = args.punctuation
 
     word_embedding = args.word_embedding
@@ -103,9 +102,9 @@ def main():
         char_dict, char_dim = utils.load_embedding_dict(char_embedding, char_path)
     logger.info("Creating Alphabets")
     word_alphabet, char_alphabet, pos_alphabet, \
-    type_alphabet = conllx_data.create_alphabets("data/alphabets/mst/", train_path,
-                                                 data_paths=[dev_path, test_path],
-                                                 max_vocabulary_size=50000, embedd_dict=word_dict)
+    type_alphabet = conllx_stacked_data.create_alphabets("data/alphabets/ptr/", train_path,
+                                                         data_paths=[dev_path, test_path],
+                                                         max_vocabulary_size=50000, embedd_dict=word_dict)
 
     num_words = word_alphabet.size()
     num_chars = char_alphabet.size()
@@ -120,16 +119,18 @@ def main():
     logger.info("Reading Data")
     use_gpu = torch.cuda.is_available()
 
-    data_train = conllx_data.read_data_to_variable(train_path, word_alphabet, char_alphabet, pos_alphabet,
-                                                   type_alphabet, use_gpu=use_gpu, symbolic_root=True)
-    # data_train = conllx_data.read_data(train_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
-    # num_data = sum([len(bucket) for bucket in data_train])
+    data_train = conllx_stacked_data.read_stacked_data_to_variable(train_path, word_alphabet, char_alphabet,
+                                                                   pos_alphabet, type_alphabet, use_gpu=use_gpu,
+                                                                   left2right=left2right)
     num_data = sum(data_train[1])
 
-    data_dev = conllx_data.read_data_to_variable(dev_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
-                                                 use_gpu=use_gpu, volatile=True, symbolic_root=True)
-    data_test = conllx_data.read_data_to_variable(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
-                                                  use_gpu=use_gpu, volatile=True, symbolic_root=True)
+    data_dev = conllx_stacked_data.read_stacked_data_to_variable(dev_path, word_alphabet, char_alphabet, pos_alphabet,
+                                                                 type_alphabet, use_gpu=use_gpu, volatile=True,
+                                                                 left2right=left2right)
+    data_test = conllx_stacked_data.read_stacked_data_to_variable(test_path, word_alphabet, char_alphabet,
+                                                                  pos_alphabet, type_alphabet,
+                                                                  use_gpu=use_gpu, volatile=True,
+                                                                  left2right=left2right)
 
     punct_set = None
     if punctuation is not None:
@@ -139,7 +140,7 @@ def main():
     def construct_word_embedding_table():
         scale = np.sqrt(3.0 / word_dim)
         table = np.empty([word_alphabet.size(), word_dim], dtype=np.float32)
-        table[conllx_data.UNK_ID, :] = np.random.uniform(-scale, scale, [1, word_dim]).astype(np.float32)
+        table[conllx_stacked_data.UNK_ID, :] = np.random.uniform(-scale, scale, [1, word_dim]).astype(np.float32)
         oov = 0
         for word, index in word_alphabet.items():
             if word in word_dict:
@@ -159,7 +160,7 @@ def main():
 
         scale = np.sqrt(3.0 / char_dim)
         table = np.empty([num_chars, char_dim], dtype=np.float32)
-        table[conllx_data.UNK_ID, :] = np.random.uniform(-scale, scale, [1, char_dim]).astype(np.float32)
+        table[conllx_stacked_data.UNK_ID, :] = np.random.uniform(-scale, scale, [1, char_dim]).astype(np.float32)
         oov = 0
         for char, index, in char_alphabet.items():
             if char in char_dict:
@@ -175,32 +176,24 @@ def main():
     char_table = construct_char_embedding_table()
 
     window = 3
-    if obj == 'cross_entropy':
-        if args.dropout == 'std':
-            network = BiRecurrentConvBiAffine(word_dim, num_words,
-                                              char_dim, num_chars,
-                                              pos_dim, num_pos,
-                                              num_filters, window,
-                                              mode, hidden_size, num_layers,
-                                              num_types, arc_space, type_space,
-                                              embedd_word=word_table, embedd_char=char_table,
-                                              p_in=p_in, p_rnn=p_rnn, biaffine=biaffine)
-        else:
-            network = BiVarRecurrentConvBiAffine(word_dim, num_words,
-                                                 char_dim, num_chars,
-                                                 pos_dim, num_pos,
-                                                 num_filters, window,
-                                                 mode, hidden_size, num_layers,
-                                                 num_types, arc_space, type_space,
-                                                 embedd_word=word_table, embedd_char=char_table,
-                                                 p_in=p_in, p_rnn=p_rnn, biaffine=biaffine)
-    elif obj == 'crf':
-        if args.dropout == 'std':
-            raise NotImplementedError
-        else:
-            raise NotImplementedError
+    if args.dropout == 'std':
+        network = StackPtrNet(word_dim, num_words,
+                              char_dim, num_chars,
+                              pos_dim, num_pos,
+                              num_filters, window,
+                              mode, hidden_size, num_layers,
+                              num_types, arc_space, type_space,
+                              embedd_word=word_table, embedd_char=char_table,
+                              p_in=p_in, p_rnn=p_rnn, biaffine=biaffine)
     else:
-        raise RuntimeError('Unknown objective: %s' % obj)
+        network = StackPtrNet(word_dim, num_words,
+                              char_dim, num_chars,
+                              pos_dim, num_pos,
+                              num_filters, window,
+                              mode, hidden_size, num_layers,
+                              num_types, arc_space, type_space,
+                              embedd_word=word_table, embedd_char=char_table,
+                              p_in=p_in, p_rnn=p_rnn, biaffine=biaffine)
 
     if use_gpu:
         network.cuda()
@@ -220,9 +213,8 @@ def main():
     logger.info("Embedding dim: word=%d, char=%d, pos=%d" % (word_dim, char_dim, pos_dim))
     logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, arc_space=%d, type_space=%d, %s" % (
         mode, num_layers, hidden_size, num_filters, arc_space, type_space, 'biaffine' if biaffine else 'affine'))
-    logger.info("train: obj: %s, l2: %f, (#data: %d, batch: %d, dropout(in, rnn): (%.2f, %.2f), unk replace: %.2f)" % (
-        obj, gamma, num_data, batch_size, p_in, p_rnn, unk_replace))
-    logger.info("decoding algorithm: %s" % decoding)
+    logger.info("train: l2: %f, (#data: %d, batch: %d, dropout(in, rnn): (%.2f, %.2f), unk replace: %.2f)" % (
+        gamma, num_data, batch_size, p_in, p_rnn, unk_replace))
 
     num_batches = num_data / batch_size + 1
     dev_ucorrect = 0.0
@@ -236,14 +228,6 @@ def main():
     test_lcorrect_nopunct = 0.0
     test_total = 0
     test_total_nopunc = 0
-
-    if decoding == 'greedy':
-        decode = network.decode
-    elif decoding == 'mst':
-        decode = network.decode_mst
-    else:
-        raise ValueError('Unknown decoding algorithm: %s' % decoding)
-
     for epoch in range(1, num_epochs + 1):
         print('Epoch %d (%s(%s), learning rate=%.4f, decay rate=%.4f (schedule=%d)): ' % (
             epoch, mode, args.dropout, lr, decay_rate, schedule))
@@ -255,16 +239,18 @@ def main():
         num_back = 0
         network.train()
         for batch in range(1, num_batches + 1):
-            word, char, pos, heads, types, masks, lengths = conllx_data.get_batch_variable(data_train, batch_size,
-                                                                                           unk_replace=unk_replace)
-
+            input_encoder, input_decoder = conllx_stacked_data.get_batch_stacked_variable(data_train, batch_size,
+                                                                                          unk_replace=unk_replace)
+            word, char, pos, heads, types, masks_e, lengths_e = input_encoder
+            stacked_heads, children, stacked_types, masks_d, lengths_d = input_decoder
             optim.zero_grad()
-            loss_arc, loss_type = network.loss(word, char, pos, heads, types, mask=masks, length=lengths)
+            loss_arc, loss_type = network.loss(word, char, pos, stacked_heads, children, stacked_types,
+                                               mask_e=masks_e, length_e=lengths_e, mask_d=masks_d, length_d=lengths_d)
             loss = loss_arc + loss_type
             loss.backward()
             optim.step()
 
-            num_inst = word.size(0) if obj == 'crf' else masks.data.sum() - word.size(0)
+            num_inst = masks_d.data.sum()
             train_err += loss.data[0] * num_inst
             train_err_arc += loss_arc.data[0] * num_inst
             train_err_type += loss_type.data[0] * num_inst
@@ -304,110 +290,6 @@ def main():
         dev_lcorr_nopunc = 0.0
         dev_total = 0
         dev_total_nopunc = 0
-        for batch in conllx_data.iterate_batch_variable(data_dev, batch_size):
-            word, char, pos, heads, types, masks, lengths = batch
-            heads_pred, types_pred = decode(word, char, pos, mask=masks, length=lengths,
-                                            leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
-            word = word.data.cpu().numpy()
-            pos = pos.data.cpu().numpy()
-            lengths = lengths.cpu().numpy()
-            heads = heads.data.cpu().numpy()
-            types = types.data.cpu().numpy()
-
-            pred_writer.write(word, pos, heads_pred, types_pred, lengths, symbolic_root=True)
-            gold_writer.write(word, pos, heads, types, lengths, symbolic_root=True)
-
-            ucorr, lcorr, total, \
-            ucorr_nopunc, lcorr_nopunc, total_nopunc = parser.eval(word, pos, heads_pred, types_pred, heads, types,
-                                                                   word_alphabet, pos_alphabet, lengths,
-                                                                   punct_set=punct_set, symbolic_root=True)
-            dev_ucorr += ucorr
-            dev_lcorr += lcorr
-            dev_total += total
-
-            dev_ucorr_nopunc += ucorr_nopunc
-            dev_lcorr_nopunc += lcorr_nopunc
-            dev_total_nopunc += total_nopunc
-
-        pred_writer.close()
-        gold_writer.close()
-        print('W. Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%' % (
-            dev_ucorr, dev_lcorr, dev_total, dev_ucorr * 100 / dev_total, dev_lcorr * 100 / dev_total))
-        print('Wo Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%' % (
-            dev_ucorr_nopunc, dev_lcorr_nopunc, dev_total_nopunc, dev_ucorr_nopunc * 100 / dev_total_nopunc,
-            dev_lcorr_nopunc * 100 / dev_total_nopunc))
-
-        if dev_ucorrect_nopunct <= dev_ucorr_nopunc:
-            dev_ucorrect_nopunct = dev_ucorr_nopunc
-            dev_lcorrect_nopunct = dev_lcorr_nopunc
-            dev_ucorrect = dev_ucorr
-            dev_lcorrect = dev_lcorr
-            best_epoch = epoch
-
-            pred_filename = 'tmp/%spred_test%d' % (str(uid), epoch)
-            pred_writer.start(pred_filename)
-            gold_filename = 'tmp/%sgold_test%d' % (str(uid), epoch)
-            gold_writer.start(gold_filename)
-            test_ucorr = 0.0
-            test_lcorr = 0.0
-            test_ucorr_nopunc = 0.0
-            test_lcorr_nopunc = 0.0
-            test_total = 0
-            test_total_nopunc = 0
-            for batch in conllx_data.iterate_batch_variable(data_test, batch_size):
-                word, char, pos, heads, types, masks, lengths = batch
-                heads_pred, types_pred = decode(word, char, pos, mask=masks, length=lengths,
-                                                leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
-                word = word.data.cpu().numpy()
-                pos = pos.data.cpu().numpy()
-                lengths = lengths.cpu().numpy()
-                heads = heads.data.cpu().numpy()
-                types = types.data.cpu().numpy()
-
-                pred_writer.write(word, pos, heads_pred, types_pred, lengths, symbolic_root=True)
-                gold_writer.write(word, pos, heads, types, lengths, symbolic_root=True)
-
-                ucorr, lcorr, total, \
-                ucorr_nopunc, lcorr_nopunc, total_nopunc = parser.eval(word, pos, heads_pred, types_pred, heads, types,
-                                                                       word_alphabet, pos_alphabet, lengths,
-                                                                       punct_set=punct_set, symbolic_root=True)
-                test_ucorr += ucorr
-                test_lcorr += lcorr
-                test_total += total
-
-                test_ucorr_nopunc += ucorr_nopunc
-                test_lcorr_nopunc += lcorr_nopunc
-                test_total_nopunc += total_nopunc
-
-            pred_writer.close()
-            gold_writer.close()
-            test_ucorrect = test_ucorr
-            test_lcorrect = test_lcorr
-            test_ucorrect_nopunct = test_ucorr_nopunc
-            test_lcorrect_nopunct = test_lcorr_nopunc
-
-        print('best dev  W. Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%% (epoch: %d)' % (
-            dev_ucorrect, dev_lcorrect, dev_total,
-            dev_ucorrect * 100 / dev_total, dev_lcorrect * 100 / dev_total, best_epoch))
-        print('best dev  Wo Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%% (epoch: %d)' % (
-            dev_ucorrect_nopunct, dev_lcorrect_nopunct, dev_total_nopunc,
-            dev_ucorrect_nopunct * 100 / dev_total_nopunc, dev_lcorrect_nopunct * 100 / dev_total_nopunc, best_epoch))
-        print('best test W. Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%% (epoch: %d)' % (
-            test_ucorrect, test_lcorrect, test_total,
-            test_ucorrect * 100 / test_total, test_lcorrect * 100 / test_total, best_epoch))
-        print('best test Wo Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%% (epoch: %d)' % (
-            test_ucorrect_nopunct, test_lcorrect_nopunct, test_total_nopunc,
-            test_ucorrect_nopunct * 100 / test_total_nopunc, test_lcorrect_nopunct * 100 / test_total_nopunc,
-            best_epoch))
-
-        if epoch % schedule == 0:
-            # lr = lr * decay_rate
-            if epoch < adam_epochs:
-                lr = adam_rate / (1.0 + epoch * decay_rate)
-                optim = Adam(network.parameters(), lr=lr, betas=(0.9, 0.9), weight_decay=gamma)
-            else:
-                lr = learning_rate / (1.0 + (epoch - adam_epochs) * decay_rate)
-                optim = SGD(network.parameters(), lr=lr, momentum=momentum, weight_decay=gamma, nesterov=True)
 
 
 if __name__ == '__main__':
