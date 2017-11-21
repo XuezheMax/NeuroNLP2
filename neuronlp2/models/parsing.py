@@ -451,7 +451,7 @@ class StackPtrNet(nn.Module):
         # create batch index [batch]
         batch_index = torch.arange(0, batch).type_as(out_arc.data).long()
         # get vector for heads [batch, length_decoder, type_space],
-        type_c = type_c[batch_index, children.t()].transpose(0, 1).contiguous()
+        type_c = type_c[batch_index, children.data.t()].transpose(0, 1).contiguous()
         # compute output for type [batch, length_decoder, num_labels]
         out_type = self.bilinear(type_h, type_c)
 
