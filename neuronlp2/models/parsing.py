@@ -400,7 +400,7 @@ class StackPtrNet(nn.Module):
         # create batch index [batch]
         batch_index = torch.arange(0, batch).type_as(input_embedd.data).long()
         # get vector for heads [batch, length_decoder, input_dim],
-        input_embedd = input_embedd[batch_index, heads_stack.t()].transpose(0, 1)
+        input_embedd = input_embedd[batch_index, heads_stack.data.t()].transpose(0, 1)
         # apply dropout
         input = self.dropout_in(input_embedd)
         # prepare packed_sequence
