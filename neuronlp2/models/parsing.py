@@ -186,7 +186,7 @@ class BiRecurrentConvBiAffine(nn.Module):
         out_arc = out_arc + torch.diag(out_arc.new(max_len).fill_(-np.inf))
         # set invalid positions to -inf
         if mask is not None:
-            minus_mask = (1 - mask.data).view(batch, max_len, 1)
+            minus_mask = (1 - mask.data).byte().view(batch, max_len, 1)
             out_arc.masked_fill_(minus_mask, -np.inf)
 
         # compute naive predictions.
