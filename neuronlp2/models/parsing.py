@@ -367,9 +367,9 @@ class StackPtrNet(nn.Module):
         char = torch.tanh(char).view(char_size[0], char_size[1], -1)
 
         # concatenate word and char [batch, length, word_dim+char_filter]
-        input_embedd = torch.cat([word, char, pos], dim=2)
+        src_encoding = torch.cat([word, char, pos], dim=2)
         # apply dropout
-        input = self.dropout_in(input_embedd)
+        input = self.dropout_in(src_encoding)
         # prepare packed_sequence
         if length_e is not None:
             seq_input, hx, rev_order, mask_e = utils.prepare_rnn_seq(input, length_e, hx=hx, masks=mask_e,
@@ -387,22 +387,22 @@ class StackPtrNet(nn.Module):
         # output size [batch, length, type_space]
         type_c = F.elu(self.type_c(output))
 
-        return input_embedd, arc_c, type_c, hn, mask_e, length_e
+        return src_encoding, arc_c, type_c, hn, mask_e, length_e
 
-    def _get_decoder_output(self, input_embedd, heads_stack, hx, mask_d=None, length_d=None):
+    def _get_decoder_output(self, src_encoding, heads_stack, hx, mask_d=None, length_d=None):
         # hack length from mask
         # we do not hack mask from length for special reasons.
         # Thus, always provide mask if it is necessary.
         if length_d is None and mask_d is not None:
             length_d = mask_d.data.sum(dim=1).long()
 
-        batch, _, _ = input_embedd.size()
+        batch, _, _ = src_encoding.size()
         # create batch index [batch]
-        batch_index = torch.arange(0, batch).type_as(input_embedd.data).long()
+        batch_index = torch.arange(0, batch).type_as(src_encoding.data).long()
         # get vector for heads [batch, length_decoder, input_dim],
-        input_embedd = input_embedd[batch_index, heads_stack.data.t()].transpose(0, 1)
+        src_encoding = src_encoding[batch_index, heads_stack.data.t()].transpose(0, 1)
         # apply dropout
-        input = self.dropout_in(input_embedd)
+        input = self.dropout_in(src_encoding)
         # prepare packed_sequence
         if length_d is not None:
             seq_input, hx, rev_order, mask_d = utils.prepare_rnn_seq(input, length_d, hx=hx, masks=mask_d,
@@ -430,12 +430,12 @@ class StackPtrNet(nn.Module):
              mask_e=None, length_e=None, mask_d=None, length_d=None, hx=None):
 
         # output from encoder [batch, length_encoder, tag_space]
-        input_embedd, arc_c, type_c, hn, mask_e, _ = self._get_encoder_output(input_word, input_char, input_pos,
+        src_encoding, arc_c, type_c, hn, mask_e, _ = self._get_encoder_output(input_word, input_char, input_pos,
                                                                               mask_e=mask_e, length_e=length_e, hx=hx)
 
         batch, max_len_e, _ = arc_c.size()
         # output from decoder [batch, length_decoder, tag_space]
-        arc_h, type_h, _, mask_d, _ = self._get_decoder_output(input_embedd, stacked_heads, hn,
+        arc_h, type_h, _, mask_d, _ = self._get_decoder_output(src_encoding, stacked_heads, hn,
                                                                mask_d=mask_d, length_d=length_d)
         _, max_len_d, _ = arc_h.size()
 
@@ -488,3 +488,52 @@ class StackPtrNet(nn.Module):
         loss_type = loss_type[batch_index, head_index, stacked_types.data.t()]
 
         return -loss_arc.sum() / num, -loss_type.sum() / num
+
+    def _decode_per_sentence(self, src_encoding, arc_c, type_c, hx, length, beam):
+        # src_encoding [length, input_size]
+        # arc_c [length, arc_space]
+        # type_c [length, type_space]
+        # hx [num_direction, hidden_size]
+        if length is not None:
+            src_encoding = src_encoding[:length]
+            arc_c = arc_c[:length]
+            type_c = type_c[:length]
+        else:
+            length = src_encoding.size(0)
+
+        # expand each tensor for beam search
+        # [beam, length, input_size]
+        src_encoding = src_encoding.expand((beam, ) + src_encoding.size())
+        # [beam, length, arc_space]
+        arc_c = arc_c.expand((beam, ) + arc_c.size())
+        # [beam, length, type_space]
+        type_c = type_c.expand((beam, ) + type_c.size())
+        # [num_direction, beam, hidden_size]
+        hx = hx.view(hx.size(0), 1, hx.size(1)).expand(hx.size(0), beam, hx.size(1))
+
+        beam_index = torch.arange(0, beam).type_as(src_encoding.data).long()
+        stacked_heads = beam_index.new(2 * length - 1, beam).zero_()
+        children = beam_index.new(stacked_heads.size()).zero_()
+        stacked_types = beam_index.new(stacked_heads.size()).zero_()
+        hypothesis_scores = []
+        for t in range(2 * length - 1):
+            heads = stacked_heads[t]
+            # [beam, 1, input_size]
+            input = src_encoding[beam_index, heads].unsqueeze(1)
+
+    def decode(self, input_word, input_char, input_pos, mask=None, length=None, hx=None, leading_symbolic=0, beam=1):
+        # output from encoder [batch, length_encoder, tag_space]
+        # src_encoding [batch, length, input_size]
+        # arc_c [batch, length, arc_space]
+        # type_c [batch, length, type_space]
+        # hn [num_direction, batch, hidden_size]
+        src_encoding, arc_c, type_c, hn, mask_e, length = self._get_encoder_output(input_word, input_char, input_pos,
+                                                                                   mask_e=mask, length_e=length, hx=hx)
+        batch, max_len_e, _ = src_encoding.size()
+
+        pars = np.zeros([batch, max_len_e], dtype=np.int32)
+        types = np.zeros([batch, max_len_e], dtype=np.int32)
+
+        for b in range(batch):
+            sent_len = None if length is None else length[b]
+            self._decode_per_sentence(src_encoding[b], arc_c[b], type_c[b], hn[:, b, :], sent_len, beam)
