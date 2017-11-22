@@ -71,7 +71,6 @@ class ChainCRF(nn.Module):
 
         # compute out_s by tensor dot [batch, length, input_size] * [input_size, num_label]
         # thus out_s should be [batch, length, num_label] --> [batch, length, num_label, 1]
-        # out_s = self.state_nn(input).view(batch, length, 1, self.num_labels)
         out_s = self.state_nn(input).unsqueeze(2)
 
         if self.bigram:
@@ -84,7 +83,6 @@ class ChainCRF(nn.Module):
             output = self.trans_matrix + out_s
 
         if mask is not None:
-            # output = output * mask.view(mask.size() + (1, 1))
             output = output * mask.unsqueeze(2).unsqueeze(3)
 
         return output
@@ -112,7 +110,6 @@ class ChainCRF(nn.Module):
         # shape = [length, batch, 1]
         mask_transpose = None
         if mask is not None:
-            # mask_transpose = mask.view(mask.size() + (1, )).transpose(0, 1)
             mask_transpose = mask.unsqueeze(2).transpose(0, 1)
 
 
@@ -137,7 +134,6 @@ class ChainCRF(nn.Module):
                 partition = curr_energy[:, -1, :]
             else:
                 # shape = [batch, num_label]
-                # partition_new = logsumexp(curr_energy + partition.view(partition.size() + (1,)), dim=1)
                 partition_new = logsumexp(curr_energy + partition.unsqueeze(2), dim=1)
                 if mask_transpose is None:
                     partition = partition_new
@@ -272,7 +268,7 @@ class TreeCRF(nn.Module):
         A = torch.exp(energy)
         # mask out invalid positions
         if mask is not None:
-            A = A * mask.view(batch, 1, length, 1) * mask.view(batch, 1, 1, length)
+            A = A * mask.unsqueeze(1).unsqueeze(3) * mask.unsqueeze(1).unsqueeze(2)
 
         # sum along the label axis [batch, length, length]
         A = A.sum(dim=1)
@@ -308,7 +304,8 @@ class TreeCRF(nn.Module):
             z[b] = logdet(Lx)
 
         # first create index matrix [length, batch]
-        index = torch.zeros(length, batch) + torch.arange(0, length).view(length, 1)
+        # index = torch.zeros(length, batch) + torch.arange(0, length).view(length, 1)
+        index = torch.arange(0, length).view(length, 1).expand(length, batch)
         index = index.type_as(energy.data).long()
         batch_index = torch.arange(0, batch).type_as(energy.data).long()
         # compute target energy [length-1, batch]
