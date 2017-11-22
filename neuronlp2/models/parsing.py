@@ -155,8 +155,8 @@ class BiRecurrentConvBiAffine(nn.Module):
             num = float(max_len - 1) * batch
 
         # first create index matrix [length, batch]
-        # child_index = torch.zeros(max_len, batch) + torch.arange(0, max_len).view(max_len, 1)
-        child_index = torch.zeros(max_len, batch) + torch.arange(0, max_len).unsqueeze(1)
+        child_index = torch.arange(0, max_len).view(max_len, 1).expand(max_len, batch)
+        # child_index = torch.zeros(max_len, batch) + torch.arange(0, max_len).unsqueeze(1)
         child_index = child_index.type_as(out_arc.data).long()
         # [length-1, batch]
         loss_arc = loss_arc[batch_index, heads.data.t(), child_index][1:]
@@ -448,8 +448,6 @@ class StackPtrNet(nn.Module):
             children = children[:, :max_len_d]
             stacked_types = stacked_types[:, :max_len_d]
 
-        mask_e = mask_e.contiguous()
-        mask_d = mask_d.contiguous()
         # [batch, length_decoder, length_encoder]
         out_arc = self.attention(arc_h, arc_c, mask_d=mask_d, mask_e=mask_e).squeeze(dim=1)
 
@@ -465,7 +463,7 @@ class StackPtrNet(nn.Module):
             minus_inf = -1e8
             minus_mask_d = (1 - mask_d) * minus_inf
             minus_mask_e = (1 - mask_e) * minus_inf
-            out_arc = out_arc + minus_mask_d.view(batch, max_len_d, 1) + minus_mask_e.view(batch, 1, max_len_e)
+            out_arc = out_arc + minus_mask_d.unsqueeze(2) + minus_mask_e.unsqueeze(1)
 
         # TODO for Pytorch 2.0.4, need to set dim=1 for log_softmax or use softmax then take log
         # first convert out_arc to [length_encoder, length_decoder, batch] for log_softmax computation.
@@ -477,8 +475,8 @@ class StackPtrNet(nn.Module):
 
         # mask invalid position to 0 for sum loss
         if mask_e is not None:
-            loss_arc = loss_arc * mask_d.view(batch, max_len_d, 1) * mask_e.view(batch, 1, max_len_e)
-            loss_type = loss_type * mask_d.view(batch, max_len_d, 1)
+            loss_arc = loss_arc * mask_d.unsqueeze(2) * mask_e.unsqueeze(1)
+            loss_type = loss_type * mask_d.unsqueeze(2)
             # number of valid positions which contribute to loss (remove the symbolic head for each sentence.
             num = mask_d.sum()
         else:
@@ -486,7 +484,7 @@ class StackPtrNet(nn.Module):
             num = float(max_len_d * batch)
 
         # first create index matrix [length, batch]
-        head_index = torch.zeros(max_len_d, batch) + torch.arange(0, max_len_d).view(max_len_d, 1)
+        head_index = torch.arange(0, max_len_d).view(max_len_d, 1).expand(max_len_d, batch)
         head_index = head_index.type_as(out_arc.data).long()
         # [length_decoder, batch]
         loss_arc = loss_arc[batch_index, head_index, children.data.t()]
