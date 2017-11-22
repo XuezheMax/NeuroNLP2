@@ -71,7 +71,8 @@ class ChainCRF(nn.Module):
 
         # compute out_s by tensor dot [batch, length, input_size] * [input_size, num_label]
         # thus out_s should be [batch, length, num_label] --> [batch, length, num_label, 1]
-        out_s = self.state_nn(input).view(batch, length, 1, self.num_labels)
+        # out_s = self.state_nn(input).view(batch, length, 1, self.num_labels)
+        out_s = self.state_nn(input).unsqueeze(2)
 
         if self.bigram:
             # compute out_s by tensor dot: [batch, length, input_size] * [input_size, num_label * num_label]
@@ -83,7 +84,8 @@ class ChainCRF(nn.Module):
             output = self.trans_matrix + out_s
 
         if mask is not None:
-            output = output * mask.view(mask.size() + (1, 1))
+            # output = output * mask.view(mask.size() + (1, 1))
+            output = output * mask.unsqueeze(2).unsqueeze(3)
 
         return output
 
@@ -110,7 +112,8 @@ class ChainCRF(nn.Module):
         # shape = [length, batch, 1]
         mask_transpose = None
         if mask is not None:
-            mask_transpose = mask.view(mask.size() + (1, )).transpose(0, 1)
+            # mask_transpose = mask.view(mask.size() + (1, )).transpose(0, 1)
+            mask_transpose = mask.unsqueeze(2).transpose(0, 1)
 
 
         # shape = [batch, num_label]
@@ -131,10 +134,11 @@ class ChainCRF(nn.Module):
             # shape = [batch, num_label, num_label]
             curr_energy = energy_transpose[t]
             if t == 0:
-                partition = curr_energy[:, -1, :].contiguous()
+                partition = curr_energy[:, -1, :]
             else:
                 # shape = [batch, num_label]
-                partition_new = logsumexp(curr_energy + partition.view(partition.size() + (1,)), dim=1)
+                # partition_new = logsumexp(curr_energy + partition.view(partition.size() + (1,)), dim=1)
+                partition_new = logsumexp(curr_energy + partition.unsqueeze(2), dim=1)
                 if mask_transpose is None:
                     partition = partition_new
                 else:

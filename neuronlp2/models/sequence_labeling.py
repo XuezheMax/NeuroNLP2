@@ -107,8 +107,7 @@ class BiRecurrentConv(nn.Module):
 
         if length is not None and target.size(1) != mask.size(1):
             max_len = length.max()
-            target = target[:, :max_len]
-            target = target.contiguous()
+            target = target[:, :max_len].contiguous()
 
         if mask is not None:
             # TODO for Pytorch 2.0.4, first take nllloss then mask (no need of broadcast for mask)
@@ -225,8 +224,7 @@ class BiRecurrentConvCRF(BiRecurrentConv):
 
         if length is not None:
             max_len = length.max()
-            target = target[:, :max_len]
-            target = target.contiguous()
+            target = target[:, :max_len].contiguous()
 
         preds = self.crf.decode(output, mask=mask, leading_symbolic=leading_symbolic)
         if mask is None:
