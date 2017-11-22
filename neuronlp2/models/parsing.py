@@ -156,7 +156,6 @@ class BiRecurrentConvBiAffine(nn.Module):
 
         # first create index matrix [length, batch]
         child_index = torch.arange(0, max_len).view(max_len, 1).expand(max_len, batch)
-        # child_index = torch.zeros(max_len, batch) + torch.arange(0, max_len).unsqueeze(1)
         child_index = child_index.type_as(out_arc.data).long()
         # [length-1, batch]
         loss_arc = loss_arc[batch_index, heads.data.t(), child_index][1:]
