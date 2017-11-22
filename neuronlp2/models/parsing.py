@@ -101,7 +101,7 @@ class BiRecurrentConvBiAffine(nn.Module):
         # output from rnn [batch, length, tag_space]
         arc, type, _, mask, length = self._get_rnn_output(input_word, input_char, input_pos,
                                                           mask=mask, length=length, hx=hx)
-        mask = mask.contiguous()
+        # mask = mask.contiguous()
         # [batch, length, length]
         out_arc = self.attention(arc[0], arc[1], mask_d=mask, mask_e=mask).squeeze(dim=1)
         return out_arc, type, mask, length
@@ -114,8 +114,8 @@ class BiRecurrentConvBiAffine(nn.Module):
         batch, max_len, _ = out_arc.size()
 
         if length is not None and heads.size(1) != mask.size(1):
-            heads = heads[:, :max_len].contiguous()
-            types = types[:, :max_len].contiguous()
+            heads = heads[:, :max_len]
+            types = types[:, :max_len]
 
         # out_type shape [batch, length, type_space]
         type_h, type_c = out_type
@@ -131,7 +131,8 @@ class BiRecurrentConvBiAffine(nn.Module):
         if mask is not None:
             minus_inf = -1e8
             minus_mask = (1 - mask) * minus_inf
-            out_arc = out_arc + minus_mask.view(batch, max_len, 1) + minus_mask.view(batch, 1, max_len)
+            # out_arc = out_arc + minus_mask.view(batch, max_len, 1) + minus_mask.view(batch, 1, max_len)
+            out_arc = out_arc + minus_mask.unsqueeze(2) + minus_mask.unsqueeze(1)
 
         # TODO for Pytorch 2.0.4, need to set dim=1 for log_softmax or use softmax then take log
         # first convert out_arc to [max_len, batch, max_len] for log_softmax computation.
@@ -143,8 +144,10 @@ class BiRecurrentConvBiAffine(nn.Module):
 
         # mask invalid position to 0 for sum loss
         if mask is not None:
-            loss_arc = loss_arc * mask.view(batch, max_len, 1) * mask.view(batch, 1, max_len)
-            loss_type = loss_type * mask.view(batch, max_len, 1)
+            # loss_arc = loss_arc * mask.view(batch, max_len, 1) * mask.view(batch, 1, max_len)
+            # loss_type = loss_type * mask.view(batch, max_len, 1)
+            loss_arc = loss_arc * mask.unsqueeze(2) * mask.unsqueeze(1)
+            loss_type = loss_type * mask.unsqueeze(2)
             # number of valid positions which contribute to loss (remove the symbolic head for each sentence.
             num = mask.sum() - batch
         else:
@@ -152,7 +155,8 @@ class BiRecurrentConvBiAffine(nn.Module):
             num = float(max_len - 1) * batch
 
         # first create index matrix [length, batch]
-        child_index = torch.zeros(max_len, batch) + torch.arange(0, max_len).view(max_len, 1)
+        # child_index = torch.zeros(max_len, batch) + torch.arange(0, max_len).view(max_len, 1)
+        child_index = torch.zeros(max_len, batch) + torch.arange(0, max_len).unsqueeze(1)
         child_index = child_index.type_as(out_arc.data).long()
         # [length-1, batch]
         loss_arc = loss_arc[batch_index, heads.data.t(), child_index][1:]
@@ -186,7 +190,8 @@ class BiRecurrentConvBiAffine(nn.Module):
         out_arc = out_arc + torch.diag(out_arc.new(max_len).fill_(-np.inf))
         # set invalid positions to -inf
         if mask is not None:
-            minus_mask = (1 - mask.data).byte().view(batch, max_len, 1)
+            # minus_mask = (1 - mask.data).byte().view(batch, max_len, 1)
+            minus_mask = (1 - mask.data).byte().unsqueeze(2)
             out_arc.masked_fill_(minus_mask, -np.inf)
 
         # compute naive predictions.
