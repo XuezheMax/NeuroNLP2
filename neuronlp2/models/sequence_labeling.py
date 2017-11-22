@@ -204,10 +204,7 @@ class BiRecurrentConvCRF(BiRecurrentConv):
 
         if length is not None:
             max_len = length.max()
-            target = target[:, :max_len].contiguous()
-
-        if mask is not None:
-            mask = mask.contiguous()
+            target = target[:, :max_len]
 
         # [batch, length, num_label,  num_label]
         return self.crf.loss(output, target, mask=mask).mean()
@@ -216,15 +213,12 @@ class BiRecurrentConvCRF(BiRecurrentConv):
         # output from rnn [batch, length, tag_space]
         output, _, mask, length = self._get_rnn_output(input_word, input_char, mask=mask, length=length, hx=hx)
 
-        if mask is not None:
-            mask = mask.contiguous()
-
         if target is None:
             return self.crf.decode(output, mask=mask, leading_symbolic=leading_symbolic), None
 
         if length is not None:
             max_len = length.max()
-            target = target[:, :max_len].contiguous()
+            target = target[:, :max_len]
 
         preds = self.crf.decode(output, mask=mask, leading_symbolic=leading_symbolic)
         if mask is None:

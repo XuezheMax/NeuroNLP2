@@ -73,11 +73,9 @@ class Attention(nn.Module):
 
         # compute decoder part: [num_label, input_size_decoder] * [batch, input_size_decoder, length_decoder]
         # the output shape is [batch, num_label, length_decoder]
-        # out_d = torch.matmul(self.W_d, input_d.transpose(1, 2)).view(batch, self.num_labels, length_decoder, 1)
         out_d = torch.matmul(self.W_d, input_d.transpose(1, 2)).unsqueeze(3)
         # compute decoder part: [num_label, input_size_encoder] * [batch, input_size_encoder, length_encoder]
         # the output shape is [batch, num_label, length_encoder]
-        # out_e = torch.matmul(self.W_e, input_e.transpose(1, 2)).view(batch, self.num_labels, 1, length_encoder)
         out_e = torch.matmul(self.W_e, input_e.transpose(1, 2)).unsqueeze(2)
 
         # output shape [batch, num_label, length_decoder, length_encoder]
@@ -85,11 +83,9 @@ class Attention(nn.Module):
             # compute bi-affine part
             # [batch, 1, length_decoder, input_size_decoder] * [num_labels, input_size_decoder, input_size_encoder]
             # output shape [batch, num_label, length_decoder, input_size_encoder]
-            # output = torch.matmul(input_d.view(batch, 1, length_decoder, self.input_size_decoder), self.U)
             output = torch.matmul(input_d.unsqueeze(1), self.U)
             # [batch, num_label, length_decoder, input_size_encoder] * [batch, 1, input_size_encoder, length_encoder]
             # output shape [batch, num_label, length_decoder, length_encoder]
-            # output = torch.matmul(output, input_e.view(batch, 1, length_encoder, self.input_size_encoder).transpose(2, 3))
             output = torch.matmul(output, input_e.unsqueeze(1).transpose(2, 3))
 
             output = output + out_d + out_e + self.b
@@ -97,7 +93,6 @@ class Attention(nn.Module):
             output = out_d + out_d + self.b
 
         if mask_d is not None:
-            # output = output * mask_d.view(batch, 1, length_decoder, 1) * mask_e.view(batch, 1, 1, length_encoder)
             output = output * mask_d.unsqueeze(1).unsqueeze(3) * mask_e.unsqueeze(1).unsqueeze(2)
 
         return output
