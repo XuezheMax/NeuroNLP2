@@ -90,7 +90,7 @@ class Attention(nn.Module):
             # [batch, num_label, length_decoder, input_size_encoder] * [batch, 1, input_size_encoder, length_encoder]
             # output shape [batch, num_label, length_decoder, length_encoder]
             # output = torch.matmul(output, input_e.view(batch, 1, length_encoder, self.input_size_encoder).transpose(2, 3))
-            output = torch.matmul(output, input_e.qusqueeze(1).transpose(2, 3))
+            output = torch.matmul(output, input_e.unsqueeze(1).transpose(2, 3))
 
             output = output + out_d + out_e + self.b
         else:
