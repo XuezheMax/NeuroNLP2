@@ -520,7 +520,7 @@ class StackPtrNet(nn.Module):
 
         stacked_heads = torch.zeros(2 * length - 1, beam).type_as(src_encoding.data).long()
         children = stacked_heads.new(stacked_heads.size()).zero_()
-        stacked_types = stacked_heads.new(stacked_heads.size(0)).zero_()
+        stacked_types = stacked_heads.new(stacked_heads.size()).zero_()
         hypothesis_scores = src_encoding.data.new(beam).zero_()
         constraints = np.zeros([beam, length], dtype=np.bool)
         constraints[:, 0] = True
