@@ -556,6 +556,11 @@ class StackPtrNet(nn.Module):
             base_index = hyp_index / length
             child_index = hyp_index % length
 
+            print(length)
+            print(hyp_index)
+            print(base_index)
+            print(child_index)
+
             count = 0
             ids = []
             new_constraints = np.zeros([beam, length], dtype=np.bool)
@@ -593,7 +598,6 @@ class StackPtrNet(nn.Module):
 
             # predict types for new hypotheses
             # [num_hyp, type_space]
-            print(length)
             print(base_index)
             print(type_h)
             raw_input()
