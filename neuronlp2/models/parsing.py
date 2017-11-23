@@ -690,9 +690,9 @@ class StackPtrNet(nn.Module):
             sent_len = None if length is None else length[b]
             # hack to handle LSTM
             if isinstance(hn, tuple):
-                hn, cn = hn
-                hx = hn[:, b, :].contiguous()
-                cx = cn[:, b, :].contiguous()
+                hx, cx = hn
+                hx = hx[:, b, :].contiguous()
+                cx = cx[:, b, :].contiguous()
                 hx = (hx, cx)
             else:
                 hx = hn[:, b, :].contiguous()
