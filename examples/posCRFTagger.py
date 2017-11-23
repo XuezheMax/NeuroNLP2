@@ -168,6 +168,7 @@ def main():
                 log_info = 'train: %d/%d loss: %.4f, time left (estimated): %.2fs' % (
                     batch, num_batches, train_err / train_total, time_left)
                 sys.stdout.write(log_info)
+                sys.stdout.flush()
                 num_back = len(log_info)
 
         sys.stdout.write("\b" * num_back)

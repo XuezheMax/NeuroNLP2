@@ -593,6 +593,10 @@ class StackPtrNet(nn.Module):
 
             # predict types for new hypotheses
             # [num_hyp, type_space]
+            print(length)
+            print(base_index)
+            print(type_h)
+            raw_input()
             hyp_type_c = type_c[child_index]
             hyp_type_h = type_h[base_index]
             # compute output for type [num_hyp, num_labels]
