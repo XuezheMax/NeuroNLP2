@@ -215,7 +215,7 @@ def main():
         mode, num_layers, hidden_size, num_filters, arc_space, type_space, 'biaffine' if biaffine else 'affine'))
     logger.info("train: l2: %f, (#data: %d, batch: %d, dropout(in, rnn): (%.2f, %.2f), unk replace: %.2f)" % (
         gamma, num_data, batch_size, p_in, p_rnn, unk_replace))
-    logger.info('Prior order: %s' % 'left2right' if left2right else 'inside-out')
+    logger.info('prior order: %s, beam: %d' % ('left2right' if left2right else 'inside-out', beam))
 
     num_batches = num_data / batch_size + 1
     dev_ucorrect = 0.0
