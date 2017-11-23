@@ -533,10 +533,8 @@ class StackPtrNet(nn.Module):
             print(t)
             # beam_index = torch.arange(0, num_hyp).type_as(src_encoding.data).long()
             beam_index = src_encoding.data.new(num_hyp).zero_().long()
-            print(beam_index)
             # [num_hyp]
             heads = stacked_heads[t, :num_hyp]
-            print(heads)
             # [num_hyp, 1, input_size]
             input = src_encoding[beam_index, heads].unsqueeze(1)
             # output [num_hyp, 1, hidden_size]
@@ -564,12 +562,18 @@ class StackPtrNet(nn.Module):
             ids = []
             new_constraints = np.zeros([beam, length], dtype=np.bool)
             for id in range(num_hyp * length):
+                print('id: %d' % id)
                 base_id = base_index[id]
                 child_id = child_index[id]
+                print('bid, cid: %d, %d' % (base_id, child_id))
                 new_hyp_score = new_hypothesis_scores[id]
+                print(constraints[base_id])
                 if not constraints[base_id, child_id]:
                     new_constraints[count] = constraints[base_id]
                     new_constraints[count, child_id] = True
+
+                    print(constraints[base_id])
+                    print(new_constraints[count])
 
                     new_stacked_heads[:t + 1, count] = stacked_heads[:t + 1, base_id]
                     if t + 1 < 2 * length - 1:
@@ -582,6 +586,9 @@ class StackPtrNet(nn.Module):
                     hypothesis_scores[count] = new_hyp_score
                     ids.append(id)
                     count += 1
+
+                print('count: %d' % count)
+                raw_input()
 
                 if count == beam:
                     break
