@@ -520,14 +520,14 @@ class StackPtrNet(nn.Module):
 
         stacked_heads = torch.zeros(2 * length - 1, beam).type_as(src_encoding.data).long()
         children = stacked_heads.new(stacked_heads.size()).zero_()
-        types = stacked_heads.new(beam, length).zero_()
+        stacked_types = stacked_heads.new(stacked_heads.size(0)).zero_()
         hypothesis_scores = src_encoding.data.new(beam).zero_()
         constraints = np.zeros([beam, length], dtype=np.bool)
         constraints[:, 0] = True
 
         # temporal tensors for each step.
         new_stacked_heads = stacked_heads.new(stacked_heads.size()).zero_()
-        new_types = stacked_heads.new(beam, length).zero_()
+        new_stacked_types = stacked_types.new(stacked_types.size()).zero_()
         num_hyp = 1
         for t in range(2 * length - 1):
             print(t)
@@ -565,10 +565,33 @@ class StackPtrNet(nn.Module):
                 print('id: %d' % id)
                 base_id = base_index[id]
                 child_id = child_index[id]
+                head = heads[base_id]
                 print('bid, cid: %d, %d' % (base_id, child_id))
                 new_hyp_score = new_hypothesis_scores[id]
-                print(constraints[base_id])
-                if not constraints[base_id, child_id]:
+                if head == child_id:
+                    assert constraints[base_id, child_id], 'constrains error: %d, %d' % (base_id, child_id)
+                    if child_id != 0:
+                        new_stacked_heads[:t + 1, count] = stacked_heads[:t + 1, base_id]
+                        if t + 1 < 2 * length - 1:
+                            new_stacked_heads[t + 1, count] = stacked_heads[t - 1, count]
+                        if t > 0:
+                            children[:t, count] = stacked_heads[1:t + 1, base_id]
+                        children[t, count] = child_id
+
+                        hypothesis_scores[count] = new_hyp_score
+                        ids.append(id)
+                        count += 1
+                    elif t == 2 * length - 2:
+                        new_stacked_heads[:t + 1, count] = stacked_heads[:t + 1, base_id]
+                        children[:t, count] = stacked_heads[1:t + 1, base_id]
+                        children[t, count] = child_id
+
+                        hypothesis_scores[count] = new_hyp_score
+                        ids.append(id)
+                        count += 1
+                    else:
+                        raise RuntimeError
+                elif not constraints[base_id, child_id]:
                     new_constraints[count] = constraints[base_id]
                     new_constraints[count, child_id] = True
 
@@ -623,11 +646,10 @@ class StackPtrNet(nn.Module):
             hyp_types = hyp_types + leading_symbolic
             for i in range(num_hyp):
                 base_id = base_index[i]
-                child_id = child_index[i]
-                new_types[i] = types[base_id]
-                new_types[i, child_id] = hyp_types[i]
+                new_stacked_types[:t, i] = stacked_types[:t, base_id]
+                new_stacked_types[t, i] = hyp_types[i]
 
-            types.copy_(new_types)
+            stacked_types.copy_(new_stacked_types)
             # hx [num_directions, num_hyp, hidden_size]
             # hack to handle LSTM
             if isinstance(hx, tuple):
@@ -640,13 +662,15 @@ class StackPtrNet(nn.Module):
 
         stacked_heads = stacked_heads.cpu().numpy()[:, 0]
         children = children.cpu().numpy()[:, 0]
-        types = types.cpu().numpy()[0].astype(np.int32)
         heads = np.zeros(length, dtype=np.int32)
+        types = np.zeros(length, dtype=np.int32)
         for i in range(2 * length - 1):
             head = stacked_heads[i]
             child = children[i]
+            type = stacked_types[i]
             if head != child:
                 heads[child] = head
+                types[child] = type
         return heads, types
 
     def decode(self, input_word, input_char, input_pos, mask=None, length=None, hx=None, leading_symbolic=0, beam=1):
