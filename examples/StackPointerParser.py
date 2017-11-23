@@ -294,7 +294,7 @@ def main():
         for batch in conllx_stacked_data.iterate_batch_stacked_variable(data_dev, batch_size):
             input_encoder, _ = batch
             word, char, pos, heads, types, masks, lengths = input_encoder
-            heads_pred, types_pred = network.decode(word, char, pos, mask=masks, length=lengths,
+            heads_pred, types_pred = network.decode(word, char, pos, mask=masks, length=lengths, beam=beam,
                                                     leading_symbolic=conllx_stacked_data.NUM_SYMBOLIC_TAGS)
             word = word.data.cpu().numpy()
             pos = pos.data.cpu().numpy()
@@ -345,7 +345,7 @@ def main():
             for batch in conllx_stacked_data.iterate_batch_stacked_variable(data_test, batch_size):
                 input_encoder, _ = batch
                 word, char, pos, heads, types, masks, lengths = input_encoder
-                heads_pred, types_pred = network.decode(word, char, pos, mask=masks, length=lengths,
+                heads_pred, types_pred = network.decode(word, char, pos, mask=masks, length=lengths, beam=beam,
                                                         leading_symbolic=conllx_stacked_data.NUM_SYMBOLIC_TAGS)
                 word = word.data.cpu().numpy()
                 pos = pos.data.cpu().numpy()

@@ -648,11 +648,11 @@ class StackPtrNet(nn.Module):
             # hack to handle LSTM
             if isinstance(hn, tuple):
                 hn, cn = hn
-                hx = hn[:, b, :]
-                cx = cn[:, b, :]
+                hx = hn[:, b, :].contiguous()
+                cx = cn[:, b, :].contiguous()
                 hx = (hx, cx)
             else:
-                hx = hn[:, b, :]
+                hx = hn[:, b, :].contiguous()
 
             hids, tids = self._decode_per_sentence(src_encoding[b], arc_c[b], type_c[b], hx, sent_len, beam,
                                                    leading_symbolic)
