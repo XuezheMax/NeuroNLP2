@@ -8,6 +8,7 @@ import utils
 import torch
 from torch.autograd import Variable
 from .conllx_data import _buckets, PAD_ID_WORD, PAD_ID_CHAR, PAD_ID_TAG, UNK_ID
+from .conllx_data import NUM_SYMBOLIC_TAGS
 from .conllx_data import create_alphabets
 
 

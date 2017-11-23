@@ -491,7 +491,7 @@ class StackPtrNet(nn.Module):
 
         return -loss_arc.sum() / num, -loss_type.sum() / num
 
-    def _decode_per_sentence(self, src_encoding, arc_c, type_c, hx, length, beam):
+    def _decode_per_sentence(self, src_encoding, arc_c, type_c, hx, length, beam, leading_symbolic):
         # src_encoding [length, input_size]
         # arc_c [length, arc_space]
         # type_c [length, type_space]
@@ -504,24 +504,131 @@ class StackPtrNet(nn.Module):
             length = src_encoding.size(0)
 
         # expand each tensor for beam search
-        # [beam, length, input_size]
-        src_encoding = src_encoding.expand((beam, ) + src_encoding.size())
-        # [beam, length, arc_space]
-        arc_c = arc_c.expand((beam, ) + arc_c.size())
-        # [beam, length, type_space]
-        type_c = type_c.expand((beam, ) + type_c.size())
-        # [num_direction, beam, hidden_size]
-        hx = hx.view(hx.size(0), 1, hx.size(1)).expand(hx.size(0), beam, hx.size(1))
+        # [1, length, input_size]
+        src_encoding = src_encoding.unsqueeze(0)
+        # [1, length, arc_space]
+        arc_c = arc_c.unsqueeze(0)
+        # [num_direction, 1, hidden_size]
+        # hack to handle LSTM
+        if isinstance(hx, tuple):
+            hx, cx = hx
+            hx = hx.unsqueeze(1)
+            cx = cx.unsqueeze(1)
+            hx = (hx, cx)
+        else:
+            hx = hx.unsqueeze(1)
 
-        beam_index = torch.arange(0, beam).type_as(src_encoding.data).long()
-        stacked_heads = beam_index.new(2 * length - 1, beam).zero_()
-        children = beam_index.new(stacked_heads.size()).zero_()
-        stacked_types = beam_index.new(stacked_heads.size()).zero_()
-        hypothesis_scores = []
+        stacked_heads = torch.zeros(2 * length - 1, beam).type_as(src_encoding.data).long()
+        children = stacked_heads.new(stacked_heads.size()).zero_()
+        types = stacked_heads.new(beam, length).zero_()
+        hypothesis_scores = src_encoding.data.new(beam).zero_()
+        constraints = np.zeros([beam, length], dtype=np.bool)
+        constraints[:, 0] = True
+
+        # temporal tensors for each step.
+        new_stacked_heads = stacked_heads.new(stacked_heads.size()).zero_()
+        new_types = stacked_heads.new(beam, length).zero_()
+        num_hyp = 1
         for t in range(2 * length - 1):
-            heads = stacked_heads[t]
-            # [beam, 1, input_size]
+            beam_index = torch.arange(0, num_hyp).type_as(src_encoding.data).long()
+            # [num_hyp]
+            heads = stacked_heads[t, :num_hyp]
+            # [num_hyp, 1, input_size]
             input = src_encoding[beam_index, heads].unsqueeze(1)
+            # output [num_hyp, 1, hidden_size]
+            # hx [num_direction, num_hyp, hidden_size]
+            output, hx = self.decoder(input, hx=hx)
+
+            # output size [num_hyp, 1, arc_space]
+            arc_h = F.elu(self.arc_h(output))
+
+            # output size [num_hyp, type_space]
+            type_h = F.elu(self.type_h(output)).squeeze(dim=1)
+
+            # [num_hyp, length_encoder]
+            out_arc = self.attention(arc_h, arc_c).squeeze(dim=1).squeeze(dim=1)
+            # [num_hyp, length_encoder]
+            hyp_scores = self.logsoftmax(out_arc)
+            # [num_hyp, length_encoder]
+            new_hypothesis_scores = hypothesis_scores.unsqueeze(1) + hyp_scores
+            # [num_hyp * length_encoder]
+            new_hypothesis_scores, hyp_index = torch.sort(new_hypothesis_scores.view(-1), descending=True)
+            base_index = hyp_index / length
+            child_index = hyp_index % length
+
+            count = 0
+            ids = []
+            new_constraints = np.zeros([beam, length], dtype=np.bool)
+            for id in range(num_hyp * length):
+                base_id = base_index[id]
+                child_id = child_index[id]
+                new_hyp_score = new_hypothesis_scores[id]
+                if not constraints[base_id, child_id]:
+                    new_constraints[count] = constraints[base_id]
+                    new_constraints[count, child_id] = True
+
+                    new_stacked_heads[:t + 1, count] = stacked_heads[:t + 1, base_id]
+                    if t + 1 < 2 * length - 1:
+                        new_stacked_heads[t + 1, count] = child_id
+
+                    children[:t, count] = stacked_heads[1:t + 1, base_id]
+                    children[t, count] = child_id
+
+                    hypothesis_scores[count] = new_hyp_score
+                    ids.append(id)
+                    count += 1
+
+                if count == beam:
+                    break
+
+            # [num_hyp]
+            num_hyp = len(ids)
+            index = torch.from_numpy(np.array(ids)).type_as(base_index)
+            base_index = base_index[index]
+            child_index = child_index[index]
+
+            stacked_heads.copy_(new_stacked_heads)
+            constraints = new_constraints
+
+            # predict types for new hypotheses
+            # [num_hyp, type_space]
+            hyp_type_c = type_c[child_index]
+            hyp_type_h = type_h[base_index]
+            # compute output for type [num_hyp, num_labels]
+            out_type = self.bilinear(hyp_type_h, hyp_type_c)
+            # remove the first #leading_symbolic types.
+            out_type = out_type[:, leading_symbolic:]
+            # compute the prediction of types [num_hyp]
+            _, hyp_types = out_type.max(dim=1)
+            hyp_types = hyp_types + leading_symbolic
+            for i in range(num_hyp):
+                base_id = base_index[i]
+                child_id = child_index[i]
+                new_types[i] = types[base_id]
+                new_types[i, child_id] = hyp_types[i]
+
+            types.copy_(new_types)
+            # hx [num_directions, num_hyp, hidden_size]
+            # hack to handle LSTM
+            if isinstance(hx, tuple):
+                hx, cx = hx
+                hx = hx[:, base_index, :]
+                cx = cx[:, base_index, :]
+                hx = (hx, cx)
+            else:
+                hx = hx[:, base_index, :]
+
+        stacked_heads = stacked_heads.cpu().numpy()[:, 0]
+        children = children.cpu().numpy()[:, 0]
+        types = types.cpu().numpy()[0].astype(np.int32)
+        heads = np.zeros(length, dtype=np.int32)
+        for i in range(2 * length - 1):
+            head = stacked_heads[i]
+            child = children[i]
+            if head != child:
+                heads[child] = head
+        return heads, types
+
 
     def decode(self, input_word, input_char, input_pos, mask=None, length=None, hx=None, leading_symbolic=0, beam=1):
         # output from encoder [batch, length_encoder, tag_space]
@@ -533,9 +640,14 @@ class StackPtrNet(nn.Module):
                                                                                    mask_e=mask, length_e=length, hx=hx)
         batch, max_len_e, _ = src_encoding.size()
 
-        pars = np.zeros([batch, max_len_e], dtype=np.int32)
+        heads = np.zeros([batch, max_len_e], dtype=np.int32)
         types = np.zeros([batch, max_len_e], dtype=np.int32)
 
         for b in range(batch):
             sent_len = None if length is None else length[b]
-            self._decode_per_sentence(src_encoding[b], arc_c[b], type_c[b], hn[:, b, :], sent_len, beam)
+            hids, tids = self._decode_per_sentence(src_encoding[b], arc_c[b], type_c[b], hn[:, b, :], sent_len, beam,
+                                                   leading_symbolic)
+            heads[b] = hids
+            types[b] = tids
+
+        return heads, types
