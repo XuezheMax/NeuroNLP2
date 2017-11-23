@@ -527,10 +527,11 @@ class StackPtrNet(nn.Module):
 
         # temporal tensors for each step.
         new_stacked_heads = stacked_heads.new(stacked_heads.size()).zero_()
+        new_children = children.new(children.size()).zero_()
         new_stacked_types = stacked_types.new(stacked_types.size()).zero_()
         num_hyp = 1
-        for t in range(2 * length - 1):
-            print(t)
+        num_step = 2 * length - 1
+        for t in range(num_step):
             # beam_index = torch.arange(0, num_hyp).type_as(src_encoding.data).long()
             beam_index = src_encoding.data.new(num_hyp).zero_().long()
             # [num_hyp]
@@ -562,33 +563,21 @@ class StackPtrNet(nn.Module):
             ids = []
             new_constraints = np.zeros([beam, length], dtype=np.bool)
             for id in range(num_hyp * length):
-                print('id: %d' % id)
                 base_id = base_index[id]
                 child_id = child_index[id]
                 head = heads[base_id]
-                print('bid, cid: %d, %d' % (base_id, child_id))
                 new_hyp_score = new_hypothesis_scores[id]
                 if head == child_id:
                     assert constraints[base_id, child_id], 'constrains error: %d, %d' % (base_id, child_id)
-                    if child_id != 0:
+                    if child_id != 0 or t + 1 == num_step:
                         new_constraints[count] = constraints[base_id]
 
-                        new_stacked_heads[:t + 1, count] = stacked_heads[:t + 1, base_id]
-                        if t + 1 < 2 * length - 1:
+                        new_stacked_heads[:, count] = stacked_heads[:, base_id]
+                        if t + 1 < num_step:
                             new_stacked_heads[t + 1, count] = stacked_heads[t - 1, count]
-                        if t > 0:
-                            children[:t, count] = stacked_heads[1:t + 1, base_id]
-                        children[t, count] = child_id
 
-                        hypothesis_scores[count] = new_hyp_score
-                        ids.append(id)
-                        count += 1
-                    elif t == 2 * length - 2:
-                        new_constraints[count] = constraints[base_id]
-                        
-                        new_stacked_heads[:t + 1, count] = stacked_heads[:t + 1, base_id]
-                        children[:t, count] = stacked_heads[1:t + 1, base_id]
-                        children[t, count] = child_id
+                        new_children[:, count] = children[:, base_id]
+                        new_children[t, count] = child_id
 
                         hypothesis_scores[count] = new_hyp_score
                         ids.append(id)
@@ -598,12 +587,11 @@ class StackPtrNet(nn.Module):
                     new_constraints[count, child_id] = True
 
                     new_stacked_heads[:t + 1, count] = stacked_heads[:t + 1, base_id]
-                    if t + 1 < 2 * length - 1:
+                    if t + 1 < num_step:
                         new_stacked_heads[t + 1, count] = child_id
 
-                    if t > 0:
-                        children[:t, count] = stacked_heads[1:t + 1, base_id]
-                    children[t, count] = child_id
+                    new_children[:, count] = children[:, base_id]
+                    new_children[t, count] = child_id
 
                     hypothesis_scores[count] = new_hyp_score
                     ids.append(id)
@@ -614,18 +602,12 @@ class StackPtrNet(nn.Module):
 
             # [num_hyp]
             num_hyp = len(ids)
-            print(ids)
             if num_hyp == 1:
                 index = base_index.new(1).fill_(ids[0])
             else:
                 index = torch.from_numpy(np.array(ids)).type_as(base_index)
             base_index = base_index[index]
             child_index = child_index[index]
-
-            stacked_heads.copy_(new_stacked_heads)
-            constraints = new_constraints
-            print(constraints)
-            raw_input()
 
             # predict types for new hypotheses
             # [num_hyp, type_space]
@@ -640,10 +622,12 @@ class StackPtrNet(nn.Module):
             hyp_types = hyp_types + leading_symbolic
             for i in range(num_hyp):
                 base_id = base_index[i]
-                if t > 0:
-                    new_stacked_types[:t, i] = stacked_types[:t, base_id]
+                new_stacked_types[:, i] = stacked_types[:, base_id]
                 new_stacked_types[t, i] = hyp_types[i]
 
+            stacked_heads.copy_(new_stacked_heads)
+            constraints = new_constraints
+            children.copy_(new_children)
             stacked_types.copy_(new_stacked_types)
             # hx [num_directions, num_hyp, hidden_size]
             # hack to handle LSTM
@@ -660,7 +644,7 @@ class StackPtrNet(nn.Module):
         stacked_types = stacked_types.cpu().numpy()[:, 0]
         heads = np.zeros(length, dtype=np.int32)
         types = np.zeros(length, dtype=np.int32)
-        for i in range(2 * length - 1):
+        for i in range(num_step):
             head = stacked_heads[i]
             child = children[i]
             type = stacked_types[i]
