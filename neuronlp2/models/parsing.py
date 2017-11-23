@@ -550,7 +550,7 @@ class StackPtrNet(nn.Module):
             # [num_hyp, length_encoder]
             hyp_scores = self.logsoftmax(out_arc)
             # [num_hyp, length_encoder]
-            new_hypothesis_scores = hypothesis_scores.unsqueeze(1) + hyp_scores
+            new_hypothesis_scores = hypothesis_scores.unsqueeze(1) + hyp_scores.data
             # [num_hyp * length_encoder]
             new_hypothesis_scores, hyp_index = torch.sort(new_hypothesis_scores.view(-1), descending=True)
             base_index = hyp_index / length
@@ -597,7 +597,7 @@ class StackPtrNet(nn.Module):
             # compute output for type [num_hyp, num_labels]
             out_type = self.bilinear(hyp_type_h, hyp_type_c)
             # remove the first #leading_symbolic types.
-            out_type = out_type[:, leading_symbolic:]
+            out_type = out_type.data[:, leading_symbolic:]
             # compute the prediction of types [num_hyp]
             _, hyp_types = out_type.max(dim=1)
             hyp_types = hyp_types + leading_symbolic
@@ -628,7 +628,6 @@ class StackPtrNet(nn.Module):
             if head != child:
                 heads[child] = head
         return heads, types
-
 
     def decode(self, input_word, input_char, input_pos, mask=None, length=None, hx=None, leading_symbolic=0, beam=1):
         # output from encoder [batch, length_encoder, tag_space]
