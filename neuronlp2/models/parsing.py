@@ -589,8 +589,6 @@ class StackPtrNet(nn.Module):
                         hypothesis_scores[count] = new_hyp_score
                         ids.append(id)
                         count += 1
-                    else:
-                        raise RuntimeError
                 elif not constraints[base_id, child_id]:
                     new_constraints[count] = constraints[base_id]
                     new_constraints[count, child_id] = True
