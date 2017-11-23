@@ -117,7 +117,7 @@ def main():
     logger.info("Type Alphabet Size: %d" % num_types)
 
     logger.info("Reading Data")
-    use_gpu = False #torch.cuda.is_available()
+    use_gpu = torch.cuda.is_available()
 
     data_train = conllx_stacked_data.read_stacked_data_to_variable(train_path, word_alphabet, char_alphabet,
                                                                    pos_alphabet, type_alphabet, use_gpu=use_gpu,
