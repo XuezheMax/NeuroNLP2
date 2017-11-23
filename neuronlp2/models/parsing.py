@@ -543,7 +543,7 @@ class StackPtrNet(nn.Module):
             # hx [num_direction, num_hyp, hidden_size]
             output, hx = self.decoder(input, hx=hx)
             print(output.size())
-            print(hx.size())
+            print(hx[0].size())
 
             # output size [num_hyp, 1, arc_space]
             arc_h = F.elu(self.arc_h(output))
