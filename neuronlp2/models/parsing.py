@@ -671,7 +671,7 @@ class StackPtrNet(nn.Module):
             if head != child:
                 heads[child] = head
                 types[child] = type
-        return heads, types
+        return heads, types, length
 
     def decode(self, input_word, input_char, input_pos, mask=None, length=None, hx=None, leading_symbolic=0, beam=1):
         # output from encoder [batch, length_encoder, tag_space]
@@ -697,9 +697,9 @@ class StackPtrNet(nn.Module):
             else:
                 hx = hn[:, b, :].contiguous()
 
-            hids, tids = self._decode_per_sentence(src_encoding[b], arc_c[b], type_c[b], hx, sent_len, beam,
-                                                   leading_symbolic)
-            heads[b] = hids
-            types[b] = tids
+            hids, tids, sent_len = self._decode_per_sentence(src_encoding[b], arc_c[b], type_c[b], hx, sent_len, beam,
+                                                             leading_symbolic)
+            heads[b, :sent_len] = hids
+            types[b, :sent_len] = tids
 
         return heads, types
