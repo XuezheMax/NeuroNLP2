@@ -555,7 +555,7 @@ class StackPtrNet(nn.Module):
             print(type_h.size())
 
             # [num_hyp, length_encoder]
-            out_arc = self.attention(arc_h, arc_c).squeeze(dim=1).squeeze(dim=1)
+            out_arc = self.attention(arc_h, arc_c[beam_index]).squeeze(dim=1).squeeze(dim=1)
             print(out_arc.size())
             # [num_hyp, length_encoder]
             hyp_scores = self.logsoftmax(out_arc)
