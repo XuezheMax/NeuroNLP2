@@ -593,9 +593,6 @@ class StackPtrNet(nn.Module):
                     new_constraints[count] = constraints[base_id]
                     new_constraints[count, child_id] = True
 
-                    print(constraints[base_id])
-                    print(new_constraints[count])
-
                     new_stacked_heads[:t + 1, count] = stacked_heads[:t + 1, base_id]
                     if t + 1 < 2 * length - 1:
                         new_stacked_heads[t + 1, count] = child_id
@@ -607,9 +604,6 @@ class StackPtrNet(nn.Module):
                     hypothesis_scores[count] = new_hyp_score
                     ids.append(id)
                     count += 1
-
-                print('count: %d' % count)
-                raw_input()
 
                 if count == beam:
                     break
@@ -626,15 +620,13 @@ class StackPtrNet(nn.Module):
 
             stacked_heads.copy_(new_stacked_heads)
             constraints = new_constraints
+            print(constraints)
+            raw_input()
 
             # predict types for new hypotheses
             # [num_hyp, type_space]
-            print(base_index)
             hyp_type_c = type_c[child_index]
             hyp_type_h = type_h[base_index]
-            print(hyp_type_h.size())
-            print(hyp_type_c.size())
-            raw_input()
             # compute output for type [num_hyp, num_labels]
             out_type = self.bilinear(hyp_type_h, hyp_type_c)
             # remove the first #leading_symbolic types.
