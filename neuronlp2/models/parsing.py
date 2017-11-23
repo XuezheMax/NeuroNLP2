@@ -571,6 +571,8 @@ class StackPtrNet(nn.Module):
                 if head == child_id:
                     assert constraints[base_id, child_id], 'constrains error: %d, %d' % (base_id, child_id)
                     if child_id != 0:
+                        new_constraints[count] = constraints[base_id]
+
                         new_stacked_heads[:t + 1, count] = stacked_heads[:t + 1, base_id]
                         if t + 1 < 2 * length - 1:
                             new_stacked_heads[t + 1, count] = stacked_heads[t - 1, count]
@@ -582,6 +584,8 @@ class StackPtrNet(nn.Module):
                         ids.append(id)
                         count += 1
                     elif t == 2 * length - 2:
+                        new_constraints[count] = constraints[base_id]
+                        
                         new_stacked_heads[:t + 1, count] = stacked_heads[:t + 1, base_id]
                         children[:t, count] = stacked_heads[1:t + 1, base_id]
                         children[t, count] = child_id
