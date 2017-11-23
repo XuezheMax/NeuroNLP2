@@ -530,7 +530,7 @@ class StackPtrNet(nn.Module):
         new_types = stacked_heads.new(beam, length).zero_()
         num_hyp = 1
         for t in range(2 * length - 1):
-            print(length)
+            print(t)
             # beam_index = torch.arange(0, num_hyp).type_as(src_encoding.data).long()
             beam_index = src_encoding.data.new(num_hyp).zero_().long()
             print(beam_index)
@@ -539,42 +539,26 @@ class StackPtrNet(nn.Module):
             print(heads)
             # [num_hyp, 1, input_size]
             input = src_encoding[beam_index, heads].unsqueeze(1)
-            print(input.size())
             # output [num_hyp, 1, hidden_size]
             # hx [num_direction, num_hyp, hidden_size]
             output, hx = self.decoder(input, hx=hx)
-            print(output.size())
-            print(hx[0].size())
 
             # output size [num_hyp, 1, arc_space]
             arc_h = F.elu(self.arc_h(output))
-            print(arc_h.size())
 
             # output size [num_hyp, type_space]
             type_h = F.elu(self.type_h(output)).squeeze(dim=1)
-            print(type_h.size())
 
             # [num_hyp, length_encoder]
             out_arc = self.attention(arc_h, arc_c[beam_index]).squeeze(dim=1).squeeze(dim=1)
-            print(out_arc.size())
             # [num_hyp, length_encoder]
             hyp_scores = self.logsoftmax(out_arc)
-            print(hyp_scores.size())
             # [num_hyp, length_encoder]
             new_hypothesis_scores = hypothesis_scores[:num_hyp].unsqueeze(1) + hyp_scores.data
-            print(new_hypothesis_scores.size())
             # [num_hyp * length_encoder]
             new_hypothesis_scores, hyp_index = torch.sort(new_hypothesis_scores.view(-1), dim=0, descending=True)
-            print(new_hypothesis_scores.size())
-            print(hyp_index.size())
-            raw_input()
             base_index = hyp_index / length
             child_index = hyp_index % length
-
-            print(hyp_index)
-            print(base_index)
-            print(child_index)
-            raw_input()
 
             count = 0
             ids = []
@@ -604,6 +588,7 @@ class StackPtrNet(nn.Module):
 
             # [num_hyp]
             num_hyp = len(ids)
+            print(ids)
             if num_hyp == 1:
                 index = base_index.new(1).fill_(ids[0])
             else:
@@ -621,6 +606,7 @@ class StackPtrNet(nn.Module):
             hyp_type_h = type_h[base_index]
             print(hyp_type_h.size())
             print(hyp_type_c.size())
+            raw_input()
             # compute output for type [num_hyp, num_labels]
             out_type = self.bilinear(hyp_type_h, hyp_type_c)
             # remove the first #leading_symbolic types.
@@ -644,8 +630,6 @@ class StackPtrNet(nn.Module):
                 hx = (hx, cx)
             else:
                 hx = hx[:, base_index, :]
-            print(hx[0].size())
-            raw_input()
 
         stacked_heads = stacked_heads.cpu().numpy()[:, 0]
         children = children.cpu().numpy()[:, 0]
