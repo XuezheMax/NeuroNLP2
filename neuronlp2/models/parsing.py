@@ -645,7 +645,16 @@ class StackPtrNet(nn.Module):
 
         for b in range(batch):
             sent_len = None if length is None else length[b]
-            hids, tids = self._decode_per_sentence(src_encoding[b], arc_c[b], type_c[b], hn[:, b, :], sent_len, beam,
+            # hack to handle LSTM
+            if isinstance(hn, tuple):
+                hn, cn = hn
+                hx = hn[:, b, :]
+                cx = cn[:, b, :]
+                hx = (hx, cx)
+            else:
+                hx = hn[:, b, :]
+
+            hids, tids = self._decode_per_sentence(src_encoding[b], arc_c[b], type_c[b], hx, sent_len, beam,
                                                    leading_symbolic)
             heads[b] = hids
             types[b] = tids
