@@ -558,10 +558,15 @@ class StackPtrNet(nn.Module):
             print(out_arc.size())
             # [num_hyp, length_encoder]
             hyp_scores = self.logsoftmax(out_arc)
+            print(hyp_scores.size())
             # [num_hyp, length_encoder]
             new_hypothesis_scores = hypothesis_scores.unsqueeze(1) + hyp_scores.data
+            print(new_hypothesis_scores.size())
             # [num_hyp * length_encoder]
             new_hypothesis_scores, hyp_index = torch.sort(new_hypothesis_scores.view(-1), dim=0, descending=True)
+            print(new_hypothesis_scores.size())
+            print(hyp_index.size())
+            raw_input()
             base_index = hyp_index / length
             child_index = hyp_index % length
 
