@@ -571,7 +571,8 @@ class StackPtrNet(nn.Module):
                     if t + 1 < 2 * length - 1:
                         new_stacked_heads[t + 1, count] = child_id
 
-                    children[:t, count] = stacked_heads[1:t + 1, base_id]
+                    if t > 0:
+                        children[:t, count] = stacked_heads[1:t + 1, base_id]
                     children[t, count] = child_id
 
                     hypothesis_scores[count] = new_hyp_score
