@@ -662,6 +662,7 @@ class StackPtrNet(nn.Module):
 
         stacked_heads = stacked_heads.cpu().numpy()[:, 0]
         children = children.cpu().numpy()[:, 0]
+        stacked_types = stacked_types.cpu().numpy()[:, 0]
         heads = np.zeros(length, dtype=np.int32)
         types = np.zeros(length, dtype=np.int32)
         for i in range(2 * length - 1):
