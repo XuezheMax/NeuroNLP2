@@ -644,7 +644,8 @@ class StackPtrNet(nn.Module):
             hyp_types = hyp_types + leading_symbolic
             for i in range(num_hyp):
                 base_id = base_index[i]
-                new_stacked_types[:t, i] = stacked_types[:t, base_id]
+                if t > 0:
+                    new_stacked_types[:t, i] = stacked_types[:t, base_id]
                 new_stacked_types[t, i] = hyp_types[i]
 
             stacked_types.copy_(new_stacked_types)
