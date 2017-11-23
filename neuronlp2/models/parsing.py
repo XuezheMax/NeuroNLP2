@@ -531,7 +531,8 @@ class StackPtrNet(nn.Module):
         num_hyp = 1
         for t in range(2 * length - 1):
             print(length)
-            beam_index = torch.arange(0, num_hyp).type_as(src_encoding.data).long()
+            # beam_index = torch.arange(0, num_hyp).type_as(src_encoding.data).long()
+            beam_index = src_encoding.data.new(num_hyp).zero_().long()
             print(beam_index)
             # [num_hyp]
             heads = stacked_heads[t, :num_hyp]
