@@ -530,23 +530,32 @@ class StackPtrNet(nn.Module):
         new_types = stacked_heads.new(beam, length).zero_()
         num_hyp = 1
         for t in range(2 * length - 1):
+            print(length)
             beam_index = torch.arange(0, num_hyp).type_as(src_encoding.data).long()
+            print(beam_index)
             # [num_hyp]
             heads = stacked_heads[t, :num_hyp]
+            print(heads)
             # [num_hyp, 1, input_size]
             input = src_encoding[beam_index, heads].unsqueeze(1)
+            print(input.size())
             # output [num_hyp, 1, hidden_size]
             # hx [num_direction, num_hyp, hidden_size]
             output, hx = self.decoder(input, hx=hx)
+            print(output.size())
+            print(hx.size())
 
             # output size [num_hyp, 1, arc_space]
             arc_h = F.elu(self.arc_h(output))
+            print(arc_h.size())
 
             # output size [num_hyp, type_space]
             type_h = F.elu(self.type_h(output)).squeeze(dim=1)
+            print(type_h.size())
 
             # [num_hyp, length_encoder]
             out_arc = self.attention(arc_h, arc_c).squeeze(dim=1).squeeze(dim=1)
+            print(out_arc.size())
             # [num_hyp, length_encoder]
             hyp_scores = self.logsoftmax(out_arc)
             # [num_hyp, length_encoder]
@@ -556,10 +565,10 @@ class StackPtrNet(nn.Module):
             base_index = hyp_index / length
             child_index = hyp_index % length
 
-            print(length)
             print(hyp_index)
             print(base_index)
             print(child_index)
+            raw_input()
 
             count = 0
             ids = []
