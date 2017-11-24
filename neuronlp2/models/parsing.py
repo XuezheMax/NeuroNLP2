@@ -518,15 +518,15 @@ class StackPtrNet(nn.Module):
         else:
             hx = hx.unsqueeze(1)
 
-        stacked_heads = torch.zeros(2 * length - 1, beam).type_as(src_encoding.data).long()
-        children = stacked_heads.new(stacked_heads.size()).zero_()
-        stacked_types = stacked_heads.new(stacked_heads.size()).zero_()
+        stacked_heads = [[0] for _ in range(beam)]
+        children = torch.zeros(beam, 2 * length - 1).type_as(src_encoding.data).long()
+        stacked_types = children.new(children.size()).zero_()
         hypothesis_scores = src_encoding.data.new(beam).zero_()
         constraints = np.zeros([beam, length], dtype=np.bool)
         constraints[:, 0] = True
 
         # temporal tensors for each step.
-        new_stacked_heads = stacked_heads.new(stacked_heads.size()).zero_()
+        new_stacked_heads = [[] for _ in range(beam)]
         new_children = children.new(children.size()).zero_()
         new_stacked_types = stacked_types.new(stacked_types.size()).zero_()
         num_hyp = 1
@@ -535,7 +535,7 @@ class StackPtrNet(nn.Module):
             # beam_index = torch.arange(0, num_hyp).type_as(src_encoding.data).long()
             beam_index = src_encoding.data.new(num_hyp).zero_().long()
             # [num_hyp]
-            heads = stacked_heads[t, :num_hyp]
+            heads = torch.LongTensor([stacked_heads[i][-1] for i in range(num_hyp)]).type_as(children)
             print('heads')
             print(heads)
             # [num_hyp, 1, input_size]
@@ -568,7 +568,7 @@ class StackPtrNet(nn.Module):
             print(base_index)
             print(child_index)
 
-            count = 0
+            cc = 0
             ids = []
             new_constraints = np.zeros([beam, length], dtype=np.bool)
             for id in range(num_hyp * length):
@@ -579,34 +579,32 @@ class StackPtrNet(nn.Module):
                 if head == child_id:
                     assert constraints[base_id, child_id], 'constrains error: %d, %d' % (base_id, child_id)
                     if child_id != 0 or t + 1 == num_step:
-                        new_constraints[count] = constraints[base_id]
+                        new_constraints[cc] = constraints[base_id]
 
-                        new_stacked_heads[:, count] = stacked_heads[:, base_id]
-                        if t + 1 < num_step:
-                            new_stacked_heads[t + 1, count] = stacked_heads[t - 1, count]
+                        new_stacked_heads[cc] = [stacked_heads[base_id][i] for i in range(len(stacked_heads[base_id]))]
+                        new_stacked_heads[cc].pop()
 
-                        new_children[:, count] = children[:, base_id]
-                        new_children[t, count] = child_id
+                        new_children[cc] = children[base_id]
+                        new_children[cc, t] = child_id
 
-                        hypothesis_scores[count] = new_hyp_score
+                        hypothesis_scores[cc] = new_hyp_score
                         ids.append(id)
-                        count += 1
+                        cc += 1
                 elif not constraints[base_id, child_id]:
-                    new_constraints[count] = constraints[base_id]
-                    new_constraints[count, child_id] = True
+                    new_constraints[cc] = constraints[base_id]
+                    new_constraints[cc, child_id] = True
 
-                    new_stacked_heads[:, count] = stacked_heads[:, base_id]
-                    if t + 1 < num_step:
-                        new_stacked_heads[t + 1, count] = child_id
+                    new_stacked_heads[cc] = [stacked_heads[base_id][i] for i in range(len(stacked_heads[base_id]))]
+                    new_stacked_heads[cc].append(child_id)
 
-                    new_children[:, count] = children[:, base_id]
-                    new_children[t, count] = child_id
+                    new_children[cc] = children[base_id]
+                    new_children[cc, t] = child_id
 
-                    hypothesis_scores[count] = new_hyp_score
+                    hypothesis_scores[cc] = new_hyp_score
                     ids.append(id)
-                    count += 1
+                    cc += 1
 
-                if count == beam:
+                if cc == beam:
                     break
 
             # [num_hyp]
@@ -631,10 +629,10 @@ class StackPtrNet(nn.Module):
             hyp_types = hyp_types + leading_symbolic
             for i in range(num_hyp):
                 base_id = base_index[i]
-                new_stacked_types[:, i] = stacked_types[:, base_id]
-                new_stacked_types[t, i] = hyp_types[i]
+                new_stacked_types[i] = stacked_types[base_id]
+                new_stacked_types[i, t] = hyp_types[i]
 
-            stacked_heads.copy_(new_stacked_heads)
+            stacked_heads = [[new_stacked_heads[i][j] for j in range(len(new_stacked_heads[i]))] for i in range(num_hyp)]
             constraints = new_constraints
             children.copy_(new_children)
             stacked_types.copy_(new_stacked_types)
@@ -653,18 +651,22 @@ class StackPtrNet(nn.Module):
             else:
                 hx = hx[:, base_index, :]
 
-        stacked_heads = stacked_heads.cpu().numpy()[:, 0]
-        children = children.cpu().numpy()[:, 0]
-        stacked_types = stacked_types.cpu().numpy()[:, 0]
+        children = children.cpu().numpy()[0]
+        stacked_types = stacked_types.cpu().numpy()[0]
         heads = np.zeros(length, dtype=np.int32)
         types = np.zeros(length, dtype=np.int32)
+        stack = [0]
         for i in range(num_step):
-            head = stacked_heads[i]
+            head = stack[-1]
             child = children[i]
             type = stacked_types[i]
             if head != child:
                 heads[child] = head
                 types[child] = type
+                stack.append(child)
+            else:
+                stack.pop()
+
         return heads, types, length
 
     def decode(self, input_word, input_char, input_pos, mask=None, length=None, hx=None, leading_symbolic=0, beam=1):
