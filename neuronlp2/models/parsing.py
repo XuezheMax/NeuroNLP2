@@ -407,9 +407,6 @@ class StackPtrNet(nn.Module):
         src_encoding = src_encoding[batch_index, heads_stack.data.t()].transpose(0, 1)
         # apply dropout
         input = self.dropout_in(src_encoding)
-        if display:
-            print('input_loss:')
-            print(input)
         # prepare packed_sequence
         if length_d is not None:
             seq_input, hx, rev_order, mask_d = utils.prepare_rnn_seq(input, length_d, hx=hx, masks=mask_d,
@@ -420,6 +417,9 @@ class StackPtrNet(nn.Module):
         else:
             # output from rnn [batch, length_decoder, hidden_size]
             output, hn = self.decoder(input, hx=hx)
+        if display:
+            print('output_loss:')
+            print(output)
         output = self.dropout_rnn(output)
 
         # output size [batch, length_decoder, arc_space]
@@ -566,11 +566,11 @@ class StackPtrNet(nn.Module):
             heads = torch.LongTensor([stacked_heads[i][-1] for i in range(num_hyp)]).type_as(children)
             # [num_hyp, 1, input_size]
             input = src_encoding[beam_index, heads].unsqueeze(1)
-            print('input_decode:')
-            print(input)
             # output [num_hyp, 1, hidden_size]
             # hx [num_direction, num_hyp, hidden_size]
             output, hx = self.decoder(input, hx=hx)
+            print('out_decode')
+            print(output)
 
             # output size [num_hyp, 1, arc_space]
             arc_h = F.elu(self.arc_h(output))
