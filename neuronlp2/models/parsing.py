@@ -333,10 +333,11 @@ class StackPtrNet(nn.Module):
         self.encoder = RNN(word_dim + num_filters + pos_dim, hidden_size, num_layers=num_layers,
                            batch_first=True, bidirectional=True, dropout=p_rnn)
 
-        self.decoder = RNN(word_dim + num_filters + pos_dim, hidden_size * 2, num_layers=num_layers,
+        self.decoder = RNN(word_dim + num_filters + pos_dim, hidden_size, num_layers=num_layers,
                            batch_first=True, bidirectional=False, dropout=p_rnn)
 
-        out_dim = hidden_size * 2
+        self.hx_dense = nn.Linear(2 * hidden_size, hidden_size)
+        out_dim = hidden_size
         self.arc_h = nn.Linear(out_dim, arc_space)  # arc dense for decoder
         self.arc_c = nn.Linear(out_dim, arc_space)  # arc dense for encoder
         self.attention = Attention(arc_space, arc_space, 1, biaffine=biaffine)
@@ -430,6 +431,31 @@ class StackPtrNet(nn.Module):
     def forward(self, input_word, input_char, input_pos, mask=None, length=None, hx=None):
         raise RuntimeError('Stack Pointer Network does not implement forward')
 
+    def _transform_decoder_init_state(self, hn):
+        if isinstance(hn, tuple):
+            hn, cn = hn
+            # hn [2 * num_layers, batch, hidden_size]
+            num_dir, batch, hidden_size = cn.size()
+            # first convert cn t0 [batch, 2 * num_layers, hidden_size]
+            cn = cn.transpose(0, 1).contiguous()
+            # then view to [batch, num_layers, 2 * hidden_size] --> [num_layer, batch, 2 * num_layers]
+            cn = cn.view(batch, num_dir / 2, 2 * hidden_size).transpose(0, 1)
+            # take hx_dense to [num_layers, batch, hidden_size]
+            cn = self.hx_dense(cn)
+            # hn is tanh(cn)
+            hn = F.tanh(cn)
+            hn = (hn, cn)
+        else:
+            # hn [2 * num_layers, batch, hidden_size]
+            num_dir, batch, hidden_size = hn.size()
+            # first convert hn t0 [batch, 2 * num_layers, hidden_size]
+            hn = hn.transpose(0, 1).contiguous()
+            # then view to [batch, num_layers, 2 * hidden_size] --> [num_layer, batch, 2 * num_layers]
+            hn = hn.view(batch, num_dir / 2, 2 * hidden_size).transpose(0, 1)
+            # take hx_dense to [num_layers, batch, hidden_size]
+            hn = F.tanh(self.hx_dense(hn))
+        return hn
+
     def loss(self, input_word, input_char, input_pos, stacked_heads, children, stacked_types,
              mask_e=None, length_e=None, mask_d=None, length_d=None, hx=None, display=False):
 
@@ -438,6 +464,8 @@ class StackPtrNet(nn.Module):
                                                                               mask_e=mask_e, length_e=length_e, hx=hx)
 
         batch, max_len_e, _ = arc_c.size()
+        # transform hn to [num_layers, batch, hidden_size]
+        hn = self._transform_decoder_init_state(hn)
         # output from decoder [batch, length_decoder, tag_space]
         arc_h, type_h, _, mask_d, _ = self._get_decoder_output(src_encoding, stacked_heads, hn,
                                                                mask_d=mask_d, length_d=length_d, display=display)
@@ -690,6 +718,7 @@ class StackPtrNet(nn.Module):
         # hn [num_direction, batch, hidden_size]
         src_encoding, arc_c, type_c, hn, mask, length = self._get_encoder_output(input_word, input_char, input_pos,
                                                                                    mask_e=mask, length_e=length, hx=hx)
+        hn = self._transform_decoder_init_state(hn)
         batch, max_len_e, _ = src_encoding.size()
 
         heads = np.zeros([batch, max_len_e], dtype=np.int32)
