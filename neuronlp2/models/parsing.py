@@ -337,13 +337,12 @@ class StackPtrNet(nn.Module):
                            batch_first=True, bidirectional=False, dropout=p_rnn)
 
         self.hx_dense = nn.Linear(2 * hidden_size, hidden_size)
-        out_dim = hidden_size
-        self.arc_h = nn.Linear(out_dim, arc_space)  # arc dense for decoder
-        self.arc_c = nn.Linear(out_dim, arc_space)  # arc dense for encoder
+        self.arc_h = nn.Linear(hidden_size, arc_space)  # arc dense for decoder
+        self.arc_c = nn.Linear(hidden_size * 2, arc_space)  # arc dense for encoder
         self.attention = Attention(arc_space, arc_space, 1, biaffine=biaffine)
 
-        self.type_h = nn.Linear(out_dim, type_space)  # type dense for decoder
-        self.type_c = nn.Linear(out_dim, type_space)  # type dense for encoder
+        self.type_h = nn.Linear(hidden_size, type_space)  # type dense for decoder
+        self.type_c = nn.Linear(hidden_size * 2, type_space)  # type dense for encoder
         self.bilinear = BiLinear(type_space, type_space, self.num_labels)
         self.logsoftmax = nn.LogSoftmax()
 
