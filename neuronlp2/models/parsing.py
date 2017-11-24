@@ -407,6 +407,8 @@ class StackPtrNet(nn.Module):
         src_encoding = src_encoding[batch_index, heads_stack.data.t()].transpose(0, 1)
         # apply dropout
         input = self.dropout_in(src_encoding)
+        print('input_loss:')
+        print(input)
         # prepare packed_sequence
         if length_d is not None:
             seq_input, hx, rev_order, mask_d = utils.prepare_rnn_seq(input, length_d, hx=hx, masks=mask_d,
@@ -563,6 +565,8 @@ class StackPtrNet(nn.Module):
             heads = torch.LongTensor([stacked_heads[i][-1] for i in range(num_hyp)]).type_as(children)
             # [num_hyp, 1, input_size]
             input = src_encoding[beam_index, heads].unsqueeze(1)
+            print('input_decode:')
+            print(input)
             # output [num_hyp, 1, hidden_size]
             # hx [num_direction, num_hyp, hidden_size]
             output, hx = self.decoder(input, hx=hx)
@@ -688,7 +692,7 @@ class StackPtrNet(nn.Module):
         # arc_c [batch, length, arc_space]
         # type_c [batch, length, type_space]
         # hn [num_direction, batch, hidden_size]
-        src_encoding, arc_c, type_c, hn, mask_e, length = self._get_encoder_output(input_word, input_char, input_pos,
+        src_encoding, arc_c, type_c, hn, mask, length = self._get_encoder_output(input_word, input_char, input_pos,
                                                                                    mask_e=mask, length_e=length, hx=hx)
         batch, max_len_e, _ = src_encoding.size()
 
