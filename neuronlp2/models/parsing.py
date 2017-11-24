@@ -393,7 +393,7 @@ class StackPtrNet(nn.Module):
 
         return src_encoding, arc_c, type_c, hn, mask_e, length_e
 
-    def _get_decoder_output(self, src_encoding, heads_stack, hx, mask_d=None, length_d=None):
+    def _get_decoder_output(self, src_encoding, heads_stack, hx, mask_d=None, length_d=None, display=False):
         # hack length from mask
         # we do not hack mask from length for special reasons.
         # Thus, always provide mask if it is necessary.
@@ -407,8 +407,9 @@ class StackPtrNet(nn.Module):
         src_encoding = src_encoding[batch_index, heads_stack.data.t()].transpose(0, 1)
         # apply dropout
         input = self.dropout_in(src_encoding)
-        print('input_loss:')
-        print(input)
+        if display:
+            print('input_loss:')
+            print(input)
         # prepare packed_sequence
         if length_d is not None:
             seq_input, hx, rev_order, mask_d = utils.prepare_rnn_seq(input, length_d, hx=hx, masks=mask_d,
@@ -442,7 +443,7 @@ class StackPtrNet(nn.Module):
         batch, max_len_e, _ = arc_c.size()
         # output from decoder [batch, length_decoder, tag_space]
         arc_h, type_h, _, mask_d, _ = self._get_decoder_output(src_encoding, stacked_heads, hn,
-                                                               mask_d=mask_d, length_d=length_d)
+                                                               mask_d=mask_d, length_d=length_d, display=display)
         _, max_len_d, _ = arc_h.size()
 
         if mask_d is not None and children.size(1) != mask_d.size(1):
