@@ -536,8 +536,6 @@ class StackPtrNet(nn.Module):
             beam_index = src_encoding.data.new(num_hyp).zero_().long()
             # [num_hyp]
             heads = torch.LongTensor([stacked_heads[i][-1] for i in range(num_hyp)]).type_as(children)
-            print('heads')
-            print(heads)
             # [num_hyp, 1, input_size]
             input = src_encoding[beam_index, heads].unsqueeze(1)
             # output [num_hyp, 1, hidden_size]
@@ -554,19 +552,12 @@ class StackPtrNet(nn.Module):
             out_arc = self.attention(arc_h, arc_c[beam_index]).squeeze(dim=1).squeeze(dim=1)
             # [num_hyp, length_encoder]
             hyp_scores = self.logsoftmax(out_arc)
-            print("hyp score:")
-            print(hyp_scores)
             # [num_hyp, length_encoder]
             new_hypothesis_scores = hypothesis_scores[:num_hyp].unsqueeze(1) + hyp_scores.data
-            print(new_hypothesis_scores)
             # [num_hyp * length_encoder]
             new_hypothesis_scores, hyp_index = torch.sort(new_hypothesis_scores.view(-1), dim=0, descending=True)
-            print(new_hypothesis_scores)
             base_index = hyp_index / length
             child_index = hyp_index % length
-            print('index:')
-            print(base_index)
-            print(child_index)
 
             cc = 0
             ids = []
@@ -636,11 +627,6 @@ class StackPtrNet(nn.Module):
             constraints = new_constraints
             children.copy_(new_children)
             stacked_types.copy_(new_stacked_types)
-            print('state:')
-            print(stacked_heads)
-            print(children)
-            print(stacked_types)
-            raw_input()
             # hx [num_directions, num_hyp, hidden_size]
             # hack to handle LSTM
             if isinstance(hx, tuple):
