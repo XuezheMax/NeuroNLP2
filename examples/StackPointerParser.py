@@ -271,8 +271,8 @@ def main():
             train_err_arc_non_leaf += loss_arc_non_leaf.data[0] * num_non_leaf
 
             train_err_type += loss_type.data[0] * num
-            train_err_arc_leaf += loss_type_leaf.data[0] * num_leaf
-            train_err_arc_non_leaf += loss_type_non_leaf.data[0] * num_non_leaf
+            train_err_type_leaf += loss_type_leaf.data[0] * num_leaf
+            train_err_type_non_leaf += loss_type_non_leaf.data[0] * num_non_leaf
 
             train_total += num
             train_total_leaf += num_leaf

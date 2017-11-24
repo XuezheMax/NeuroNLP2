@@ -507,8 +507,8 @@ class StackPtrNet(nn.Module):
         loss_type_leaf = loss_type * mask_leaf
         loss_type_non_leaf = loss_type * mask_non_leaf
 
-        return -loss_arc.sum() / num, -loss_arc_leaf.sum() / num_leaf, loss_arc_non_leaf.sum() / num_non_leaf, \
-               -loss_type.sum() / num, loss_type_leaf.sum() / num_leaf, loss_type_non_leaf.sum() / num_non_leaf, \
+        return -loss_arc.sum() / num, -loss_arc_leaf.sum() / num_leaf, -loss_arc_non_leaf.sum() / num_non_leaf, \
+               -loss_type.sum() / num, -loss_type_leaf.sum() / num_leaf, -loss_type_non_leaf.sum() / num_non_leaf, \
                num, num_leaf, num_non_leaf
 
     def _decode_per_sentence(self, src_encoding, arc_c, type_c, hx, length, beam, leading_symbolic):
