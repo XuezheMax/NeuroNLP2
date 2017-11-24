@@ -444,6 +444,7 @@ class StackPtrNet(nn.Module):
         _, max_len_d, _ = arc_h.size()
 
         if mask_d is not None and children.size(1) != mask_d.size(1):
+            stacked_heads = stacked_heads[:, :max_len_d]
             children = children[:, :max_len_d]
             stacked_types = stacked_types[:, :max_len_d]
 
@@ -472,24 +473,43 @@ class StackPtrNet(nn.Module):
         # then convert back to [batch, length_decoder, num_labels]
         loss_type = self.logsoftmax(out_type.transpose(0, 2)).transpose(0, 2)
 
+        # get leaf and non-leaf mask
+        # shape = [batch, length_decoder]
+        mask_leaf = torch.eq(stacked_heads, children).float()
+        mask_non_leaf = (1.0 - mask_leaf)
+
         # mask invalid position to 0 for sum loss
         if mask_e is not None:
             loss_arc = loss_arc * mask_d.unsqueeze(2) * mask_e.unsqueeze(1)
             loss_type = loss_type * mask_d.unsqueeze(2)
+            mask_leaf = mask_leaf * mask_d
+            mask_non_leaf = mask_non_leaf * mask_d
+
             # number of valid positions which contribute to loss (remove the symbolic head for each sentence.
             num = mask_d.sum()
+            num_leaf = mask_leaf.sum()
+            num_non_leaf = mask_non_leaf.sum()
         else:
             # number of valid positions which contribute to loss (remove the symbolic head for each sentence.
             num = float(max_len_d * batch)
+            num_leaf = max_len_e
+            num_non_leaf = max_len_e - 1
 
         # first create index matrix [length, batch]
         head_index = torch.arange(0, max_len_d).view(max_len_d, 1).expand(max_len_d, batch)
         head_index = head_index.type_as(out_arc.data).long()
-        # [length_decoder, batch]
-        loss_arc = loss_arc[batch_index, head_index, children.data.t()]
-        loss_type = loss_type[batch_index, head_index, stacked_types.data.t()]
+        # [batch, length_decoder]
+        loss_arc = loss_arc[batch_index, head_index, children.data.t()].transpose(0, 1)
+        loss_arc_leaf = loss_arc * mask_leaf
+        loss_arc_non_leaf = loss_arc * mask_non_leaf
 
-        return -loss_arc.sum() / num, -loss_type.sum() / num
+        loss_type = loss_type[batch_index, head_index, stacked_types.data.t()].transpose(0, 1)
+        loss_type_leaf = loss_type * mask_leaf
+        loss_type_non_leaf = loss_type * mask_non_leaf
+
+        return -loss_arc.sum() / num, -loss_arc_leaf.sum() / num_leaf, loss_arc_non_leaf.sum() / num_non_leaf, \
+               -loss_type.sum() / num, loss_type_leaf.sum() / num_leaf, loss_type_non_leaf.sum() / num_non_leaf, \
+               num, num_leaf, num_non_leaf
 
     def _decode_per_sentence(self, src_encoding, arc_c, type_c, hx, length, beam, leading_symbolic):
         # src_encoding [length, input_size]
