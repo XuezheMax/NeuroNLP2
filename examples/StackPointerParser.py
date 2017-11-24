@@ -316,7 +316,7 @@ def main():
         dev_lcorr_nopunc = 0.0
         dev_total = 0
         dev_total_nopunc = 0
-        for batch in conllx_stacked_data.iterate_batch_stacked_variable(data_dev, 1):
+        for batch in conllx_stacked_data.iterate_batch_stacked_variable(data_dev, 2):
             input_encoder, _ = batch
             word, char, pos, heads, types, masks, lengths = input_encoder
             stacked_heads, children, stacked_types, masks_d, lengths_d = input_decoder
