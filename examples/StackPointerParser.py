@@ -316,9 +316,13 @@ def main():
         dev_lcorr_nopunc = 0.0
         dev_total = 0
         dev_total_nopunc = 0
-        for batch in conllx_stacked_data.iterate_batch_stacked_variable(data_dev, batch_size):
+        for batch in conllx_stacked_data.iterate_batch_stacked_variable(data_dev, 1):
             input_encoder, _ = batch
             word, char, pos, heads, types, masks, lengths = input_encoder
+            stacked_heads, children, stacked_types, masks_d, lengths_d = input_decoder
+            network.loss(word, char, pos, stacked_heads, children, stacked_types,
+                         mask_e=masks, length_e=lengths, mask_d=masks_d,
+                         length_d=lengths_d, display=True)
             heads_pred, types_pred = network.decode(word, char, pos, mask=masks, length=lengths, beam=beam,
                                                     leading_symbolic=conllx_stacked_data.NUM_SYMBOLIC_TAGS)
             word = word.data.cpu().numpy()

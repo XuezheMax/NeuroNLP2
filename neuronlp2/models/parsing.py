@@ -431,7 +431,7 @@ class StackPtrNet(nn.Module):
         raise RuntimeError('Stack Pointer Network does not implement forward')
 
     def loss(self, input_word, input_char, input_pos, stacked_heads, children, stacked_types,
-             mask_e=None, length_e=None, mask_d=None, length_d=None, hx=None):
+             mask_e=None, length_e=None, mask_d=None, length_d=None, hx=None, display=False):
 
         # output from encoder [batch, length_encoder, tag_space]
         src_encoding, arc_c, type_c, hn, mask_e, _ = self._get_encoder_output(input_word, input_char, input_pos,
@@ -469,6 +469,11 @@ class StackPtrNet(nn.Module):
         # first convert out_arc to [length_encoder, length_decoder, batch] for log_softmax computation.
         # then convert back to [batch, length_decoder, length_encoder]
         loss_arc = self.logsoftmax(out_arc.transpose(0, 2)).transpose(0, 2)
+        if display:
+            print(children)
+            print(stacked_heads)
+            print(loss_arc)
+            raw_input()
         # convert out_type to [num_labels, length_decoder, batch] for log_softmax computation.
         # then convert back to [batch, length_decoder, num_labels]
         loss_type = self.logsoftmax(out_type.transpose(0, 2)).transpose(0, 2)
@@ -572,6 +577,8 @@ class StackPtrNet(nn.Module):
             out_arc = self.attention(arc_h, arc_c[beam_index]).squeeze(dim=1).squeeze(dim=1)
             # [num_hyp, length_encoder]
             hyp_scores = self.logsoftmax(out_arc)
+            print(hyp_scores)
+            raw_input()
             # [num_hyp, length_encoder]
             new_hypothesis_scores = hypothesis_scores[:num_hyp].unsqueeze(1) + hyp_scores.data
             # [num_hyp * length_encoder]
