@@ -536,6 +536,8 @@ class StackPtrNet(nn.Module):
             beam_index = src_encoding.data.new(num_hyp).zero_().long()
             # [num_hyp]
             heads = stacked_heads[t, :num_hyp]
+            print('heads')
+            print(heads)
             # [num_hyp, 1, input_size]
             input = src_encoding[beam_index, heads].unsqueeze(1)
             # output [num_hyp, 1, hidden_size]
@@ -552,12 +554,19 @@ class StackPtrNet(nn.Module):
             out_arc = self.attention(arc_h, arc_c[beam_index]).squeeze(dim=1).squeeze(dim=1)
             # [num_hyp, length_encoder]
             hyp_scores = self.logsoftmax(out_arc)
+            print("hyp score:")
+            print(hyp_scores)
             # [num_hyp, length_encoder]
             new_hypothesis_scores = hypothesis_scores[:num_hyp].unsqueeze(1) + hyp_scores.data
+            print(new_hypothesis_scores)
             # [num_hyp * length_encoder]
             new_hypothesis_scores, hyp_index = torch.sort(new_hypothesis_scores.view(-1), dim=0, descending=True)
+            print(new_hypothesis_scores)
             base_index = hyp_index / length
             child_index = hyp_index % length
+            print('index:')
+            print(base_index)
+            print(child_index)
 
             count = 0
             ids = []
@@ -586,7 +595,7 @@ class StackPtrNet(nn.Module):
                     new_constraints[count] = constraints[base_id]
                     new_constraints[count, child_id] = True
 
-                    new_stacked_heads[:t + 1, count] = stacked_heads[:t + 1, base_id]
+                    new_stacked_heads[:, count] = stacked_heads[:, base_id]
                     if t + 1 < num_step:
                         new_stacked_heads[t + 1, count] = child_id
 
@@ -629,6 +638,11 @@ class StackPtrNet(nn.Module):
             constraints = new_constraints
             children.copy_(new_children)
             stacked_types.copy_(new_stacked_types)
+            print('state:')
+            print(stacked_heads)
+            print(children)
+            print(stacked_types)
+            raw_input()
             # hx [num_directions, num_hyp, hidden_size]
             # hack to handle LSTM
             if isinstance(hx, tuple):
