@@ -232,14 +232,10 @@ def main():
     for epoch in range(1, num_epochs + 1):
         print('Epoch %d (%s(%s), learning rate=%.4f, decay rate=%.4f (schedule=%d)): ' % (
             epoch, mode, args.dropout, lr, decay_rate, schedule))
-        train_err = 0.
-        train_err_arc = 0.
         train_err_arc_leaf = 0.
         train_err_arc_non_leaf = 0.
-        train_err_type = 0.
         train_err_type_leaf = 0.
         train_err_type_non_leaf = 0.
-        train_total = 0.
         train_total_leaf = 0.
         train_total_non_leaf = 0.
         start_time = time.time()
@@ -251,30 +247,27 @@ def main():
             word, char, pos, heads, types, masks_e, lengths_e = input_encoder
             stacked_heads, children, stacked_types, masks_d, lengths_d = input_decoder
             optim.zero_grad()
-            loss_arc, loss_arc_leaf, loss_arc_non_leaf, \
-            loss_type, loss_type_leaf, loss_type_non_leaf, \
-            num, num_leaf, num_non_leaf = network.loss(word, char, pos, stacked_heads, children, stacked_types,
+            loss_arc_leaf, loss_arc_non_leaf, \
+            loss_type_leaf, loss_type_non_leaf, \
+            num_leaf, num_non_leaf = network.loss(word, char, pos, stacked_heads, children, stacked_types,
                                                        mask_e=masks_e, length_e=lengths_e, mask_d=masks_d,
                                                        length_d=lengths_d)
+            loss_arc = loss_arc_leaf + loss_arc_non_leaf
+            loss_type = loss_type_leaf + loss_type_non_leaf
             loss = loss_arc + loss_type
             loss.backward()
             optim.step()
 
-            num = num.data[0]
             num_leaf = num_leaf.data[0]
             num_non_leaf = num_non_leaf.data[0]
 
-            train_err += loss.data[0] * num
 
-            train_err_arc += loss_arc.data[0] * num
             train_err_arc_leaf += loss_arc_leaf.data[0] * num_leaf
             train_err_arc_non_leaf += loss_arc_non_leaf.data[0] * num_non_leaf
 
-            train_err_type += loss_type.data[0] * num
             train_err_type_leaf += loss_type_leaf.data[0] * num_leaf
             train_err_type_non_leaf += loss_type_non_leaf.data[0] * num_non_leaf
 
-            train_total += num
             train_total_leaf += num_leaf
             train_total_non_leaf += num_non_leaf
 
@@ -286,12 +279,17 @@ def main():
                 sys.stdout.write("\b" * num_back)
                 sys.stdout.write(" " * num_back)
                 sys.stdout.write("\b" * num_back)
-                log_info = 'train: %d/%d loss: %.4f (%.4f, %.4f), arc: %.4f (%.4f, %.4f), type: %.4f (%.4f, %.4f), time left (estimated): %.2fs' % (
-                    batch, num_batches, train_err / train_total,
-                    train_err_arc_leaf / train_total_leaf + train_err_type_leaf / train_total_leaf,
-                    train_err_arc_non_leaf / train_total_non_leaf + train_err_type_non_leaf / train_total_non_leaf,
-                    train_err_arc / train_total, train_err_arc_leaf / train_total_leaf, train_err_arc_non_leaf / train_total_non_leaf,
-                    train_err_type / train_total, train_err_type_leaf / train_total_leaf, train_err_type_non_leaf / train_total_non_leaf, time_left)
+                err_arc_leaf = train_err_arc_leaf / train_total_leaf
+                err_arc_non_leaf = train_err_arc_non_leaf / train_total_non_leaf
+                err_arc = err_arc_leaf + err_arc_non_leaf
+
+                err_type_leaf = train_err_type_leaf / train_total_leaf
+                err_type_non_leaf = train_err_type_non_leaf / train_total_non_leaf
+                err_type = err_type_leaf + err_type_non_leaf
+                log_info = 'train: %d/%d loss (leaf, non_leaf), arc: %.4f (%.4f, %.4f), ' \
+                           'type: %.4f (%.4f, %.4f), time left (estimated): %.2fs' % (
+                    batch, num_batches, err_arc, err_arc_leaf, err_arc_non_leaf,
+                    err_type, err_type_leaf, err_type_non_leaf, time_left)
                 sys.stdout.write(log_info)
                 sys.stdout.flush()
                 num_back = len(log_info)
@@ -299,8 +297,15 @@ def main():
         sys.stdout.write("\b" * num_back)
         sys.stdout.write(" " * num_back)
         sys.stdout.write("\b" * num_back)
-        print('train: %d loss: %.4f, arc: %.4f, type: %.4f, time: %.2fs' % (
-            num_batches, train_err / train_total, train_err_arc / train_total, train_err_type / train_total,
+        err_arc_leaf = train_err_arc_leaf / train_total_leaf
+        err_arc_non_leaf = train_err_arc_non_leaf / train_total_non_leaf
+        err_arc = err_arc_leaf + err_arc_non_leaf
+
+        err_type_leaf = train_err_type_leaf / train_total_leaf
+        err_type_non_leaf = train_err_type_non_leaf / train_total_non_leaf
+        err_type = err_type_leaf + err_type_non_leaf
+        print('train: %d loss (leaf, non_leaf), arc: %.4f (%.4f, %.4f), type: %.4f (%.4f, %.4f), time: %.2fs' % (
+            num_batches, err_arc, err_arc_leaf, err_arc_non_leaf, err_type, err_type_leaf, err_type_non_leaf,
             time.time() - start_time))
 
         # evaluate performance on dev data

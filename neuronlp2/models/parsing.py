@@ -513,12 +513,10 @@ class StackPtrNet(nn.Module):
             mask_non_leaf = mask_non_leaf * mask_d
 
             # number of valid positions which contribute to loss (remove the symbolic head for each sentence.
-            num = mask_d.sum()
             num_leaf = mask_leaf.sum()
             num_non_leaf = mask_non_leaf.sum()
         else:
             # number of valid positions which contribute to loss (remove the symbolic head for each sentence.
-            num = float(max_len_d * batch)
             num_leaf = max_len_e
             num_non_leaf = max_len_e - 1
 
@@ -534,9 +532,9 @@ class StackPtrNet(nn.Module):
         loss_type_leaf = loss_type * mask_leaf
         loss_type_non_leaf = loss_type * mask_non_leaf
 
-        return -loss_arc.sum() / num, -loss_arc_leaf.sum() / num_leaf, -loss_arc_non_leaf.sum() / num_non_leaf, \
-               -loss_type.sum() / num, -loss_type_leaf.sum() / num_leaf, -loss_type_non_leaf.sum() / num_non_leaf, \
-               num, num_leaf, num_non_leaf
+        return -loss_arc_leaf.sum() / num_leaf, -loss_arc_non_leaf.sum() / num_non_leaf, \
+               -loss_type_leaf.sum() / num_leaf, -loss_type_non_leaf.sum() / num_non_leaf, \
+               num_leaf, num_non_leaf
 
     def _decode_per_sentence(self, src_encoding, arc_c, type_c, hx, length, beam, leading_symbolic):
         # src_encoding [length, input_size]
