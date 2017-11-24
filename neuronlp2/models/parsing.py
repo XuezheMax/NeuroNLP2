@@ -418,8 +418,8 @@ class StackPtrNet(nn.Module):
             # output from rnn [batch, length_decoder, hidden_size]
             output, hn = self.decoder(input, hx=hx)
         if display:
-            print('output_loss:')
-            print(output)
+            print('hx_loss:')
+            print(hx)
         output = self.dropout_rnn(output)
 
         # output size [batch, length_decoder, arc_space]
@@ -568,9 +568,9 @@ class StackPtrNet(nn.Module):
             input = src_encoding[beam_index, heads].unsqueeze(1)
             # output [num_hyp, 1, hidden_size]
             # hx [num_direction, num_hyp, hidden_size]
+            print('hx_decode')
+            print(hx)
             output, hx = self.decoder(input, hx=hx)
-            print('out_decode')
-            print(output)
 
             # output size [num_hyp, 1, arc_space]
             arc_h = F.elu(self.arc_h(output))
