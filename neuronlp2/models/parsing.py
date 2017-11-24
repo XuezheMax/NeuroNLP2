@@ -333,8 +333,8 @@ class StackPtrNet(nn.Module):
         self.encoder = RNN(word_dim + num_filters + pos_dim, hidden_size, num_layers=num_layers,
                            batch_first=True, bidirectional=True, dropout=p_rnn)
 
-        self.decoder = RNN(word_dim + num_filters + pos_dim, hidden_size, num_layers=num_layers,
-                           batch_first=True, bidirectional=True, dropout=p_rnn)
+        self.decoder = RNN(word_dim + num_filters + pos_dim, hidden_size * 2, num_layers=num_layers,
+                           batch_first=True, bidirectional=False, dropout=p_rnn)
 
         out_dim = hidden_size * 2
         self.arc_h = nn.Linear(out_dim, arc_space)  # arc dense for decoder
@@ -417,9 +417,6 @@ class StackPtrNet(nn.Module):
         else:
             # output from rnn [batch, length_decoder, hidden_size]
             output, hn = self.decoder(input, hx=hx)
-        if display:
-            print('hx_loss:')
-            print(hx)
         output = self.dropout_rnn(output)
 
         # output size [batch, length_decoder, arc_space]
@@ -568,8 +565,6 @@ class StackPtrNet(nn.Module):
             input = src_encoding[beam_index, heads].unsqueeze(1)
             # output [num_hyp, 1, hidden_size]
             # hx [num_direction, num_hyp, hidden_size]
-            print('hx_decode')
-            print(hx)
             output, hx = self.decoder(input, hx=hx)
 
             # output size [num_hyp, 1, arc_space]
