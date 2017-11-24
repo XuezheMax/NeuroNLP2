@@ -260,6 +260,10 @@ def main():
             loss.backward()
             optim.step()
 
+            num = num.data[0]
+            num_leaf = num_leaf.data[0]
+            num_non_leaf = num_non_leaf.data[0]
+
             train_err += loss.data[0] * num
 
             train_err_arc += loss_arc.data[0] * num
