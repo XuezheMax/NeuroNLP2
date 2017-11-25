@@ -109,10 +109,6 @@ def StackedRNN(inners, num_layers, lstm=False, dropout=0, train=True):
             all_output = []
             for j, inner in enumerate(inners):
                 l = i * num_directions + j
-                print(num_layers, num_directions)
-                print("i, j: %d %d" % (i, j))
-                print(l)
-                raw_input()
                 hy, output = inner(input, hidden[l], cells[l], mask)
                 next_hidden.append(hy)
                 all_output.append(output)
