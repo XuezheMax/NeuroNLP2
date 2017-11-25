@@ -305,6 +305,12 @@ class BiVarRecurrentConvBiAffine(BiRecurrentConvBiAffine):
         type_h = F.elu(self.type_h(output))
         type_c = F.elu(self.type_c(output))
 
+        arc_h = self.dropout_rnn(arc_h.transpose(1, 2)).transpose(1, 2)
+        arc_c = self.dropout_rnn(arc_c.transpose(1, 2)).transpose(1, 2)
+
+        type_h = self.dropout_rnn(type_h.transpose(1, 2)).transpose(1, 2)
+        type_c = self.dropout_rnn(type_c.transpose(1, 2)).transpose(1, 2)
+
         return (arc_h, arc_c), (type_h, type_c), hn, mask, length
 
 
