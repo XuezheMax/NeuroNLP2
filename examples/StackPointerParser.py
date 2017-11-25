@@ -18,7 +18,7 @@ import numpy as np
 import torch
 from torch.optim import Adam, SGD
 from neuronlp2.io import get_logger, conllx_stacked_data
-from neuronlp2.models import StackPtrNet
+from neuronlp2.models import StackPtrNet, StackVarPtrNet
 from neuronlp2 import utils
 from neuronlp2.io import CoNLLXWriter
 from neuronlp2.tasks import parser
@@ -186,14 +186,14 @@ def main():
                               embedd_word=word_table, embedd_char=char_table,
                               p_in=p_in, p_rnn=p_rnn, biaffine=biaffine)
     else:
-        network = StackPtrNet(word_dim, num_words,
-                              char_dim, num_chars,
-                              pos_dim, num_pos,
-                              num_filters, window,
-                              mode, hidden_size, num_layers,
-                              num_types, arc_space, type_space,
-                              embedd_word=word_table, embedd_char=char_table,
-                              p_in=p_in, p_rnn=p_rnn, biaffine=biaffine)
+        network = StackVarPtrNet(word_dim, num_words,
+                                 char_dim, num_chars,
+                                 pos_dim, num_pos,
+                                 num_filters, window,
+                                 mode, hidden_size, num_layers,
+                                 num_types, arc_space, type_space,
+                                 embedd_word=word_table, embedd_char=char_table,
+                                 p_in=p_in, p_rnn=p_rnn, biaffine=biaffine)
 
     if use_gpu:
         network.cuda()
@@ -250,8 +250,8 @@ def main():
             loss_arc_leaf, loss_arc_non_leaf, \
             loss_type_leaf, loss_type_non_leaf, \
             num_leaf, num_non_leaf = network.loss(word, char, pos, stacked_heads, children, stacked_types,
-                                                       mask_e=masks_e, length_e=lengths_e, mask_d=masks_d,
-                                                       length_d=lengths_d)
+                                                  mask_e=masks_e, length_e=lengths_e, mask_d=masks_d,
+                                                  length_d=lengths_d)
             loss_arc = loss_arc_leaf + loss_arc_non_leaf
             loss_type = loss_type_leaf + loss_type_non_leaf
             loss = loss_arc + loss_type
@@ -260,7 +260,6 @@ def main():
 
             num_leaf = num_leaf.data[0]
             num_non_leaf = num_non_leaf.data[0]
-
 
             train_err_arc_leaf += loss_arc_leaf.data[0] * num_leaf
             train_err_arc_non_leaf += loss_arc_non_leaf.data[0] * num_non_leaf
@@ -288,8 +287,8 @@ def main():
                 err_type = err_type_leaf + err_type_non_leaf
                 log_info = 'train: %d/%d loss (leaf, non_leaf), arc: %.4f (%.4f, %.4f), ' \
                            'type: %.4f (%.4f, %.4f), time left (estimated): %.2fs' % (
-                    batch, num_batches, err_arc, err_arc_leaf, err_arc_non_leaf,
-                    err_type, err_type_leaf, err_type_non_leaf, time_left)
+                               batch, num_batches, err_arc, err_arc_leaf, err_arc_non_leaf,
+                               err_type, err_type_leaf, err_type_non_leaf, time_left)
                 sys.stdout.write(log_info)
                 sys.stdout.flush()
                 num_back = len(log_info)
