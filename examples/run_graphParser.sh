@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-CUDA_VISIBLE_DEVICES=1 python examples/GraphParser.py --mode LSTM --num_epochs 200 --batch_size 64 --hidden_size 400 --num_layers 3 \
+CUDA_VISIBLE_DEVICES=1 python examples/GraphParser.py --mode LSTM --num_epochs 200 --batch_size 32 --hidden_size 400 --num_layers 3 \
  --pos_dim 100 --char_dim 50 --num_filters 100 --arc_space 500 --type_space 100 \
- --objective cross_entropy --learning_rate 0.1 --decay_rate 0.05 --schedule 2 --gamma 0.0 \
- --dropout variational --p_in 0.33 --p_rnn 0.33 --unk_replace 0.5 --biaffine \
+ --objective cross_entropy --learning_rate 0.1 --decay_rate 0.05 --schedule 1 --gamma 0.0 \
+ --dropout variational --p_in 0.33 --p_rnn 0.33 --unk_replace 0.0 --biaffine \
  --decode mst \
  --word_embedding glove --word_path "data/glove/glove.6B/glove.6B.100d.gz" --char_embedding random \
  --punctuation '$(' '.' '``' "''" ':' ',' \

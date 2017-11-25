@@ -266,12 +266,14 @@ class BiVarRecurrentConvBiAffine(BiRecurrentConvBiAffine):
         else:
             raise ValueError('Unknown RNN mode: %s' % rnn_mode)
 
-        self.rnn = RNN(word_dim + num_filters, hidden_size, num_layers=num_layers,
+        self.rnn = RNN(word_dim + num_filters + pos_dim, hidden_size, num_layers=num_layers,
                        batch_first=True, bidirectional=True, dropout=p_rnn)
 
     def _get_rnn_output(self, input_word, input_char, input_pos, mask=None, length=None, hx=None):
         # [batch, length, word_dim]
         word = self.word_embedd(input_word)
+        # [batch, length, pos_dim]
+        pos = self.pos_embedd(input_pos)
 
         # [batch, length, char_length, char_dim]
         char = self.char_embedd(input_char)
@@ -286,7 +288,7 @@ class BiVarRecurrentConvBiAffine(BiRecurrentConvBiAffine):
         char = torch.tanh(char).view(char_size[0], char_size[1], -1)
 
         # concatenate word and char [batch, length, word_dim+char_filter]
-        input = torch.cat([word, char], dim=2)
+        input = torch.cat([word, char, pos], dim=2)
         # apply dropout
         # [batch, length, dim] --> [batch, dim, length] --> [batch, length, dim]
         input = self.dropout_in(input.transpose(1, 2)).transpose(1, 2)
@@ -731,3 +733,92 @@ class StackPtrNet(nn.Module):
             types[b, :sent_len] = tids
 
         return heads, types
+
+
+class StackVarPtrNet(StackPtrNet):
+    def __init__(self, word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, num_filters, kernel_size,
+                 rnn_mode, hidden_size, num_layers, num_labels, arc_space, type_space,
+                 embedd_word=None, embedd_char=None, embedd_pos=None,
+                 p_in=0.2, p_rnn=0.5, biaffine=False):
+
+        super(StackVarPtrNet, self).__init__(word_dim, num_words, char_dim, num_chars, pos_dim, num_pos,
+                                             num_filters, kernel_size, rnn_mode, hidden_size, num_layers,
+                                             num_labels, arc_space, type_space,
+                                             embedd_word=embedd_word, embedd_char=embedd_char,
+                                             embedd_pos=embedd_pos,
+                                             p_in=p_in, p_rnn=p_rnn, biaffine=biaffine)
+        self.dropout_in = nn.Dropout2d(p=p_in)
+        self.dropout_rnn = nn.Dropout2d(p_rnn)
+
+        if rnn_mode == 'RNN':
+            RNN = VarMaskedRNN
+        elif rnn_mode == 'LSTM':
+            RNN = VarMaskedLSTM
+        elif rnn_mode == 'GRU':
+            RNN = VarMaskedGRU
+        else:
+            raise ValueError('Unknown RNN mode: %s' % rnn_mode)
+
+        self.encoder = RNN(word_dim + num_filters + pos_dim, hidden_size, num_layers=num_layers,
+                           batch_first=True, bidirectional=True, dropout=p_rnn)
+
+        self.decoder = RNN(word_dim + num_filters + pos_dim, hidden_size, num_layers=num_layers,
+                           batch_first=True, bidirectional=False, dropout=p_rnn)
+
+    def _get_rnn_output(self, input_word, input_char, input_pos, mask_e=None, length_e=None, hx=None):
+        # [batch, length, word_dim]
+        word = self.word_embedd(input_word)
+        # [batch, length, pos_dim]
+        pos = self.pos_embedd(input_pos)
+
+        # [batch, length, char_length, char_dim]
+        char = self.char_embedd(input_char)
+        char_size = char.size()
+        # first transform to [batch *length, char_length, char_dim]
+        # then transpose to [batch * length, char_dim, char_length]
+        char = char.view(char_size[0] * char_size[1], char_size[2], char_size[3]).transpose(1, 2)
+        # put into cnn [batch*length, char_filters, char_length]
+        # then put into maxpooling [batch * length, char_filters]
+        char, _ = self.conv1d(char).max(dim=2)
+        # reshape to [batch, length, char_filters]
+        char = torch.tanh(char).view(char_size[0], char_size[1], -1)
+
+        # concatenate word and char [batch, length, word_dim+char_filter]
+        src_encoding = torch.cat([word, char, pos], dim=2)
+        # apply dropout
+        # [batch, length, dim] --> [batch, dim, length] --> [batch, length, dim]
+        input = self.dropout_in(src_encoding.transpose(1, 2)).transpose(1, 2)
+        # output from rnn [batch, length, hidden_size]
+        output, hn = self.encoder(input, mask_e, hx=hx)
+        # apply dropout
+        output = self.dropout_rnn(output.transpose(1, 2)).transpose(1, 2)
+
+        # output size [batch, length, arc_space]
+        arc_c = F.elu(self.arc_c(output))
+
+        # output size [batch, length, type_space]
+        type_c = F.elu(self.type_c(output))
+
+        return src_encoding, arc_c, type_c, hn, mask_e, length_e
+
+    def _get_decoder_output(self, src_encoding, heads_stack, hx, mask_d=None, length_d=None):
+        batch, _, _ = src_encoding.size()
+        # create batch index [batch]
+        batch_index = torch.arange(0, batch).type_as(src_encoding.data).long()
+        # get vector for heads [batch, length_decoder, input_dim],
+        src_encoding = src_encoding[batch_index, heads_stack.data.t()].transpose(0, 1)
+        # apply dropout
+        # [batch, length_decoder, dim] --> [batch, dim, length_decoder] --> [batch, length_decoder, dim]
+        input = self.dropout_in(src_encoding.transpose(1, 2)).transpose(1, 2)
+        # output from rnn [batch, length, hidden_size]
+        output, hn = self.decoder(input, mask_d, hx=hx)
+        # apply dropout
+        output = self.dropout_rnn(output.transpose(1, 2)).transpose(1, 2)
+
+        # output size [batch, length_decoder, arc_space]
+        arc_h = F.elu(self.arc_h(output))
+
+        # output size [batch, length_decoder, type_space]
+        type_h = F.elu(self.type_h(output))
+
+        return arc_h, type_h, hn, mask_d, length_d
