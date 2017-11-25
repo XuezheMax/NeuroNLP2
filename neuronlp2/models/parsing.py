@@ -811,7 +811,7 @@ class StackVarPtrNet(StackPtrNet):
         # [batch, length_decoder, dim] --> [batch, dim, length_decoder] --> [batch, length_decoder, dim]
         input = self.dropout_in(src_encoding.transpose(1, 2)).transpose(1, 2)
         # output from rnn [batch, length, hidden_size]
-        print(hx.size())
+        print(hx[0].size())
         raw_input()
         output, hn = self.decoder(input, mask_d, hx=hx)
         # apply dropout
