@@ -101,7 +101,6 @@ class BiRecurrentConvBiAffine(nn.Module):
         # output from rnn [batch, length, tag_space]
         arc, type, _, mask, length = self._get_rnn_output(input_word, input_char, input_pos,
                                                           mask=mask, length=length, hx=hx)
-        # mask = mask.contiguous()
         # [batch, length, length]
         out_arc = self.attention(arc[0], arc[1], mask_d=mask, mask_e=mask).squeeze(dim=1)
         return out_arc, type, mask, length
@@ -131,7 +130,6 @@ class BiRecurrentConvBiAffine(nn.Module):
         if mask is not None:
             minus_inf = -1e8
             minus_mask = (1 - mask) * minus_inf
-            # out_arc = out_arc + minus_mask.view(batch, max_len, 1) + minus_mask.view(batch, 1, max_len)
             out_arc = out_arc + minus_mask.unsqueeze(2) + minus_mask.unsqueeze(1)
 
         # TODO for Pytorch 2.0.4, need to set dim=1 for log_softmax or use softmax then take log
@@ -144,8 +142,6 @@ class BiRecurrentConvBiAffine(nn.Module):
 
         # mask invalid position to 0 for sum loss
         if mask is not None:
-            # loss_arc = loss_arc * mask.view(batch, max_len, 1) * mask.view(batch, 1, max_len)
-            # loss_type = loss_type * mask.view(batch, max_len, 1)
             loss_arc = loss_arc * mask.unsqueeze(2) * mask.unsqueeze(1)
             loss_type = loss_type * mask.unsqueeze(2)
             # number of valid positions which contribute to loss (remove the symbolic head for each sentence.
@@ -243,9 +239,28 @@ class BiRecurrentConvBiAffine(nn.Module):
         # compute output for type [batch, length, length, num_labels]
         out_type = self.bilinear(type_h, type_c)
 
-        energy = out_arc.unsqueeze(3) + out_type
+        # mask invalid position to -inf for log_softmax
+        if mask is not None:
+            minus_inf = -1e8
+            minus_mask = (1 - mask) * minus_inf
+            out_arc = out_arc + minus_mask.unsqueeze(2) + minus_mask.unsqueeze(1)
 
-        return parser.decode_MST(energy.data.cpu().numpy().transpose(0, 3, 1, 2), length,
+        # TODO for Pytorch 2.0.4, need to set dim=1 for log_softmax or use softmax then take log
+        # first convert out_arc to [max_len, batch, max_len] for log_softmax computation.
+        # then convert back to [batch, max_len, max_len]
+        loss_arc = self.logsoftmax(out_arc.transpose(0, 1)).transpose(0, 1)
+        # convert out_type to [batch, num_labels, length_c, length_h] for log_softmax computation.
+        # then switch (2, 3) to [batch, num_labels, length_h, length_c]
+        loss_type = self.logsoftmax(out_type.transpose(1, 3)).transpose(2, 3)
+        # [batch, num_labels, length, length]
+        energy = loss_arc.unsqueeze(1) + loss_type
+        # mask invalid position to 0 for sum loss
+        if mask is not None:
+            # mask = [batch, 1, length]
+            mask = mask.unsqueeze(1)
+            energy = loss_arc * mask.unsqueeze(3) * mask.unsqueeze(2)
+
+        return parser.decode_MST(energy.data.cpu().numpy(), length,
                                  leading_symbolic=leading_symbolic, labeled=True)
 
         # heads_numpy, _ = parser.decode_MST(out_arc.data.cpu().numpy(), length,
