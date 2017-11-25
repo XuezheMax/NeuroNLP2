@@ -308,8 +308,8 @@ class BiVarRecurrentConvBiAffine(BiRecurrentConvBiAffine):
         arc_h = self.dropout_rnn(arc_h.transpose(1, 2)).transpose(1, 2)
         arc_c = self.dropout_rnn(arc_c.transpose(1, 2)).transpose(1, 2)
 
-        type_h = self.dropout_rnn(type_h.transpose(1, 2)).transpose(1, 2)
-        type_c = self.dropout_rnn(type_c.transpose(1, 2)).transpose(1, 2)
+        type_h = self.dropout_rnn(type_h.transpose(1, 2)).transpose(1, 2).contiguous()
+        type_c = self.dropout_rnn(type_c.transpose(1, 2)).transpose(1, 2).contiguous()
 
         return (arc_h, arc_c), (type_h, type_c), hn, mask, length
 
