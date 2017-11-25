@@ -258,7 +258,7 @@ class BiRecurrentConvBiAffine(nn.Module):
         if mask is not None:
             # mask = [batch, 1, length]
             mask = mask.unsqueeze(1)
-            energy = loss_arc * mask.unsqueeze(3) * mask.unsqueeze(2)
+            energy = energy * mask.unsqueeze(3) * mask.unsqueeze(2)
 
         return parser.decode_MST(energy.data.cpu().numpy(), length,
                                  leading_symbolic=leading_symbolic, labeled=True)
