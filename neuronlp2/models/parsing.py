@@ -243,7 +243,7 @@ class BiRecurrentConvBiAffine(nn.Module):
         # compute output for type [batch, length, length, num_labels]
         out_type = self.bilinear(type_h, type_c)
 
-        energy = out_arc.unsequeeze(3) + out_type
+        energy = out_arc.unsqueeze(3) + out_type
 
         return parser.decode_MST(energy.data.cpu().numpy().transpose(0, 3, 1, 2), length,
                                  leading_symbolic=leading_symbolic, labeled=True)
