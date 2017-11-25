@@ -226,7 +226,11 @@ class BiRecurrentConvBiAffine(nn.Module):
         # out_arc shape [batch, length, length]
         out_arc, out_type, mask, length = self.forward(input_word, input_char, input_pos,
                                                        mask=mask, length=length, hx=hx)
-        batch, max_len, _ = out_arc.size()
+
+        # out_type shape [batch, length, type_space]
+        type_h, type_c = out_type
+        batch, max_len, type_space = type_h.size()
+
         # compute lengths
         if length is None:
             if mask is None:
@@ -234,13 +238,24 @@ class BiRecurrentConvBiAffine(nn.Module):
             else:
                 length = mask.data.sum(dim=1).long().cpu().numpy()
 
-        heads_numpy, _ = parser.decode_MST(out_arc.data.cpu().numpy(), length,
-                                           leading_symbolic=leading_symbolic, labeled=False)
-        heads = torch.from_numpy(heads_numpy).type_as(input_word.data).long()
 
-        types = self._decode_types(out_type, heads, leading_symbolic)
+        type_h = type_h.unsqueeze(2).expand(batch, max_len, max_len, type_space)
+        type_c = type_c.unsqueeze(1).expand(batch, max_len, max_len, type_space)
+        # compute output for type [batch, length, length, num_labels]
+        out_type = self.bilinear(type_h, type_c)
 
-        return heads_numpy, types.data.cpu().numpy()
+        energy = out_arc.unsequeeze(3) + out_type
+
+        return parser.decode_MST(energy.data.cpu().numpy().transpose(0, 3, 1, 2), length,
+                                 leading_symbolic=leading_symbolic, labeled=True)
+
+        # heads_numpy, _ = parser.decode_MST(out_arc.data.cpu().numpy(), length,
+        #                                    leading_symbolic=leading_symbolic, labeled=False)
+        # heads = torch.from_numpy(heads_numpy).type_as(input_word.data).long()
+        #
+        # types = self._decode_types(out_type, heads, leading_symbolic)
+
+        # return heads_numpy, types.data.cpu().numpy()
 
 
 class BiVarRecurrentConvBiAffine(BiRecurrentConvBiAffine):
@@ -305,11 +320,11 @@ class BiVarRecurrentConvBiAffine(BiRecurrentConvBiAffine):
         type_h = F.elu(self.type_h(output))
         type_c = F.elu(self.type_c(output))
 
-        arc_h = self.dropout_rnn(arc_h.transpose(1, 2)).transpose(1, 2)
-        arc_c = self.dropout_rnn(arc_c.transpose(1, 2)).transpose(1, 2)
-
-        type_h = self.dropout_rnn(type_h.transpose(1, 2)).transpose(1, 2).contiguous()
-        type_c = self.dropout_rnn(type_c.transpose(1, 2)).transpose(1, 2).contiguous()
+        # arc_h = self.dropout_rnn(arc_h.transpose(1, 2)).transpose(1, 2)
+        # arc_c = self.dropout_rnn(arc_c.transpose(1, 2)).transpose(1, 2)
+        #
+        # type_h = self.dropout_rnn(type_h.transpose(1, 2)).transpose(1, 2).contiguous()
+        # type_c = self.dropout_rnn(type_c.transpose(1, 2)).transpose(1, 2).contiguous()
 
         return (arc_h, arc_c), (type_h, type_c), hn, mask, length
 
