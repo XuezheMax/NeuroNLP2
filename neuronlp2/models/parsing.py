@@ -238,9 +238,8 @@ class BiRecurrentConvBiAffine(nn.Module):
             else:
                 length = mask.data.sum(dim=1).long().cpu().numpy()
 
-
-        type_h = type_h.unsqueeze(2).expand(batch, max_len, max_len, type_space)
-        type_c = type_c.unsqueeze(1).expand(batch, max_len, max_len, type_space)
+        type_h = type_h.unsqueeze(2).expand(batch, max_len, max_len, type_space).contiguous()
+        type_c = type_c.unsqueeze(1).expand(batch, max_len, max_len, type_space).contiguous()
         # compute output for type [batch, length, length, num_labels]
         out_type = self.bilinear(type_h, type_c)
 
@@ -319,12 +318,6 @@ class BiVarRecurrentConvBiAffine(BiRecurrentConvBiAffine):
         # output size [batch, length, type_space]
         type_h = F.elu(self.type_h(output))
         type_c = F.elu(self.type_c(output))
-
-        # arc_h = self.dropout_rnn(arc_h.transpose(1, 2)).transpose(1, 2)
-        # arc_c = self.dropout_rnn(arc_c.transpose(1, 2)).transpose(1, 2)
-        #
-        # type_h = self.dropout_rnn(type_h.transpose(1, 2)).transpose(1, 2).contiguous()
-        # type_c = self.dropout_rnn(type_c.transpose(1, 2)).transpose(1, 2).contiguous()
 
         return (arc_h, arc_c), (type_h, type_c), hn, mask, length
 
