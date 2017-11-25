@@ -765,7 +765,7 @@ class StackVarPtrNet(StackPtrNet):
         self.decoder = RNN(word_dim + num_filters + pos_dim, hidden_size, num_layers=num_layers,
                            batch_first=True, bidirectional=False, dropout=p_rnn)
 
-    def _get_rnn_output(self, input_word, input_char, input_pos, mask_e=None, length_e=None, hx=None):
+    def _get_encoder_output(self, input_word, input_char, input_pos, mask_e=None, length_e=None, hx=None):
         # [batch, length, word_dim]
         word = self.word_embedd(input_word)
         # [batch, length, pos_dim]
