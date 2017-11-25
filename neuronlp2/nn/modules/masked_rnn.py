@@ -41,15 +41,14 @@ class MaskedRNNBase(nn.Module):
 
     def forward(self, input, mask=None, hx=None):
         batch_size = input.size(0) if self.batch_first else input.size(1)
-        lstm = False
+        lstm = self.Cell is nn.LSTMCell
         if hx is None:
             num_directions = 2 if self.bidirectional else 1
             hx = torch.autograd.Variable(input.data.new(self.num_layers *
                                                         num_directions,
                                                         batch_size,
                                                         self.hidden_size).zero_())
-            if self.Cell is nn.LSTMCell:
-                lstm = True
+            if lstm:
                 hx = (hx, hx)
 
         func = AutogradMaskedRNN(num_layers=self.num_layers,
