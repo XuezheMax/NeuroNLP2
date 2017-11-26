@@ -571,6 +571,8 @@ class StackPtrNet(nn.Module):
         src_encoding = src_encoding.unsqueeze(0)
         # [1, length, arc_space]
         arc_c = arc_c.unsqueeze(0)
+        # [1, length, type_space]
+        type_c = type_c.unsqueeze(0)
         # [num_direction, 1, hidden_size]
         # hack to handle LSTM
         if isinstance(hx, tuple):
@@ -605,17 +607,32 @@ class StackPtrNet(nn.Module):
             # hx [num_direction, num_hyp, hidden_size]
             output, hx = self.decoder(input, hx=hx)
 
-            # output size [num_hyp, 1, arc_space]
+            # arc_h size [num_hyp, 1, arc_space]
             arc_h = F.elu(self.arc_h(output))
-
-            # output size [num_hyp, type_space]
-            type_h = F.elu(self.type_h(output)).squeeze(dim=1)
 
             # [num_hyp, length_encoder]
             out_arc = self.attention(arc_h, arc_c[beam_index]).squeeze(dim=1).squeeze(dim=1)
             # [num_hyp, length_encoder]
-            hyp_scores = self.logsoftmax(out_arc)
+            arc_hyp_scores = self.logsoftmax(out_arc)
+
+            # type_h size [num_hyp, length_encoder, type_space]
+            type_h = F.elu(self.type_h(output)).expand(num_hyp, length, type_c.size(2))
+            # type_c size [num_hyp, length_encoder, type_space]
+            type_c = type_c[beam_index]
+
+            # compute output for type [num_hyp, length_encoder, num_labels]
+            out_type = self.bilinear(type_h, type_c)
+            # [num_hyp, length_encoder, num_labels] --> [num_labels, length_encoder, num_hyp]
+            # --> [num_hyp, length_encoder, num_labels]
+            type_hyp_scores = self.logsoftmax(out_type.transpose(0, 2)).transpose(0, 2)
+            # remove the first #leading_symbolic types.
+            type_hyp_scores = type_hyp_scores[:, :, leading_symbolic:]
+            # compute the prediction of types [num_hyp, length_encoder]
+            type_hyp_scores, hyp_types = type_hyp_scores.max(dim=2)
+            hyp_types = hyp_types + leading_symbolic
+
             # [num_hyp, length_encoder]
+            hyp_scores = arc_hyp_scores + type_hyp_scores
             new_hypothesis_scores = hypothesis_scores[:num_hyp].unsqueeze(1) + hyp_scores.data
             # [num_hyp * length_encoder]
             new_hypothesis_scores, hyp_index = torch.sort(new_hypothesis_scores.view(-1), dim=0, descending=True)
@@ -641,6 +658,9 @@ class StackPtrNet(nn.Module):
                         new_children[cc] = children[base_id]
                         new_children[cc, t] = child_id
 
+                        new_stacked_types[cc] = stacked_types[base_id]
+                        new_stacked_types[cc, t] = hyp_types[base_id, child_id]
+
                         hypothesis_scores[cc] = new_hyp_score
                         ids.append(id)
                         cc += 1
@@ -653,6 +673,9 @@ class StackPtrNet(nn.Module):
 
                     new_children[cc] = children[base_id]
                     new_children[cc, t] = child_id
+
+                    new_stacked_types[cc] = stacked_types[base_id]
+                    new_stacked_types[cc, t] = hyp_types[base_id, child_id]
 
                     hypothesis_scores[cc] = new_hyp_score
                     ids.append(id)
@@ -668,23 +691,6 @@ class StackPtrNet(nn.Module):
             else:
                 index = torch.from_numpy(np.array(ids)).type_as(base_index)
             base_index = base_index[index]
-            child_index = child_index[index]
-
-            # predict types for new hypotheses
-            # [num_hyp, type_space]
-            hyp_type_c = type_c[child_index]
-            hyp_type_h = type_h[base_index]
-            # compute output for type [num_hyp, num_labels]
-            out_type = self.bilinear(hyp_type_h, hyp_type_c)
-            # remove the first #leading_symbolic types.
-            out_type = out_type.data[:, leading_symbolic:]
-            # compute the prediction of types [num_hyp]
-            _, hyp_types = out_type.max(dim=1)
-            hyp_types = hyp_types + leading_symbolic
-            for i in range(num_hyp):
-                base_id = base_index[i]
-                new_stacked_types[i] = stacked_types[base_id]
-                new_stacked_types[i, t] = hyp_types[i]
 
             stacked_heads = [[new_stacked_heads[i][j] for j in range(len(new_stacked_heads[i]))] for i in range(num_hyp)]
             constraints = new_constraints
