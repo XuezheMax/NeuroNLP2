@@ -616,9 +616,9 @@ class StackPtrNet(nn.Module):
             arc_hyp_scores = self.logsoftmax(out_arc)
 
             # type_h size [num_hyp, length_encoder, type_space]
-            type_h = F.elu(self.type_h(output)).expand(num_hyp, length, type_c.size(2))
+            type_h = F.elu(self.type_h(output)).expand(num_hyp, length, type_c.size(2)).contiguous()
             # type_c size [num_hyp, length_encoder, type_space]
-            type_c = type_c[beam_index]
+            type_c = type_c[beam_index].contiguous()
 
             # compute output for type [num_hyp, length_encoder, num_labels]
             out_type = self.bilinear(type_h, type_c)
