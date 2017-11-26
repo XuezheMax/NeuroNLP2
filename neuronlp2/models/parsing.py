@@ -613,7 +613,7 @@ class StackPtrNet(nn.Module):
             # [num_hyp, length_encoder]
             out_arc = self.attention(arc_h, arc_c[beam_index]).squeeze(dim=1).squeeze(dim=1)
             # [num_hyp, length_encoder]
-            arc_hyp_scores = self.logsoftmax(out_arc)
+            arc_hyp_scores = self.logsoftmax(out_arc).data
 
             # type_h size [num_hyp, length_encoder, type_space]
             type_h = F.elu(self.type_h(output)).expand(num_hyp, length, type_c.size(2)).contiguous()
@@ -624,7 +624,7 @@ class StackPtrNet(nn.Module):
             out_type = self.bilinear(type_h, type_c)
             # [num_hyp, length_encoder, num_labels] --> [num_labels, length_encoder, num_hyp]
             # --> [num_hyp, length_encoder, num_labels]
-            type_hyp_scores = self.logsoftmax(out_type.transpose(0, 2)).transpose(0, 2)
+            type_hyp_scores = self.logsoftmax(out_type.transpose(0, 2)).transpose(0, 2).data
             # remove the first #leading_symbolic types.
             type_hyp_scores = type_hyp_scores[:, :, leading_symbolic:]
             # compute the prediction of types [num_hyp, length_encoder]
@@ -633,7 +633,7 @@ class StackPtrNet(nn.Module):
 
             # [num_hyp, length_encoder]
             hyp_scores = arc_hyp_scores + type_hyp_scores
-            new_hypothesis_scores = hypothesis_scores[:num_hyp].unsqueeze(1) + hyp_scores.data
+            new_hypothesis_scores = hypothesis_scores[:num_hyp].unsqueeze(1) + hyp_scores
             # [num_hyp * length_encoder]
             new_hypothesis_scores, hyp_index = torch.sort(new_hypothesis_scores.view(-1), dim=0, descending=True)
             base_index = hyp_index / length
