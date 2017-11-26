@@ -27,7 +27,7 @@ def VarLSTMCell(input, hidden, w_ih, w_hh, b_ih=None, b_hh=None, noise_in=None, 
     input = input.expand(4, *input.size()) if noise_in is None else input.unsqueeze(0) * noise_in
 
     hx, cx = hidden
-    hx = hidden.expand(3, *hx.size()) if noise_hidden is None else hx.unsqueeze(0) * noise_hidden
+    hx = hx.expand(4, *hx.size()) if noise_hidden is None else hx.unsqueeze(0) * noise_hidden
 
     gates = torch.baddbmm(b_ih.unsqueeze(1), input, w_ih) + torch.baddbmm(b_hh.unsqueeze(1), hx, w_hh)
 
