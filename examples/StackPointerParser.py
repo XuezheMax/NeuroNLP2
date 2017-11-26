@@ -79,6 +79,7 @@ def main():
     num_filters = args.num_filters
     learning_rate = args.learning_rate
     momentum = 0.9
+    betas = (0.9, 0.9)
     decay_rate = args.decay_rate
     gamma = args.gamma
     schedule = args.schedule
