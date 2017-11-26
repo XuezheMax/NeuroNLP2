@@ -263,14 +263,6 @@ class BiRecurrentConvBiAffine(nn.Module):
         return parser.decode_MST(energy.data.cpu().numpy(), length,
                                  leading_symbolic=leading_symbolic, labeled=True)
 
-        # heads_numpy, _ = parser.decode_MST(out_arc.data.cpu().numpy(), length,
-        #                                    leading_symbolic=leading_symbolic, labeled=False)
-        # heads = torch.from_numpy(heads_numpy).type_as(input_word.data).long()
-        #
-        # types = self._decode_types(out_type, heads, leading_symbolic)
-
-        # return heads_numpy, types.data.cpu().numpy()
-
 
 class BiVarRecurrentConvBiAffine(BiRecurrentConvBiAffine):
     def __init__(self, word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, num_filters, kernel_size,

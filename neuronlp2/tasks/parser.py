@@ -21,12 +21,24 @@ def eval(words, postags, heads_pred, types_pred, heads, types, word_alphabet, po
     ucorr = 0.
     lcorr = 0.
     total = 0.
+    ucomplete_match = 0.
+    lcomplete_match = 0.
+
     ucorr_nopunc = 0.
     lcorr_nopunc = 0.
     total_nopunc = 0.
+    ucomplete_match_nopunc = 0.
+    lcomplete_match_nopunc = 0.
+
+    corr_root = 0.
+    total_root = 0.
     start = 1 if symbolic_root else 0
     end = 1 if symbolic_end else 0
     for i in range(batch_size):
+        ucm = 1.
+        lcm = 1.
+        ucm_nopunc = 1.
+        lcm_nopunc = 1.
         for j in range(start, lengths[i] - end):
             word = word_alphabet.get_instance(words[i, j])
             word = word.encode('utf8')
@@ -35,15 +47,40 @@ def eval(words, postags, heads_pred, types_pred, heads, types, word_alphabet, po
             pos = pos.encode('utf8')
 
             total += 1
-            ucorr += 1 if heads[i, j] == heads_pred[i, j] else 0
-            lcorr += 1 if heads[i, j] == heads_pred[i, j] and types[i, j] == types_pred[i, j] else 0
+            if heads[i, j] == heads_pred[i, j]:
+                ucorr += 1
+                if types[i, j] == types_pred[i, j]:
+                    lcorr += 1
+                else:
+                    lcm = 0
+            else:
+                ucm = 0
+                lcm = 0
 
             if not is_punctuation(word, pos, punct_set):
                 total_nopunc += 1
-                ucorr_nopunc += 1 if heads[i, j] == heads_pred[i, j] else 0
-                lcorr_nopunc += 1 if heads[i, j] == heads_pred[i, j] and types[i, j] == types_pred[i, j] else 0
+                if heads[i, j] == heads_pred[i, j]:
+                    ucorr_nopunc += 1
+                    if types[i, j] == types_pred[i, j]:
+                        lcorr_nopunc += 1
+                    else:
+                        lcm_nopunc = 0
+                else:
+                    ucm_nopunc = 0
+                    lcm_nopunc = 0
 
-    return ucorr, lcorr, total, ucorr_nopunc, lcorr_nopunc, total_nopunc
+            if heads[i, j] == 0:
+                total_root += 1
+                corr_root += 1 if heads_pred[i, j] == 0 else 0
+
+        ucomplete_match += ucm
+        lcomplete_match += lcm
+        ucomplete_match_nopunc += ucm_nopunc
+        lcomplete_match_nopunc += lcm_nopunc
+
+    return (ucorr, lcorr, total, ucomplete_match, lcomplete_match), \
+           (ucorr_nopunc, lcorr_nopunc, total_nopunc, ucomplete_match_nopunc, lcomplete_match_nopunc), \
+           (corr_root, total_root), batch_size
 
 
 def decode_MST(energies, lengths, leading_symbolic=0, labeled=True):
