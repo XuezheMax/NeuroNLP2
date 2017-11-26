@@ -554,7 +554,7 @@ class StackPtrNet(nn.Module):
                -loss_type_leaf.sum() / num_leaf, -loss_type_non_leaf.sum() / num_non_leaf, \
                num_leaf, num_non_leaf
 
-    def _decode_per_sentence(self, src_encoding, arc_c, type_c, hx, length, beam, leading_symbolic):
+    def _decode_per_sentence(self, src_encoding, arc_c, type_c, hx, length, beam):
         # src_encoding [length, input_size]
         # arc_c [length, arc_space]
         # type_c [length, type_space]
@@ -625,11 +625,8 @@ class StackPtrNet(nn.Module):
             # [num_hyp, length_encoder, num_labels] --> [num_labels, length_encoder, num_hyp]
             # --> [num_hyp, length_encoder, num_labels]
             type_hyp_scores = self.logsoftmax(out_type.transpose(0, 2)).transpose(0, 2).data
-            # remove the first #leading_symbolic types.
-            # type_hyp_scores = type_hyp_scores[:, :, leading_symbolic:]
             # compute the prediction of types [num_hyp, length_encoder]
             type_hyp_scores, hyp_types = type_hyp_scores.max(dim=2)
-            # hyp_types = hyp_types + leading_symbolic
 
             # [num_hyp, length_encoder]
             hyp_scores = arc_hyp_scores + type_hyp_scores
@@ -724,7 +721,7 @@ class StackPtrNet(nn.Module):
 
         return heads, types, length
 
-    def decode(self, input_word, input_char, input_pos, mask=None, length=None, hx=None, leading_symbolic=0, beam=1):
+    def decode(self, input_word, input_char, input_pos, mask=None, length=None, hx=None, beam=1):
         # output from encoder [batch, length_encoder, tag_space]
         # src_encoding [batch, length, input_size]
         # arc_c [batch, length, arc_space]
@@ -749,8 +746,7 @@ class StackPtrNet(nn.Module):
             else:
                 hx = hn[:, b, :].contiguous()
 
-            hids, tids, sent_len = self._decode_per_sentence(src_encoding[b], arc_c[b], type_c[b], hx, sent_len, beam,
-                                                             leading_symbolic)
+            hids, tids, sent_len = self._decode_per_sentence(src_encoding[b], arc_c[b], type_c[b], hx, sent_len, beam)
             heads[b, :sent_len] = hids
             types[b, :sent_len] = tids
 
