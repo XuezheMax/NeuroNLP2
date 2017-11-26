@@ -614,8 +614,6 @@ class StackPtrNet(nn.Module):
             out_arc = self.attention(arc_h, arc_c[beam_index]).squeeze(dim=1).squeeze(dim=1)
             # [num_hyp, length_encoder]
             arc_hyp_scores = self.logsoftmax(out_arc).data
-            print('arc scores')
-            print(arc_hyp_scores)
 
             # type_h size [num_hyp, length_encoder, type_space]
             type_h = F.elu(self.type_h(output)).expand(num_hyp, length, type_c.size(2)).contiguous()
@@ -627,22 +625,15 @@ class StackPtrNet(nn.Module):
             # [num_hyp, length_encoder, num_labels] --> [num_labels, length_encoder, num_hyp]
             # --> [num_hyp, length_encoder, num_labels]
             type_hyp_scores = self.logsoftmax(out_type.transpose(0, 2)).transpose(0, 2).data
-            print('type scores')
-            print(type_hyp_scores)
             # remove the first #leading_symbolic types.
             type_hyp_scores = type_hyp_scores[:, :, leading_symbolic:]
             # compute the prediction of types [num_hyp, length_encoder]
             type_hyp_scores, hyp_types = type_hyp_scores.max(dim=2)
-            print(type_hyp_scores)
             hyp_types = hyp_types + leading_symbolic
-            print(hyp_types)
 
             # [num_hyp, length_encoder]
-            hyp_scores = arc_hyp_scores + type_hyp_scores
-            print(hyp_scores)
+            hyp_scores = arc_hyp_scores #+ type_hyp_scores
             new_hypothesis_scores = hypothesis_scores[:num_hyp].unsqueeze(1) + hyp_scores
-            print(new_hypothesis_scores)
-            raw_input()
             # [num_hyp * length_encoder]
             new_hypothesis_scores, hyp_index = torch.sort(new_hypothesis_scores.view(-1), dim=0, descending=True)
             base_index = hyp_index / length
