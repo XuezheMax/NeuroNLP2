@@ -451,6 +451,7 @@ def main():
             pred_writer.close()
             gold_writer.close()
 
+        print('-----------------------------------------------------------------------------------------------------------------------')
         print('best dev  W. Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%, ucm: %.2f%%, lcm: %.2f%% (epoch: %d)' % (
             dev_ucorrect, dev_lcorrect, dev_total, dev_ucorrect * 100 / dev_total, dev_lcorrect * 100 / dev_total,
             dev_ucomlpete_match * 100 / dev_total_inst, dev_lcomplete_match * 100 / dev_total_inst,
@@ -462,7 +463,7 @@ def main():
             best_epoch))
         print('best dev  Root: corr: %d, total: %d, acc: %.2f%% (epoch: %d)' % (
             dev_root_correct, dev_total_root, dev_root_correct * 100 / dev_total_root, best_epoch))
-
+        print('-----------------------------------------------------------------------------------------------------------------------')
         print('best test W. Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%, ucm: %.2f%%, lcm: %.2f%% (epoch: %d)' % (
             test_ucorrect, test_lcorrect, test_total, test_ucorrect * 100 / test_total, test_lcorrect * 100 / test_total,
             test_ucomlpete_match * 100 / test_total_inst, test_lcomplete_match * 100 / test_total_inst,
@@ -474,6 +475,7 @@ def main():
             best_epoch))
         print('best test Root: corr: %d, total: %d, acc: %.2f%% (epoch: %d)' % (
             test_root_correct, test_total_root, test_root_correct * 100 / test_total_root, best_epoch))
+        print('=======================================================================================================================')
 
         if epoch % schedule == 0:
             # lr = lr * decay_rate
