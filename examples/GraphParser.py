@@ -41,6 +41,7 @@ def main():
     args_parser.add_argument('--objective', choices=['cross_entropy', 'crf'], default='cross_entropy',
                              help='objective function of training procedure.')
     args_parser.add_argument('--decode', choices=['mst', 'greedy'], help='decoding algorithm', required=True)
+    args_parser.add_argument('--optim', choices=['sgd', 'adam'], help='optimization algorithm', required=True)
     args_parser.add_argument('--learning_rate', type=float, default=0.01, help='Learning rate')
     args_parser.add_argument('--decay_rate', type=float, default=0.05, help='Decay rate of learning rate')
     args_parser.add_argument('--gamma', type=float, default=0.0, help='weight for regularization')
@@ -81,6 +82,7 @@ def main():
     num_filters = args.num_filters
     learning_rate = args.learning_rate
     momentum = 0.9
+    betas = (0.9, 0.9)
     decay_rate = args.decay_rate
     gamma = args.gamma
     schedule = args.schedule
@@ -208,15 +210,15 @@ def main():
     pred_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
     gold_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
 
-    adam_epochs = 10
-    adam_rate = 0.001
-    if adam_epochs > 0:
-        lr = adam_rate
-        optim = Adam(network.parameters(), lr=adam_rate, betas=(0.9, 0.9), weight_decay=gamma)
-    else:
-        lr = learning_rate
-        optim = SGD(network.parameters(), lr=lr, momentum=momentum, weight_decay=gamma, nesterov=True)
+    def generate_oprimizer(learning_rate):
+        if args.optim == 'adam':
+            return  Adam(network.parameters(), lr=learning_rate, betas=betas, weight_decay=gamma)
+        elif args.optim == 'sgd':
+            return SGD(network.parameters(), lr=learning_rate, momentum=momentum, weight_decay=gamma, nesterov=True)
+        else:
+            raise ValueError('Unknown optimization algorithm: %s' % args.optim)
 
+    optim = generate_oprimizer(learning_rate)
     logger.info("Embedding dim: word=%d, char=%d, pos=%d" % (word_dim, char_dim, pos_dim))
     logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, arc_space=%d, type_space=%d, %s" % (
         mode, num_layers, hidden_size, num_filters, arc_space, type_space, 'biaffine' if biaffine else 'affine'))
@@ -260,9 +262,10 @@ def main():
     else:
         raise ValueError('Unknown decoding algorithm: %s' % decoding)
 
+    lr = learning_rate
     for epoch in range(1, num_epochs + 1):
-        print('Epoch %d (%s(%s), learning rate=%.4f, decay rate=%.4f (schedule=%d)): ' % (
-            epoch, mode, args.dropout, lr, decay_rate, schedule))
+        print('Epoch %d (%s(%s), optim: %s, learning rate=%.4f, decay rate=%.4f (schedule=%d)): ' % (
+            epoch, mode, args.dropout, args.optim, lr, decay_rate, schedule))
         train_err = 0.
         train_err_arc = 0.
         train_err_type = 0.
@@ -342,8 +345,8 @@ def main():
             gold_writer.write(word, pos, heads, types, lengths, symbolic_root=True)
 
             stats, stats_nopunc, stats_root, num_inst = parser.eval(word, pos, heads_pred, types_pred, heads, types,
-                                                                     word_alphabet, pos_alphabet, lengths,
-                                                                     punct_set=punct_set, symbolic_root=True)
+                                                                    word_alphabet, pos_alphabet, lengths,
+                                                                    punct_set=punct_set, symbolic_root=True)
             ucorr, lcorr, total, ucm, lcm = stats
             ucorr_nopunc, lcorr_nopunc, total_nopunc, ucm_nopunc, lcm_nopunc = stats_nopunc
             corr_root, total_root = stats_root
@@ -396,6 +399,7 @@ def main():
             pred_writer.start(pred_filename)
             gold_filename = 'tmp/%sgold_test%d' % (str(uid), epoch)
             gold_writer.start(gold_filename)
+
             test_ucorrect = 0.0
             test_lcorrect = 0.0
             test_ucomlpete_match = 0.0
@@ -451,7 +455,7 @@ def main():
             pred_writer.close()
             gold_writer.close()
 
-        print('-----------------------------------------------------------------------------------------------------------------------')
+        print('----------------------------------------------------------------------------------------------------------------------------')
         print('best dev  W. Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%, ucm: %.2f%%, lcm: %.2f%% (epoch: %d)' % (
             dev_ucorrect, dev_lcorrect, dev_total, dev_ucorrect * 100 / dev_total, dev_lcorrect * 100 / dev_total,
             dev_ucomlpete_match * 100 / dev_total_inst, dev_lcomplete_match * 100 / dev_total_inst,
@@ -463,7 +467,7 @@ def main():
             best_epoch))
         print('best dev  Root: corr: %d, total: %d, acc: %.2f%% (epoch: %d)' % (
             dev_root_correct, dev_total_root, dev_root_correct * 100 / dev_total_root, best_epoch))
-        print('-----------------------------------------------------------------------------------------------------------------------')
+        print('----------------------------------------------------------------------------------------------------------------------------')
         print('best test W. Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%, ucm: %.2f%%, lcm: %.2f%% (epoch: %d)' % (
             test_ucorrect, test_lcorrect, test_total, test_ucorrect * 100 / test_total, test_lcorrect * 100 / test_total,
             test_ucomlpete_match * 100 / test_total_inst, test_lcomplete_match * 100 / test_total_inst,
@@ -475,16 +479,12 @@ def main():
             best_epoch))
         print('best test Root: corr: %d, total: %d, acc: %.2f%% (epoch: %d)' % (
             test_root_correct, test_total_root, test_root_correct * 100 / test_total_root, best_epoch))
-        print('=======================================================================================================================')
+        print('============================================================================================================================')
 
         if epoch % schedule == 0:
             # lr = lr * decay_rate
-            if epoch < adam_epochs:
-                lr = adam_rate / (1.0 + epoch * decay_rate)
-                optim = Adam(network.parameters(), lr=lr, betas=(0.9, 0.9), weight_decay=gamma)
-            else:
-                lr = learning_rate / (1.0 + (epoch - adam_epochs) * decay_rate)
-                optim = SGD(network.parameters(), lr=lr, momentum=momentum, weight_decay=gamma, nesterov=True)
+            lr = learning_rate / (1.0 + epoch * decay_rate)
+            optim = generate_oprimizer(lr)
 
 
 if __name__ == '__main__':
