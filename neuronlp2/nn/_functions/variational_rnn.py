@@ -5,33 +5,33 @@ from torch.nn._functions.thnn import rnnFusedPointwise as fusedBackend
 from torch.nn import functional as F
 
 
-def VarRNNReLUCell(input, hidden, w_ih, w_hh, b_ih=None, b_hh=None, noise=None):
-    if noise is not None:
-        hidden = hidden * noise
+def VarRNNReLUCell(input, hidden, w_ih, w_hh, b_ih=None, b_hh=None, noise_in=None, noise_hidden=None):
+    if noise_in is not None:
+        input = input * noise_in
+    if noise_hidden is not None:
+        hidden = hidden * noise_hidden
     hy = F.relu(F.linear(input, w_ih, b_ih) + F.linear(hidden, w_hh, b_hh))
     return hy
 
 
-def VarRNNTanhCell(input, hidden, w_ih, w_hh, b_ih=None, b_hh=None, noise=None):
-    if noise is not None:
-        hidden = hidden * noise
+def VarRNNTanhCell(input, hidden, w_ih, w_hh, b_ih=None, b_hh=None, noise_in=None, noise_hidden=None):
+    if noise_in is not None:
+        input = input * noise_in
+    if noise_hidden is not None:
+        hidden = hidden * noise_hidden
     hy = F.tanh(F.linear(input, w_ih, b_ih) + F.linear(hidden, w_hh, b_hh))
     return hy
 
 
-def VarLSTMCell(input, hidden, w_ih, w_hh, b_ih=None, b_hh=None, noise=None):
-    if input.is_cuda:
-        igates = F.linear(input, w_ih)
-        hgates = F.linear(hidden[0], w_hh) if noise is None else F.linear(hidden[0] * noise, w_hh)
-        state = fusedBackend.LSTMFused()
-        return state(igates, hgates, hidden[1]) if b_ih is None else state(igates, hgates, hidden[1], b_ih, b_hh)
+def VarLSTMCell(input, hidden, w_ih, w_hh, b_ih=None, b_hh=None, noise_in=None, noise_hidden=None):
+    input = input.expand(4, *input.size()) if noise_in is None else input.unsqueeze(0) * noise_in
 
     hx, cx = hidden
-    if noise is not None:
-        hx = hx * noise
-    gates = F.linear(input, w_ih, b_ih) + F.linear(hx, w_hh, b_hh)
+    hx = hidden.expand(3, *hx.size()) if noise_hidden is None else hx.unsqueeze(0) * noise_hidden
 
-    ingate, forgetgate, cellgate, outgate = gates.chunk(4, 1)
+    gates = torch.baddbmm(b_ih.unsqueeze(1), input, w_ih) + torch.baddbmm(b_hh.unsqueeze(1), hx, w_hh)
+
+    ingate, forgetgate, cellgate, outgate = gates
 
     ingate = F.sigmoid(ingate)
     forgetgate = F.sigmoid(forgetgate)
@@ -44,18 +44,14 @@ def VarLSTMCell(input, hidden, w_ih, w_hh, b_ih=None, b_hh=None, noise=None):
     return hy, cy
 
 
-def VarGRUCell(input, hidden, w_ih, w_hh, b_ih=None, b_hh=None, noise=None):
-    hx = hidden if noise is None else hidden * noise
-    if input.is_cuda:
-        gi = F.linear(input, w_ih)
-        gh = F.linear(hx, w_hh)
-        state = fusedBackend.GRUFused()
-        return state(gi, gh, hidden) if b_ih is None else state(gi, gh, hidden, b_ih, b_hh)
+def VarGRUCell(input, hidden, w_ih, w_hh, b_ih=None, b_hh=None, noise_in=None, noise_hidden=None):
+    input = input.expand(3, *input.size()) if noise_in is None else input.unsqueeze(0) * noise_in
+    hx = hidden.expand(3, *hidden.size()) if noise_hidden is None else hidden.unsqueeze(0) * noise_hidden
 
-    gi = F.linear(input, w_ih, b_ih)
-    gh = F.linear(hx, w_hh, b_hh)
-    i_r, i_i, i_n = gi.chunk(3, 1)
-    h_r, h_i, h_n = gh.chunk(3, 1)
+    gi = torch.baddbmm(b_ih.unsqueeze(1), input, w_ih)
+    gh = torch.baddbmm(b_hh.unsqueeze(1), hx, w_hh)
+    i_r, i_i, i_n = gi
+    h_r, h_i, h_n = gh
 
     resetgate = F.sigmoid(i_r + h_r)
     inputgate = F.sigmoid(i_i + h_i)
@@ -93,7 +89,7 @@ def VarMaskedRecurrent(reverse=False):
     return forward
 
 
-def StackedRNN(inners, num_layers, lstm=False, dropout=0, train=True):
+def StackedRNN(inners, num_layers, lstm=False):
 
     num_directions = len(inners)
     total_layers = num_layers * num_directions
@@ -115,10 +111,6 @@ def StackedRNN(inners, num_layers, lstm=False, dropout=0, train=True):
 
             input = torch.cat(all_output, input.dim() - 1)
 
-            if dropout != 0 and i < num_layers - 1:
-                # [length, batch, dim] --> [dim, batch, length] --> [length, batch, dim]
-                input = F.dropout2d(input.transpose(0, 2), p=dropout, training=train, inplace=False).transpose(0, 2)
-
         if lstm:
             next_h, next_c = zip(*next_hidden)
             next_hidden = (
@@ -133,7 +125,7 @@ def StackedRNN(inners, num_layers, lstm=False, dropout=0, train=True):
     return forward
 
 
-def AutogradVarMaskedRNN(num_layers=1, batch_first=False, dropout=0, train=True, bidirectional=False, lstm=False):
+def AutogradVarMaskedRNN(num_layers=1, batch_first=False, bidirectional=False, lstm=False):
 
     rec_factory = VarMaskedRecurrent
 
@@ -144,9 +136,7 @@ def AutogradVarMaskedRNN(num_layers=1, batch_first=False, dropout=0, train=True,
 
     func = StackedRNN(layer,
                       num_layers,
-                      lstm=lstm,
-                      dropout=dropout,
-                      train=train)
+                      lstm=lstm)
 
     def forward(input, cells, hidden, mask):
         if batch_first:

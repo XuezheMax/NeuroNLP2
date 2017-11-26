@@ -11,7 +11,7 @@ from .._functions import variational_rnn as rnn_F
 class VarMaskedRNNBase(nn.Module):
     def __init__(self, Cell, input_size, hidden_size,
                  num_layers=1, bias=True, batch_first=False,
-                 dropout=0, bidirectional=False, **kwargs):
+                 dropout_in=0, dropout_hidden=0, bidirectional=False, **kwargs):
 
         super(VarMaskedRNNBase, self).__init__()
         self.Cell = Cell
@@ -20,7 +20,6 @@ class VarMaskedRNNBase(nn.Module):
         self.num_layers = num_layers
         self.bias = bias
         self.batch_first = batch_first
-        self.dropout = dropout
         self.bidirectional = bidirectional
         num_directions = 2 if bidirectional else 1
 
@@ -29,7 +28,14 @@ class VarMaskedRNNBase(nn.Module):
             for direction in range(num_directions):
                 layer_input_size = input_size if layer == 0 else hidden_size * num_directions
 
-                cell = self.Cell(layer_input_size, hidden_size, self.bias, p=dropout, **kwargs)
+                if layer == 0:
+                    # for the first RNN layer, the input dropout rate is dropout_in
+                    cell = self.Cell(layer_input_size, hidden_size, self.bias,
+                                     p_in=dropout_in, p_hidden=dropout_hidden, **kwargs)
+                else:
+                    # for higher RNN layers, the input dropout rate is dropout_hidden
+                    cell = self.Cell(layer_input_size, hidden_size, self.bias,
+                                     p_in=dropout_hidden, p_hidden=dropout_hidden, **kwargs)
                 self.all_cells.append(cell)
                 self.add_module('cell%d' % (layer * num_directions + direction), cell)
 
@@ -52,15 +58,13 @@ class VarMaskedRNNBase(nn.Module):
                 hx = (hx, hx)
 
         func = rnn_F.AutogradVarMaskedRNN(num_layers=self.num_layers,
-                                 batch_first=self.batch_first,
-                                 dropout=self.dropout,
-                                 train=self.training,
-                                 bidirectional=self.bidirectional,
-                                 lstm=lstm)
+                                          batch_first=self.batch_first,
+                                          bidirectional=self.bidirectional,
+                                          lstm=lstm)
         for cell in self.all_cells:
             cell.reset_noise(batch_size)
 
-        output, hidden = func(input, self.all_cells, hx, None if mask is None else mask.view(mask.size() + (1, )))
+        output, hidden = func(input, self.all_cells, hx, None if mask is None else mask.view(mask.size() + (1,)))
         return output, hidden
 
 
@@ -90,10 +94,11 @@ class VarMaskedRNN(VarMaskedRNNBase):
             Default: True
         batch_first: If True, then the input and output tensors are provided
             as (batch, seq, feature)
-        dropout: If non-zero, introduces a dropout layer on the outputs of each
-            RNN layer except the last layer
+        dropout_in: If non-zero, introduces a dropout layer on the input of the first
+            RNN layer
+        dropout_hidden: If non-zero, introduces a dropout layer on the hidden of each
+            RNN layer and the input except the first RNN layer
         bidirectional: If True, becomes a bidirectional RNN. Default: False
-        p: (float, optional): the variational (recurrent) drop probability. Default: 0.5
 
     Inputs: input, mask, h_0
         - **input** (seq_len, batch, input_size): tensor containing the features
@@ -148,10 +153,11 @@ class VarMaskedLSTM(VarMaskedRNNBase):
             Default: True
         batch_first: If True, then the input and output tensors are provided
             as (batch, seq, feature)
-        dropout: If non-zero, introduces a dropout layer on the outputs of each
-            RNN layer except the last layer
+        dropout_in: If non-zero, introduces a dropout layer on the input of the first
+            RNN layer
+        dropout_hidden: If non-zero, introduces a dropout layer on the hidden of each
+            RNN layer and the input except the first RNN layer
         bidirectional: If True, becomes a bidirectional RNN. Default: False
-        p: (float, optional): the variational (recurrent) drop probability. Default: 0.5
 
     Inputs: input, mask, (h_0, c_0)
         - **input** (seq_len, batch, input_size): tensor containing the features
@@ -208,10 +214,11 @@ class VarMaskedGRU(VarMaskedRNNBase):
             Default: True
         batch_first: If True, then the input and output tensors are provided
             as (batch, seq, feature)
-        dropout: If non-zero, introduces a dropout layer on the outputs of each
-            RNN layer except the last layer
+        dropout_in: If non-zero, introduces a dropout layer on the input of the first
+            RNN layer
+        dropout_hidden: If non-zero, introduces a dropout layer on the hidden of each
+            RNN layer and the input except the first RNN layer
         bidirectional: If True, becomes a bidirectional RNN. Default: False
-        p: (float, optional): the variational (recurrent) drop probability. Default: 0.5
 
     Inputs: input, mask, h_0
         - **input** (seq_len, batch, input_size): tensor containing the features
@@ -265,7 +272,8 @@ class VarRNNCell(VarRNNCellBase):
         bias: If False, then the layer does not use bias weights b_ih and b_hh.
             Default: True
         nonlinearity: The non-linearity to use ['tanh'|'relu']. Default: 'tanh'
-        p: (float, optional): the drop probability. Default: 0.5
+        p_in: (float, optional): the drop probability for input. Default: 0.5
+        p_hidden: (float, optional): the drop probability for hidden state. Default: 0.5
 
     Inputs: input, hidden
         - **input** (batch, input_size): tensor containing input features
@@ -286,7 +294,7 @@ class VarRNNCell(VarRNNCellBase):
 
     """
 
-    def __init__(self, input_size, hidden_size, bias=True, nonlinearity="tanh", p=0.5):
+    def __init__(self, input_size, hidden_size, bias=True, nonlinearity="tanh", p_in=0.5, p_hidden=0.5):
         super(VarRNNCell, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -301,11 +309,16 @@ class VarRNNCell(VarRNNCellBase):
             self.register_parameter('bias_ih', None)
             self.register_parameter('bias_hh', None)
         self.reset_parameters()
-        if p < 0 or p > 1:
-            raise ValueError("dropout probability has to be between 0 and 1, "
-                             "but got {}".format(p))
-        self.p = p
-        self.noise = None
+        if p_in < 0 or p_in > 1:
+            raise ValueError("input dropout probability has to be between 0 and 1, "
+                             "but got {}".format(p_in))
+        if p_hidden < 0 or p_hidden > 1:
+            raise ValueError("hidden state dropout probability has to be between 0 and 1, "
+                             "but got {}".format(p_hidden))
+        self.p_in = p_in
+        self.p_hidden = p_hidden
+        self.noise_in = None
+        self.noise_hidden = None
 
     def reset_parameters(self):
         stdv = 1.0 / math.sqrt(self.hidden_size)
@@ -313,11 +326,21 @@ class VarRNNCell(VarRNNCellBase):
             weight.data.uniform_(-stdv, stdv)
 
     def reset_noise(self, batch_size):
-        if self.training and self.p:
-            noise = self.weight_hh.data.new(batch_size, self.hidden_size).bernoulli_(1.0 - self.p) / (1.0 - self.p)
-            self.noise = Variable(noise)
+        if self.training:
+            if self.p_in:
+                noise = self.weight_ih.data.new(batch_size, self.input_size)
+                self.noise_in = Variable(noise.bernoulli_(1.0 - self.p_in) / (1.0 - self.p_in))
+            else:
+                self.noise_in = None
+
+            if self.p_hidden:
+                noise = self.weight_hh.data.new(batch_size, self.hidden_size)
+                self.noise_hidden = Variable(noise.bernoulli_(1.0 - self.p_hidden) / (1.0 - self.p_hidden))
+            else:
+                self.noise_hidden = None
         else:
-            self.noise = None
+            self.noise_in = None
+            self.noise_hidden = None
 
     def forward(self, input, hx):
         if self.nonlinearity == "tanh":
@@ -332,7 +355,7 @@ class VarRNNCell(VarRNNCellBase):
             input, hx,
             self.weight_ih, self.weight_hh,
             self.bias_ih, self.bias_hh,
-            self.noise,
+            self.noise_in, self.noise_hidden,
         )
 
 
@@ -356,7 +379,8 @@ class VarLSTMCell(VarRNNCellBase):
         hidden_size: The number of features in the hidden state h
         bias: If `False`, then the layer does not use bias weights `b_ih` and
             `b_hh`. Default: True
-        p: (float, optional): the drop probability. Default: 0.5
+        p_in: (float, optional): the drop probability for input. Default: 0.5
+        p_hidden: (float, optional): the drop probability for hidden state. Default: 0.5
 
     Inputs: input, (h_0, c_0)
         - **input** (batch, input_size): tensor containing input features
@@ -380,25 +404,30 @@ class VarLSTMCell(VarRNNCellBase):
         bias_hh: the learnable hidden-hidden bias, of shape `(4*hidden_size)`
     """
 
-    def __init__(self, input_size, hidden_size, bias=True, p=0.5):
+    def __init__(self, input_size, hidden_size, bias=True, p_in=0.5, p_hidden=0.5):
         super(VarLSTMCell, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.bias = bias
-        self.weight_ih = Parameter(torch.Tensor(4 * hidden_size, input_size))
-        self.weight_hh = Parameter(torch.Tensor(4 * hidden_size, hidden_size))
+        self.weight_ih = Parameter(torch.Tensor(4, input_size, hidden_size))
+        self.weight_hh = Parameter(torch.Tensor(4, hidden_size, hidden_size))
         if bias:
-            self.bias_ih = Parameter(torch.Tensor(4 * hidden_size))
-            self.bias_hh = Parameter(torch.Tensor(4 * hidden_size))
+            self.bias_ih = Parameter(torch.Tensor(4, hidden_size))
+            self.bias_hh = Parameter(torch.Tensor(4, hidden_size))
         else:
             self.register_parameter('bias_ih', None)
             self.register_parameter('bias_hh', None)
         self.reset_parameters()
-        if p < 0 or p > 1:
-            raise ValueError("dropout probability has to be between 0 and 1, "
-                             "but got {}".format(p))
-        self.p = p
-        self.noise = None
+        if p_in < 0 or p_in > 1:
+            raise ValueError("input dropout probability has to be between 0 and 1, "
+                             "but got {}".format(p_in))
+        if p_hidden < 0 or p_hidden > 1:
+            raise ValueError("hidden state dropout probability has to be between 0 and 1, "
+                             "but got {}".format(p_hidden))
+        self.p_in = p_in
+        self.p_hidden = p_hidden
+        self.noise_in = None
+        self.noise_hidden = None
 
     def reset_parameters(self):
         stdv = 1.0 / math.sqrt(self.hidden_size)
@@ -406,18 +435,28 @@ class VarLSTMCell(VarRNNCellBase):
             weight.data.uniform_(-stdv, stdv)
 
     def reset_noise(self, batch_size):
-        if self.training and self.p:
-            noise = self.weight_hh.data.new(batch_size, self.hidden_size).bernoulli_(1.0 - self.p) / (1.0 - self.p)
-            self.noise = Variable(noise)
+        if self.training:
+            if self.p_in:
+                noise = self.weight_ih.data.new(4, batch_size, self.input_size)
+                self.noise_in = Variable(noise.bernoulli_(1.0 - self.p_in) / (1.0 - self.p_in))
+            else:
+                self.noise_in = None
+
+            if self.p_hidden:
+                noise = self.weight_hh.data.new(4, batch_size, self.hidden_size)
+                self.noise_hidden = Variable(noise.bernoulli_(1.0 - self.p_hidden) / (1.0 - self.p_hidden))
+            else:
+                self.noise_hidden = None
         else:
-            self.noise = None
+            self.noise_in = None
+            self.noise_hidden = None
 
     def forward(self, input, hx):
         return rnn_F.VarLSTMCell(
             input, hx,
             self.weight_ih, self.weight_hh,
             self.bias_ih, self.bias_hh,
-            self.noise,
+            self.noise_in, self.noise_hidden,
         )
 
 
@@ -438,7 +477,8 @@ class VarGRUCell(VarRNNCellBase):
         hidden_size: The number of features in the hidden state h
         bias: If `False`, then the layer does not use bias weights `b_ih` and
             `b_hh`. Default: `True`
-        p: (float, optional): the drop probability. Default: 0.5
+        p_in: (float, optional): the drop probability for input. Default: 0.5
+        p_hidden: (float, optional): the drop probability for hidden state. Default: 0.5
 
     Inputs: input, hidden
         - **input** (batch, input_size): tensor containing input features
@@ -458,25 +498,30 @@ class VarGRUCell(VarRNNCellBase):
         bias_hh: the learnable hidden-hidden bias, of shape `(3*hidden_size)`
     """
 
-    def __init__(self, input_size, hidden_size, bias=True, p=0.5):
+    def __init__(self, input_size, hidden_size, bias=True, p_in=0.5, p_hidden=0.5):
         super(VarGRUCell, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.bias = bias
-        self.weight_ih = Parameter(torch.Tensor(3 * hidden_size, input_size))
-        self.weight_hh = Parameter(torch.Tensor(3 * hidden_size, hidden_size))
+        self.weight_ih = Parameter(torch.Tensor(3, input_size, hidden_size))
+        self.weight_hh = Parameter(torch.Tensor(3, hidden_size, hidden_size))
         if bias:
-            self.bias_ih = Parameter(torch.Tensor(3 * hidden_size))
-            self.bias_hh = Parameter(torch.Tensor(3 * hidden_size))
+            self.bias_ih = Parameter(torch.Tensor(3, hidden_size))
+            self.bias_hh = Parameter(torch.Tensor(3, hidden_size))
         else:
             self.register_parameter('bias_ih', None)
             self.register_parameter('bias_hh', None)
         self.reset_parameters()
-        if p < 0 or p > 1:
-            raise ValueError("dropout probability has to be between 0 and 1, "
-                             "but got {}".format(p))
-        self.p = p
-        self.noise = None
+        if p_in < 0 or p_in > 1:
+            raise ValueError("input dropout probability has to be between 0 and 1, "
+                             "but got {}".format(p_in))
+        if p_hidden < 0 or p_hidden > 1:
+            raise ValueError("hidden state dropout probability has to be between 0 and 1, "
+                             "but got {}".format(p_hidden))
+        self.p_in = p_in
+        self.p_hidden = p_hidden
+        self.noise_in = None
+        self.noise_hidden = None
 
     def reset_parameters(self):
         stdv = 1.0 / math.sqrt(self.hidden_size)
@@ -484,16 +529,26 @@ class VarGRUCell(VarRNNCellBase):
             weight.data.uniform_(-stdv, stdv)
 
     def reset_noise(self, batch_size):
-        if self.training and self.p:
-            noise = self.weight_hh.data.new(batch_size, self.hidden_size).bernoulli_(1.0 - self.p) / (1.0 - self.p)
-            self.noise = Variable(noise)
+        if self.training:
+            if self.p_in:
+                noise = self.weight_ih.data.new(3, batch_size, self.input_size)
+                self.noise_in = Variable(noise.bernoulli_(1.0 - self.p_in) / (1.0 - self.p_in))
+            else:
+                self.noise_in = None
+
+            if self.p_hidden:
+                noise = self.weight_hh.data.new(3, batch_size, self.hidden_size)
+                self.noise_hidden = Variable(noise.bernoulli_(1.0 - self.p_hidden) / (1.0 - self.p_hidden))
+            else:
+                self.noise_hidden = None
         else:
-            self.noise = None
+            self.noise_in = None
+            self.noise_hidden = None
 
     def forward(self, input, hx):
         return rnn_F.VarGRUCell(
             input, hx,
             self.weight_ih, self.weight_hh,
             self.bias_ih, self.bias_hh,
-            self.noise,
+            self.noise_in, self.noise_hidden,
         )

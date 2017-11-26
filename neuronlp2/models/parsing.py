@@ -270,8 +270,9 @@ class BiVarRecurrentConvBiAffine(BiRecurrentConvBiAffine):
                                                          embedd_word=embedd_word, embedd_char=embedd_char,
                                                          embedd_pos=embedd_pos,
                                                          p_in=p_in, p_rnn=p_rnn, biaffine=biaffine)
-        self.dropout_in = nn.Dropout2d(p=p_in)
-        self.dropout_rnn = nn.Dropout2d(p_rnn)
+        self.dropout_in = None #nn.Dropout2d(p=p_in)
+        self.dropout_rnn = None #nn.Dropout2d(p_rnn)
+        self.dropout_out = nn.Dropout2d(p=p_rnn)
 
         if rnn_mode == 'RNN':
             RNN = VarMaskedRNN
@@ -283,7 +284,7 @@ class BiVarRecurrentConvBiAffine(BiRecurrentConvBiAffine):
             raise ValueError('Unknown RNN mode: %s' % rnn_mode)
 
         self.rnn = RNN(word_dim + num_filters + pos_dim, hidden_size, num_layers=num_layers,
-                       batch_first=True, bidirectional=True, dropout=p_rnn)
+                       batch_first=True, bidirectional=True, dropout_in=p_in, dropout_hidden=p_rnn)
 
     def _get_rnn_output(self, input_word, input_char, input_pos, mask=None, length=None, hx=None):
         # [batch, length, word_dim]
@@ -307,11 +308,11 @@ class BiVarRecurrentConvBiAffine(BiRecurrentConvBiAffine):
         input = torch.cat([word, char, pos], dim=2)
         # apply dropout
         # [batch, length, dim] --> [batch, dim, length] --> [batch, length, dim]
-        input = self.dropout_in(input.transpose(1, 2)).transpose(1, 2)
+        # input = self.dropout_in(input.transpose(1, 2)).transpose(1, 2)
         # output from rnn [batch, length, hidden_size]
         output, hn = self.rnn(input, mask, hx=hx)
 
-        output = self.dropout_rnn(output.transpose(1, 2)).transpose(1, 2)
+        output = self.dropout_out(output.transpose(1, 2)).transpose(1, 2)
 
         # output size [batch, length, arc_space]
         arc_h = F.elu(self.arc_h(output))
