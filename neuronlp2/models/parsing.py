@@ -253,12 +253,7 @@ class BiRecurrentConvBiAffine(nn.Module):
         # then switch (2, 3) to [batch, num_labels, length_h, length_c]
         loss_type = self.logsoftmax(out_type.transpose(1, 3)).transpose(2, 3)
         # [batch, num_labels, length, length]
-        energy = loss_arc.unsqueeze(1) + loss_type
-        # mask invalid position to 0 for sum loss
-        if mask is not None:
-            # mask = [batch, 1, length]
-            mask = mask.unsqueeze(1)
-            energy = energy * mask.unsqueeze(3) * mask.unsqueeze(2)
+        energy = torch.exp(loss_arc.unsqueeze(1) + loss_type)
 
         return parser.decode_MST(energy.data.cpu().numpy(), length,
                                  leading_symbolic=leading_symbolic, labeled=True)
