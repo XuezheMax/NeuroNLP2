@@ -270,8 +270,8 @@ class BiVarRecurrentConvBiAffine(BiRecurrentConvBiAffine):
                                                          embedd_word=embedd_word, embedd_char=embedd_char,
                                                          embedd_pos=embedd_pos,
                                                          p_in=p_in, p_rnn=p_rnn, biaffine=biaffine)
-        self.dropout_in = None #nn.Dropout2d(p=p_in)
-        self.dropout_rnn = None #nn.Dropout2d(p_rnn)
+        self.dropout_in = None
+        self.dropout_rnn = None
         self.dropout_out = nn.Dropout2d(p=p_rnn)
 
         if rnn_mode == 'RNN':
@@ -306,12 +306,10 @@ class BiVarRecurrentConvBiAffine(BiRecurrentConvBiAffine):
 
         # concatenate word and char [batch, length, word_dim+char_filter]
         input = torch.cat([word, char, pos], dim=2)
-        # apply dropout
-        # [batch, length, dim] --> [batch, dim, length] --> [batch, length, dim]
-        # input = self.dropout_in(input.transpose(1, 2)).transpose(1, 2)
         # output from rnn [batch, length, hidden_size]
         output, hn = self.rnn(input, mask, hx=hx)
-
+        # apply dropout
+        # [batch, length, hidden_size] --> [batch, hidden_size, length] --> [batch, length, hidden_size]
         output = self.dropout_out(output.transpose(1, 2)).transpose(1, 2)
 
         # output size [batch, length, arc_space]
@@ -690,7 +688,8 @@ class StackPtrNet(nn.Module):
                 index = torch.from_numpy(np.array(ids)).type_as(base_index)
             base_index = base_index[index]
 
-            stacked_heads = [[new_stacked_heads[i][j] for j in range(len(new_stacked_heads[i]))] for i in range(num_hyp)]
+            stacked_heads = [[new_stacked_heads[i][j] for j in range(len(new_stacked_heads[i]))] for i in
+                             range(num_hyp)]
             constraints = new_constraints
             children.copy_(new_children)
             stacked_types.copy_(new_stacked_types)
@@ -729,7 +728,7 @@ class StackPtrNet(nn.Module):
         # type_c [batch, length, type_space]
         # hn [num_direction, batch, hidden_size]
         src_encoding, arc_c, type_c, hn, mask, length = self._get_encoder_output(input_word, input_char, input_pos,
-                                                                                   mask_e=mask, length_e=length, hx=hx)
+                                                                                 mask_e=mask, length_e=length, hx=hx)
         hn = self._transform_decoder_init_state(hn)
         batch, max_len_e, _ = src_encoding.size()
 
@@ -766,8 +765,9 @@ class StackVarPtrNet(StackPtrNet):
                                              embedd_word=embedd_word, embedd_char=embedd_char,
                                              embedd_pos=embedd_pos,
                                              p_in=p_in, p_rnn=p_rnn, biaffine=biaffine)
-        self.dropout_in = nn.Dropout2d(p=p_in)
-        self.dropout_rnn = nn.Dropout2d(p_rnn)
+        self.dropout_in = None
+        self.dropout_rnn = None
+        self.dropout_out = nn.Dropout2d(p=p_rnn)
 
         if rnn_mode == 'RNN':
             RNN = VarMaskedRNN
@@ -779,10 +779,10 @@ class StackVarPtrNet(StackPtrNet):
             raise ValueError('Unknown RNN mode: %s' % rnn_mode)
 
         self.encoder = RNN(word_dim + num_filters + pos_dim, hidden_size, num_layers=num_layers,
-                           batch_first=True, bidirectional=True, dropout=p_rnn)
+                           batch_first=True, bidirectional=True, dropout_in=p_in, dropout_hidden=p_rnn)
 
         self.decoder = RNN(word_dim + num_filters + pos_dim, hidden_size, num_layers=num_layers,
-                           batch_first=True, bidirectional=False, dropout=p_rnn)
+                           batch_first=True, bidirectional=False, dropout_in=p_in, dropout_hidden=p_rnn)
 
     def _get_encoder_output(self, input_word, input_char, input_pos, mask_e=None, length_e=None, hx=None):
         # [batch, length, word_dim]
@@ -804,13 +804,11 @@ class StackVarPtrNet(StackPtrNet):
 
         # concatenate word and char [batch, length, word_dim+char_filter]
         src_encoding = torch.cat([word, char, pos], dim=2)
-        # apply dropout
-        # [batch, length, dim] --> [batch, dim, length] --> [batch, length, dim]
-        input = self.dropout_in(src_encoding.transpose(1, 2)).transpose(1, 2)
         # output from rnn [batch, length, hidden_size]
-        output, hn = self.encoder(input, mask_e, hx=hx)
+        output, hn = self.encoder(src_encoding, mask_e, hx=hx)
         # apply dropout
-        output = self.dropout_rnn(output.transpose(1, 2)).transpose(1, 2)
+        # [batch, length, hidden_size] --> [batch, hidden_size, length] --> [batch, length, hidden_size]
+        output = self.dropout_out(output.transpose(1, 2)).transpose(1, 2)
 
         # output size [batch, length, arc_space]
         arc_c = F.elu(self.arc_c(output))
@@ -826,13 +824,11 @@ class StackVarPtrNet(StackPtrNet):
         batch_index = torch.arange(0, batch).type_as(src_encoding.data).long()
         # get vector for heads [batch, length_decoder, input_dim],
         src_encoding = src_encoding[batch_index, heads_stack.data.t()].transpose(0, 1)
-        # apply dropout
-        # [batch, length_decoder, dim] --> [batch, dim, length_decoder] --> [batch, length_decoder, dim]
-        input = self.dropout_in(src_encoding.transpose(1, 2)).transpose(1, 2)
         # output from rnn [batch, length, hidden_size]
-        output, hn = self.decoder(input, mask_d, hx=hx)
+        output, hn = self.decoder(src_encoding, mask_d, hx=hx)
         # apply dropout
-        output = self.dropout_rnn(output.transpose(1, 2)).transpose(1, 2)
+        # [batch, length, hidden_size] --> [batch, hidden_size, length] --> [batch, length, hidden_size]
+        output = self.dropout_out(output.transpose(1, 2)).transpose(1, 2)
 
         # output size [batch, length_decoder, arc_space]
         arc_h = F.elu(self.arc_h(output))
