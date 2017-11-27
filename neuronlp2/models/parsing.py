@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
-from ..nn import TreeCRF, VarMaskedGRU, VarMaskedRNN, VarMaskedLSTM
+from ..nn import TreeCRF, VarMaskedGRU, VarMaskedRNN, VarMaskedLSTM, VarMaskedFastLSTM
 from ..nn import Embedding
 from ..nn import utils
 from ..nn import Attention, BiLinear
@@ -31,6 +31,8 @@ class BiRecurrentConvBiAffine(nn.Module):
             RNN = VarMaskedRNN
         elif rnn_mode == 'LSTM':
             RNN = VarMaskedLSTM
+        elif rnn_mode == 'FastLSTM':
+            RNN = VarMaskedFastLSTM
         elif rnn_mode == 'GRU':
             RNN = VarMaskedGRU
         else:

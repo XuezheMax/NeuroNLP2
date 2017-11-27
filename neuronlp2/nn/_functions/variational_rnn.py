@@ -44,6 +44,34 @@ def VarLSTMCell(input, hidden, w_ih, w_hh, b_ih=None, b_hh=None, noise_in=None, 
     return hy, cy
 
 
+def VarFastLSTMCell(input, hidden, w_ih, w_hh, b_ih=None, b_hh=None, noise_in=None, noise_hidden=None):
+    if noise_in is not None:
+        input = input * noise_in
+
+    if input.is_cuda:
+        igates = F.linear(input, w_ih)
+        hgates = F.linear(hidden[0], w_hh) if noise_hidden is None else F.linear(hidden[0] * noise_hidden, w_hh)
+        state = fusedBackend.LSTMFused()
+        return state(igates, hgates, hidden[1]) if b_ih is None else state(igates, hgates, hidden[1], b_ih, b_hh)
+
+    hx, cx = hidden
+    if noise_hidden is not None:
+        hx = hx * noise_hidden
+    gates = F.linear(input, w_ih, b_ih) + F.linear(hx, w_hh, b_hh)
+
+    ingate, forgetgate, cellgate, outgate = gates.chunk(4, 1)
+
+    ingate = F.sigmoid(ingate)
+    forgetgate = F.sigmoid(forgetgate)
+    cellgate = F.tanh(cellgate)
+    outgate = F.sigmoid(outgate)
+
+    cy = (forgetgate * cx) + (ingate * cellgate)
+    hy = outgate * F.tanh(cy)
+
+    return hy, cy
+
+
 def VarGRUCell(input, hidden, w_ih, w_hh, b_ih=None, b_hh=None, noise_in=None, noise_hidden=None):
     input = input.expand(3, *input.size()) if noise_in is None else input.unsqueeze(0) * noise_in
     hx = hidden.expand(3, *hidden.size()) if noise_hidden is None else hidden.unsqueeze(0) * noise_hidden

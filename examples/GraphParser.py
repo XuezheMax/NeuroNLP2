@@ -28,7 +28,8 @@ uid = uuid.uuid4().get_hex()[:6]
 
 def main():
     args_parser = argparse.ArgumentParser(description='Tuning with graph-based parsing')
-    args_parser.add_argument('--mode', choices=['RNN', 'LSTM', 'GRU'], help='architecture of rnn', required=True)
+    args_parser.add_argument('--mode', choices=['RNN', 'LSTM', 'GRU', 'FastLSTM'],
+                             help='architecture of rnn', required=True)
     args_parser.add_argument('--num_epochs', type=int, default=200, help='Number of training epochs')
     args_parser.add_argument('--batch_size', type=int, default=64, help='Number of sentences in each batch')
     args_parser.add_argument('--hidden_size', type=int, default=256, help='Number of hidden units in RNN')
