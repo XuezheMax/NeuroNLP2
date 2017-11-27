@@ -16,23 +16,23 @@ class BiRecurrentConvBiAffine(nn.Module):
     def __init__(self, word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, num_filters, kernel_size,
                  rnn_mode, hidden_size, num_layers, num_labels, arc_space, type_space,
                  embedd_word=None, embedd_char=None, embedd_pos=None,
-                 p_in=0.2, p_rnn=0.5, biaffine=False):
+                 p_in=0.2, p_out=0.5, p_rnn=(0.5, 0.5), biaffine=False):
         super(BiRecurrentConvBiAffine, self).__init__()
 
         self.word_embedd = Embedding(num_words, word_dim, init_embedding=embedd_word)
         self.char_embedd = Embedding(num_chars, char_dim, init_embedding=embedd_char)
         self.pos_embedd = Embedding(num_pos, pos_dim, init_embedding=embedd_pos)
         self.conv1d = nn.Conv1d(char_dim, num_filters, kernel_size, padding=kernel_size - 1)
-        self.dropout_in = nn.Dropout(p=p_in)
-        self.dropout_rnn = nn.Dropout(p_rnn)
+        self.dropout_in = nn.Dropout2d(p=p_in)
+        self.dropout_out = nn.Dropout2d(p=p_out)
         self.num_labels = num_labels
 
         if rnn_mode == 'RNN':
-            RNN = nn.RNN
+            RNN = VarMaskedRNN
         elif rnn_mode == 'LSTM':
-            RNN = nn.LSTM
+            RNN = VarMaskedLSTM
         elif rnn_mode == 'GRU':
-            RNN = nn.GRU
+            RNN = VarMaskedGRU
         else:
             raise ValueError('Unknown RNN mode: %s' % rnn_mode)
 
@@ -50,12 +50,6 @@ class BiRecurrentConvBiAffine(nn.Module):
         self.logsoftmax = nn.LogSoftmax()
 
     def _get_rnn_output(self, input_word, input_char, input_pos, mask=None, length=None, hx=None):
-        # hack length from mask
-        # we do not hack mask from length for special reasons.
-        # Thus, always provide mask if it is necessary.
-        if length is None and mask is not None:
-            length = mask.data.sum(dim=1).long()
-
         # [batch, length, word_dim]
         word = self.word_embedd(input_word)
         # [batch, length, pos_dim]
@@ -73,19 +67,14 @@ class BiRecurrentConvBiAffine(nn.Module):
         # reshape to [batch, length, char_filters]
         char = torch.tanh(char).view(char_size[0], char_size[1], -1)
 
+        # apply dropout on input
+        word = self.dropout_in(word)
+        pos = self.dropout_in(pos)
+        char = self.dropout_in(char)
         # concatenate word and char [batch, length, word_dim+char_filter]
         input = torch.cat([word, char, pos], dim=2)
-        # apply dropout
-        input = self.dropout_in(input)
-        # prepare packed_sequence
-        if length is not None:
-            seq_input, hx, rev_order, mask = utils.prepare_rnn_seq(input, length, hx=hx, masks=mask, batch_first=True)
-            seq_output, hn = self.rnn(seq_input, hx=hx)
-            output, hn = utils.recover_rnn_seq(seq_output, rev_order, hx=hn, batch_first=True)
-        else:
-            # output from rnn [batch, length, hidden_size]
-            output, hn = self.rnn(input, hx=hx)
-        output = self.dropout_rnn(output)
+        # output from rnn [batch, length, hidden_size]
+        output, hn = self.rnn(input, mask, hx=hx)
 
         # output size [batch, length, arc_space]
         arc_h = F.elu(self.arc_h(output))
@@ -94,6 +83,14 @@ class BiRecurrentConvBiAffine(nn.Module):
         # output size [batch, length, type_space]
         type_h = F.elu(self.type_h(output))
         type_c = F.elu(self.type_c(output))
+
+        # apply dropout
+        # [batch, length, dim] --> [batch, dim, length] --> [batch, length, dim]
+        arc_h = self.dropout_out(arc_h.transpose(1, 2)).transpose(1, 2)
+        arc_c = self.dropout_out(arc_c.transpose(1, 2)).transpose(1, 2)
+
+        type_h = self.dropout_out(type_h.transpose(1, 2)).transpose(1, 2).contiguous()
+        type_c = self.dropout_out(type_c.transpose(1, 2)).transpose(1, 2).contiguous()
 
         return (arc_h, arc_c), (type_h, type_c), hn, mask, length
 
@@ -257,70 +254,6 @@ class BiRecurrentConvBiAffine(nn.Module):
 
         return parser.decode_MST(energy.data.cpu().numpy(), length,
                                  leading_symbolic=leading_symbolic, labeled=True)
-
-
-class BiVarRecurrentConvBiAffine(BiRecurrentConvBiAffine):
-    def __init__(self, word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, num_filters, kernel_size,
-                 rnn_mode, hidden_size, num_layers, num_labels, arc_space, type_space,
-                 embedd_word=None, embedd_char=None, embedd_pos=None,
-                 p_in=0.2, p_rnn=0.5, biaffine=False):
-        super(BiVarRecurrentConvBiAffine, self).__init__(word_dim, num_words, char_dim, num_chars, pos_dim, num_pos,
-                                                         num_filters, kernel_size, rnn_mode, hidden_size, num_layers,
-                                                         num_labels, arc_space, type_space,
-                                                         embedd_word=embedd_word, embedd_char=embedd_char,
-                                                         embedd_pos=embedd_pos,
-                                                         p_in=p_in, p_rnn=p_rnn, biaffine=biaffine)
-        self.dropout_in = None
-        self.dropout_rnn = None
-        self.dropout_out = nn.Dropout2d(p=p_rnn)
-
-        if rnn_mode == 'RNN':
-            RNN = VarMaskedRNN
-        elif rnn_mode == 'LSTM':
-            RNN = VarMaskedLSTM
-        elif rnn_mode == 'GRU':
-            RNN = VarMaskedGRU
-        else:
-            raise ValueError('Unknown RNN mode: %s' % rnn_mode)
-
-        self.rnn = RNN(word_dim + num_filters + pos_dim, hidden_size, num_layers=num_layers,
-                       batch_first=True, bidirectional=True, dropout_in=p_in, dropout_hidden=p_rnn)
-
-    def _get_rnn_output(self, input_word, input_char, input_pos, mask=None, length=None, hx=None):
-        # [batch, length, word_dim]
-        word = self.word_embedd(input_word)
-        # [batch, length, pos_dim]
-        pos = self.pos_embedd(input_pos)
-
-        # [batch, length, char_length, char_dim]
-        char = self.char_embedd(input_char)
-        char_size = char.size()
-        # first transform to [batch *length, char_length, char_dim]
-        # then transpose to [batch * length, char_dim, char_length]
-        char = char.view(char_size[0] * char_size[1], char_size[2], char_size[3]).transpose(1, 2)
-        # put into cnn [batch*length, char_filters, char_length]
-        # then put into maxpooling [batch * length, char_filters]
-        char, _ = self.conv1d(char).max(dim=2)
-        # reshape to [batch, length, char_filters]
-        char = torch.tanh(char).view(char_size[0], char_size[1], -1)
-
-        # concatenate word and char [batch, length, word_dim+char_filter]
-        input = torch.cat([word, char, pos], dim=2)
-        # output from rnn [batch, length, hidden_size]
-        output, hn = self.rnn(input, mask, hx=hx)
-        # apply dropout
-        # [batch, length, hidden_size] --> [batch, hidden_size, length] --> [batch, length, hidden_size]
-        # output = self.dropout_out(output.transpose(1, 2)).transpose(1, 2)
-
-        # output size [batch, length, arc_space]
-        arc_h = F.elu(self.arc_h(output))
-        arc_c = F.elu(self.arc_c(output))
-
-        # output size [batch, length, type_space]
-        type_h = F.elu(self.type_h(output))
-        type_c = F.elu(self.type_c(output))
-
-        return (arc_h, arc_c), (type_h, type_c), hn, mask, length
 
 
 class StackPtrNet(nn.Module):

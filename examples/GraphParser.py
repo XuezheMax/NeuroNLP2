@@ -18,7 +18,7 @@ import numpy as np
 import torch
 from torch.optim import Adam, SGD
 from neuronlp2.io import get_logger, conllx_data
-from neuronlp2.models import BiRecurrentConvBiAffine, BiVarRecurrentConvBiAffine
+from neuronlp2.models import BiRecurrentConvBiAffine
 from neuronlp2 import utils
 from neuronlp2.io import CoNLLXWriter
 from neuronlp2.tasks import parser
@@ -44,9 +44,9 @@ def main():
     args_parser.add_argument('--learning_rate', type=float, default=0.01, help='Learning rate')
     args_parser.add_argument('--decay_rate', type=float, default=0.05, help='Decay rate of learning rate')
     args_parser.add_argument('--gamma', type=float, default=0.0, help='weight for regularization')
-    args_parser.add_argument('--dropout', choices=['std', 'variational'], help='type of dropout', required=True)
-    args_parser.add_argument('--p_rnn', type=float, default=0.5, help='dropout rate for RNN')
-    args_parser.add_argument('--p_in', type=float, default=0.2, help='dropout rate for input embeddings')
+    args_parser.add_argument('--p_rnn', nargs=2, type=float, required=True, help='dropout rate for RNN')
+    args_parser.add_argument('--p_in', type=float, default=0.33, help='dropout rate for input embeddings')
+    args_parser.add_argument('--p_out', type=float, default=0.33, help='dropout rate for output layer')
     args_parser.add_argument('--biaffine', action='store_true', help='bi-gram parameter for CRF')
     args_parser.add_argument('--schedule', type=int, help='schedule for learning rate decay')
     args_parser.add_argument('--unk_replace', type=float, default=0.,
@@ -85,8 +85,9 @@ def main():
     decay_rate = args.decay_rate
     gamma = args.gamma
     schedule = args.schedule
-    p_rnn = args.p_rnn
+    p_rnn = tuple(args.p_rnn)
     p_in = args.p_in
+    p_out = args.p_out
     unk_replace = args.unk_replace
     biaffine = args.biaffine
     punctuation = args.punctuation
@@ -177,29 +178,16 @@ def main():
 
     window = 3
     if obj == 'cross_entropy':
-        if args.dropout == 'std':
-            network = BiRecurrentConvBiAffine(word_dim, num_words,
-                                              char_dim, num_chars,
-                                              pos_dim, num_pos,
-                                              num_filters, window,
-                                              mode, hidden_size, num_layers,
-                                              num_types, arc_space, type_space,
-                                              embedd_word=word_table, embedd_char=char_table,
-                                              p_in=p_in, p_rnn=p_rnn, biaffine=biaffine)
-        else:
-            network = BiVarRecurrentConvBiAffine(word_dim, num_words,
-                                                 char_dim, num_chars,
-                                                 pos_dim, num_pos,
-                                                 num_filters, window,
-                                                 mode, hidden_size, num_layers,
-                                                 num_types, arc_space, type_space,
-                                                 embedd_word=word_table, embedd_char=char_table,
-                                                 p_in=p_in, p_rnn=p_rnn, biaffine=biaffine)
+        network = BiRecurrentConvBiAffine(word_dim, num_words,
+                                          char_dim, num_chars,
+                                          pos_dim, num_pos,
+                                          num_filters, window,
+                                          mode, hidden_size, num_layers,
+                                          num_types, arc_space, type_space,
+                                          embedd_word=word_table, embedd_char=char_table,
+                                          p_in=p_in, p_out=p_out, p_rnn=p_rnn, biaffine=biaffine)
     elif obj == 'crf':
-        if args.dropout == 'std':
-            raise NotImplementedError
-        else:
-            raise NotImplementedError
+        raise NotImplementedError
     else:
         raise RuntimeError('Unknown objective: %s' % obj)
 
@@ -223,8 +211,8 @@ def main():
     logger.info("Embedding dim: word=%d, char=%d, pos=%d" % (word_dim, char_dim, pos_dim))
     logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, arc_space=%d, type_space=%d, %s" % (
         mode, num_layers, hidden_size, num_filters, arc_space, type_space, 'biaffine' if biaffine else 'affine'))
-    logger.info("train: obj: %s, l2: %f, (#data: %d, batch: %d, dropout(in, rnn): (%.2f, %.2f), unk replace: %.2f)" % (
-        obj, gamma, num_data, batch_size, p_in, p_rnn, unk_replace))
+    logger.info("train: obj: %s, l2: %f, (#data: %d, batch: %d, dropout(in, out, rnn): (%.2f, %.2f, %s), unk replace: %.2f)" % (
+        obj, gamma, num_data, batch_size, p_in, p_out, p_rnn, unk_replace))
     logger.info("decoding algorithm: %s" % decoding)
 
     num_batches = num_data / batch_size + 1
@@ -264,8 +252,8 @@ def main():
         raise ValueError('Unknown decoding algorithm: %s' % decoding)
 
     for epoch in range(1, num_epochs + 1):
-        print('Epoch %d (%s(%s), optim: %s, learning rate=%.4f, decay rate=%.4f (schedule=%d)): ' % (
-            epoch, mode, args.dropout, opt, lr, decay_rate, schedule))
+        print('Epoch %d (%s, optim: %s, learning rate=%.4f, decay rate=%.4f (schedule=%d)): ' % (
+            epoch, mode, opt, lr, decay_rate, schedule))
         train_err = 0.
         train_err_arc = 0.
         train_err_type = 0.

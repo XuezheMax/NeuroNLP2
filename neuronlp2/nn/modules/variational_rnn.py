@@ -11,7 +11,7 @@ from .._functions import variational_rnn as rnn_F
 class VarMaskedRNNBase(nn.Module):
     def __init__(self, Cell, input_size, hidden_size,
                  num_layers=1, bias=True, batch_first=False,
-                 dropout_in=0, dropout_hidden=0, bidirectional=False, **kwargs):
+                 dropout=(0, 0), bidirectional=False, **kwargs):
 
         super(VarMaskedRNNBase, self).__init__()
         self.Cell = Cell
@@ -28,14 +28,7 @@ class VarMaskedRNNBase(nn.Module):
             for direction in range(num_directions):
                 layer_input_size = input_size if layer == 0 else hidden_size * num_directions
 
-                if layer == 0:
-                    # for the first RNN layer, the input dropout rate is dropout_in
-                    cell = self.Cell(layer_input_size, hidden_size, self.bias,
-                                     p_in=dropout_in, p_hidden=dropout_hidden, **kwargs)
-                else:
-                    # for higher RNN layers, the input dropout rate is dropout_hidden
-                    cell = self.Cell(layer_input_size, hidden_size, self.bias,
-                                     p_in=dropout_hidden, p_hidden=dropout_hidden, **kwargs)
+                cell = self.Cell(layer_input_size, hidden_size, self.bias, p=dropout, **kwargs)
                 self.all_cells.append(cell)
                 self.add_module('cell%d' % (layer * num_directions + direction), cell)
 
@@ -94,10 +87,9 @@ class VarMaskedRNN(VarMaskedRNNBase):
             Default: True
         batch_first: If True, then the input and output tensors are provided
             as (batch, seq, feature)
-        dropout_in: If non-zero, introduces a dropout layer on the input of the first
-            RNN layer
-        dropout_hidden: If non-zero, introduces a dropout layer on the hidden of each
-            RNN layer and the input except the first RNN layer
+        dropout: (dropout_in, dropout_hidden) tuple.
+            If non-zero, introduces a dropout layer on the input and hidden of the each
+            RNN layer with dropout rate dropout_in and dropout_hidden, resp.
         bidirectional: If True, becomes a bidirectional RNN. Default: False
 
     Inputs: input, mask, h_0
@@ -153,10 +145,9 @@ class VarMaskedLSTM(VarMaskedRNNBase):
             Default: True
         batch_first: If True, then the input and output tensors are provided
             as (batch, seq, feature)
-        dropout_in: If non-zero, introduces a dropout layer on the input of the first
-            RNN layer
-        dropout_hidden: If non-zero, introduces a dropout layer on the hidden of each
-            RNN layer and the input except the first RNN layer
+        dropout: (dropout_in, dropout_hidden) tuple.
+            If non-zero, introduces a dropout layer on the input and hidden of the each
+            RNN layer with dropout rate dropout_in and dropout_hidden, resp.
         bidirectional: If True, becomes a bidirectional RNN. Default: False
 
     Inputs: input, mask, (h_0, c_0)
@@ -214,10 +205,9 @@ class VarMaskedGRU(VarMaskedRNNBase):
             Default: True
         batch_first: If True, then the input and output tensors are provided
             as (batch, seq, feature)
-        dropout_in: If non-zero, introduces a dropout layer on the input of the first
-            RNN layer
-        dropout_hidden: If non-zero, introduces a dropout layer on the hidden of each
-            RNN layer and the input except the first RNN layer
+        dropout: (dropout_in, dropout_hidden) tuple.
+            If non-zero, introduces a dropout layer on the input and hidden of the each
+            RNN layer with dropout rate dropout_in and dropout_hidden, resp.
         bidirectional: If True, becomes a bidirectional RNN. Default: False
 
     Inputs: input, mask, h_0
@@ -272,8 +262,7 @@ class VarRNNCell(VarRNNCellBase):
         bias: If False, then the layer does not use bias weights b_ih and b_hh.
             Default: True
         nonlinearity: The non-linearity to use ['tanh'|'relu']. Default: 'tanh'
-        p_in: (float, optional): the drop probability for input. Default: 0.5
-        p_hidden: (float, optional): the drop probability for hidden state. Default: 0.5
+        p: (p_in, p_hidden) (tuple, optional): the drop probability for input and hidden. Default: (0.5, 0.5)
 
     Inputs: input, hidden
         - **input** (batch, input_size): tensor containing input features
@@ -294,7 +283,7 @@ class VarRNNCell(VarRNNCellBase):
 
     """
 
-    def __init__(self, input_size, hidden_size, bias=True, nonlinearity="tanh", p_in=0.5, p_hidden=0.5):
+    def __init__(self, input_size, hidden_size, bias=True, nonlinearity="tanh", p=(0.5, 0.5)):
         super(VarRNNCell, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -309,6 +298,7 @@ class VarRNNCell(VarRNNCellBase):
             self.register_parameter('bias_ih', None)
             self.register_parameter('bias_hh', None)
         self.reset_parameters()
+        p_in, p_hidden = p
         if p_in < 0 or p_in > 1:
             raise ValueError("input dropout probability has to be between 0 and 1, "
                              "but got {}".format(p_in))
@@ -379,8 +369,7 @@ class VarLSTMCell(VarRNNCellBase):
         hidden_size: The number of features in the hidden state h
         bias: If `False`, then the layer does not use bias weights `b_ih` and
             `b_hh`. Default: True
-        p_in: (float, optional): the drop probability for input. Default: 0.5
-        p_hidden: (float, optional): the drop probability for hidden state. Default: 0.5
+        p: (p_in, p_hidden) (tuple, optional): the drop probability for input and hidden. Default: (0.5, 0.5)
 
     Inputs: input, (h_0, c_0)
         - **input** (batch, input_size): tensor containing input features
@@ -404,7 +393,7 @@ class VarLSTMCell(VarRNNCellBase):
         bias_hh: the learnable hidden-hidden bias, of shape `(4*hidden_size)`
     """
 
-    def __init__(self, input_size, hidden_size, bias=True, p_in=0.5, p_hidden=0.5):
+    def __init__(self, input_size, hidden_size, bias=True, p=(0.5, 0.5)):
         super(VarLSTMCell, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -418,6 +407,7 @@ class VarLSTMCell(VarRNNCellBase):
             self.register_parameter('bias_ih', None)
             self.register_parameter('bias_hh', None)
         self.reset_parameters()
+        p_in, p_hidden = p
         if p_in < 0 or p_in > 1:
             raise ValueError("input dropout probability has to be between 0 and 1, "
                              "but got {}".format(p_in))
@@ -477,8 +467,7 @@ class VarGRUCell(VarRNNCellBase):
         hidden_size: The number of features in the hidden state h
         bias: If `False`, then the layer does not use bias weights `b_ih` and
             `b_hh`. Default: `True`
-        p_in: (float, optional): the drop probability for input. Default: 0.5
-        p_hidden: (float, optional): the drop probability for hidden state. Default: 0.5
+        p: (p_in, p_hidden) (tuple, optional): the drop probability for input and hidden. Default: (0.5, 0.5)
 
     Inputs: input, hidden
         - **input** (batch, input_size): tensor containing input features
@@ -498,7 +487,7 @@ class VarGRUCell(VarRNNCellBase):
         bias_hh: the learnable hidden-hidden bias, of shape `(3*hidden_size)`
     """
 
-    def __init__(self, input_size, hidden_size, bias=True, p_in=0.5, p_hidden=0.5):
+    def __init__(self, input_size, hidden_size, bias=True, p=(0.5, 0.5)):
         super(VarGRUCell, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -512,6 +501,7 @@ class VarGRUCell(VarRNNCellBase):
             self.register_parameter('bias_ih', None)
             self.register_parameter('bias_hh', None)
         self.reset_parameters()
+        p_in, p_hidden = p
         if p_in < 0 or p_in > 1:
             raise ValueError("input dropout probability has to be between 0 and 1, "
                              "but got {}".format(p_in))
