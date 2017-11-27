@@ -129,7 +129,7 @@ class BiVarRecurrentConv(BiRecurrentConv):
                                                  embedd_word=embedd_word, embedd_char=embedd_char,
                                                  p_in=p_in, p_rnn=p_rnn)
 
-        self.dropout_in = nn.Dropout2d(p=p_in)
+        self.dropout_in = None
         self.dropout_rnn = nn.Dropout2d(p_rnn)
 
         if rnn_mode == 'RNN':
@@ -142,7 +142,7 @@ class BiVarRecurrentConv(BiRecurrentConv):
             raise ValueError('Unknown RNN mode: %s' % rnn_mode)
 
         self.rnn = RNN(word_dim + num_filters, hidden_size, num_layers=num_layers,
-                       batch_first=True, bidirectional=True, dropout=p_rnn)
+                       batch_first=True, bidirectional=True, dropout=(p_in, p_rnn))
 
     def _get_rnn_output(self, input_word, input_char, mask=None, length=None, hx=None):
         # [batch, length, word_dim]
@@ -162,9 +162,6 @@ class BiVarRecurrentConv(BiRecurrentConv):
 
         # concatenate word and char [batch, length, word_dim+char_filter]
         input = torch.cat([word, char], dim=2)
-        # apply dropout
-        # [batch, length, dim] --> [batch, dim, length] --> [batch, length, dim]
-        input = self.dropout_in(input.transpose(1, 2)).transpose(1, 2)
         # output from rnn [batch, length, hidden_size]
         output, hn = self.rnn(input, mask, hx=hx)
         # apply dropout for the output of rnn
