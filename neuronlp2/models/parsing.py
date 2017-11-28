@@ -87,12 +87,22 @@ class BiRecurrentConvBiAffine(nn.Module):
         type_c = F.elu(self.type_c(output))
 
         # apply dropout
-        # [batch, length, dim] --> [batch, dim, length] --> [batch, length, dim]
-        arc_h = self.dropout_out(arc_h.transpose(1, 2)).transpose(1, 2)
-        arc_c = self.dropout_out(arc_c.transpose(1, 2)).transpose(1, 2)
+        # [batch, length, dim] --> [batch, 2 * length, dim]
+        arc = torch.cat([arc_h, arc_c], dim=1)
+        type = torch.cat([type_h, type_c], dim=1)
 
-        type_h = self.dropout_out(type_h.transpose(1, 2)).transpose(1, 2).contiguous()
-        type_c = self.dropout_out(type_c.transpose(1, 2)).transpose(1, 2).contiguous()
+        arc = self.dropout_out(arc.transpose(1, 2)).transpose(1, 2)
+        arc_h, arc_c = arc.chunk(2, 1)
+
+        type = self.dropout_out(type.transpose(1, 2)).transpose(1, 2)
+        type_h, type_c = type.chunk(2, 1)
+
+        # [batch, length, dim] --> [batch, dim, length] --> [batch, length, dim]
+        # arc_h = self.dropout_out(arc_h.transpose(1, 2)).transpose(1, 2)
+        # arc_c = self.dropout_out(arc_c.transpose(1, 2)).transpose(1, 2)
+        #
+        # type_h = self.dropout_out(type_h.transpose(1, 2)).transpose(1, 2).contiguous()
+        # type_c = self.dropout_out(type_c.transpose(1, 2)).transpose(1, 2).contiguous()
 
         return (arc_h, arc_c), (type_h, type_c), hn, mask, length
 
