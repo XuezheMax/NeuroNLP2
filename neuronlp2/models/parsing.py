@@ -96,6 +96,8 @@ class BiRecurrentConvBiAffine(nn.Module):
 
         type = self.dropout_out(type.transpose(1, 2)).transpose(1, 2)
         type_h, type_c = type.chunk(2, 1)
+        type_h = type_h.contiguous()
+        type_c = type_c.contiguous()
 
         # [batch, length, dim] --> [batch, dim, length] --> [batch, length, dim]
         # arc_h = self.dropout_out(arc_h.transpose(1, 2)).transpose(1, 2)
