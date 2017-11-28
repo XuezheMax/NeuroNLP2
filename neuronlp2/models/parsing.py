@@ -78,6 +78,10 @@ class BiRecurrentConvBiAffine(nn.Module):
         # output from rnn [batch, length, hidden_size]
         output, hn = self.rnn(input, mask, hx=hx)
 
+        # apply dropout for output
+        # [batch, length, hidden_size] --> [batch, hidden_size, length] --> [batch, length, hidden_size]
+        output = self.dropout_out(output.transpose(1, 2)).transpose(1, 2)
+
         # output size [batch, length, arc_space]
         arc_h = F.elu(self.arc_h(output))
         arc_c = F.elu(self.arc_c(output))

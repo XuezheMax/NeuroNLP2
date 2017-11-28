@@ -39,8 +39,7 @@ def main():
     args_parser.add_argument('--num_filters', type=int, default=50, help='Number of filters in CNN')
     args_parser.add_argument('--pos_dim', type=int, default=50, help='Dimension of POS embeddings')
     args_parser.add_argument('--char_dim', type=int, default=50, help='Dimension of Character embeddings')
-    args_parser.add_argument('--optim', choices=['sgd', 'adam'], help='optimization algorithm', required=True)
-    args_parser.add_argument('--learning_rate', type=float, default=0.01, help='Learning rate')
+    args_parser.add_argument('--learning_rate', type=float, default=0.1, help='Learning rate')
     args_parser.add_argument('--decay_rate', type=float, default=0.05, help='Decay rate of learning rate')
     args_parser.add_argument('--gamma', type=float, default=0.0, help='weight for regularization')
     args_parser.add_argument('--p_rnn', nargs=2, type=float, required=True, help='dropout rate for RNN')
@@ -195,15 +194,16 @@ def main():
     pred_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
     gold_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
 
-    def generate_oprimizer(learning_rate):
-        if args.optim == 'adam':
-            return  Adam(network.parameters(), lr=learning_rate, betas=betas, weight_decay=gamma)
-        elif args.optim == 'sgd':
-            return SGD(network.parameters(), lr=learning_rate, momentum=momentum, weight_decay=gamma, nesterov=True)
-        else:
-            raise ValueError('Unknown optimization algorithm: %s' % args.optim)
-
-    optim = generate_oprimizer(learning_rate)
+    adam_epochs = 50
+    adam_rate = 0.001
+    if adam_epochs > 0:
+        lr = adam_rate
+        opt = 'adam'
+        optim = Adam(network.parameters(), lr=adam_rate, betas=betas, weight_decay=gamma)
+    else:
+        opt = 'sgd'
+        lr = learning_rate
+        optim = SGD(network.parameters(), lr=lr, momentum=momentum, weight_decay=gamma, nesterov=True)
 
     logger.info("Embedding dim: word=%d, char=%d, pos=%d" % (word_dim, char_dim, pos_dim))
     logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, arc_space=%d, type_space=%d, %s" % (
@@ -241,10 +241,9 @@ def main():
     test_total_inst = 0
     test_total_root = 0
 
-    lr = learning_rate
     for epoch in range(1, num_epochs + 1):
         print('Epoch %d (%s, optim: %s, learning rate=%.4f, decay rate=%.4f (schedule=%d)): ' % (
-            epoch, mode, args.optim, lr, decay_rate, schedule))
+            epoch, mode, opt, lr, decay_rate, schedule))
         train_err_arc_leaf = 0.
         train_err_arc_non_leaf = 0.
         train_err_type_leaf = 0.
@@ -494,8 +493,14 @@ def main():
 
         if epoch % schedule == 0:
             # lr = lr * decay_rate
-            lr = learning_rate / (1.0 + epoch * decay_rate)
-            optim = generate_oprimizer(lr)
+            if epoch < adam_epochs:
+                opt = 'adam'
+                lr = adam_rate / (1.0 + epoch * decay_rate)
+                optim = Adam(network.parameters(), lr=lr, betas=(0.9, 0.9), weight_decay=gamma)
+            else:
+                opt = 'sgd'
+                lr = learning_rate / (1.0 + (epoch - adam_epochs) * decay_rate)
+                optim = SGD(network.parameters(), lr=lr, momentum=momentum, weight_decay=gamma, nesterov=True)
 
 
 if __name__ == '__main__':
