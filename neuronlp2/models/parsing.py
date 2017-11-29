@@ -337,6 +337,10 @@ class StackPtrNet(nn.Module):
         # output from rnn [batch, length, hidden_size]
         output, hn = self.encoder(src_encoding, mask_e, hx=hx)
 
+        # apply dropout
+        # [batch, length, hidden_size] --> [batch, hidden_size, length] --> [batch, length, hidden_size]
+        output = self.dropout_out(output.transpose(1, 2)).transpose(1, 2)
+
         # output size [batch, length, arc_space]
         arc_c = F.elu(self.arc_c(output))
         # output size [batch, length, type_space]
@@ -352,6 +356,10 @@ class StackPtrNet(nn.Module):
         src_encoding = src_encoding[batch_index, heads_stack.data.t()].transpose(0, 1)
         # output from rnn [batch, length, hidden_size]
         output, hn = self.decoder(src_encoding, mask_d, hx=hx)
+
+        # apply dropout
+        # [batch, length, hidden_size] --> [batch, hidden_size, length] --> [batch, length, hidden_size]
+        output = self.dropout_out(output.transpose(1, 2)).transpose(1, 2)
 
         # output size [batch, length_decoder, arc_space]
         arc_h = F.elu(self.arc_h(output))
