@@ -445,6 +445,10 @@ class StackPtrNet(nn.Module):
         # then convert back to [batch, length_decoder, num_labels]
         loss_type = self.logsoftmax(out_type.transpose(0, 2)).transpose(0, 2)
 
+        # compute coverage loss
+        # [batch, length_decoder, length_encoder]
+        coverage = torch.exp(loss_arc)
+
         # get leaf and non-leaf mask
         # shape = [batch, length_decoder]
         mask_leaf = torch.eq(stacked_heads, children).float()
@@ -453,6 +457,7 @@ class StackPtrNet(nn.Module):
         # mask invalid position to 0 for sum loss
         if mask_e is not None:
             loss_arc = loss_arc * mask_d.unsqueeze(2) * mask_e.unsqueeze(1)
+            coverage = coverage * mask_d.unsqueeze(2) * mask_e.unsqueeze(1)
             loss_type = loss_type * mask_d.unsqueeze(2)
             mask_leaf = mask_leaf * mask_d
             mask_non_leaf = mask_non_leaf * mask_d
@@ -464,6 +469,10 @@ class StackPtrNet(nn.Module):
             # number of valid positions which contribute to loss (remove the symbolic head for each sentence.
             num_leaf = max_len_e
             num_non_leaf = max_len_e - 1
+
+        # compute the real coverage vector for each time step
+        # [batch, length_decoder, length_encoder]
+        coverage = coverage.cumsum(dim=1)
 
         # first create index matrix [length, batch]
         head_index = torch.arange(0, max_len_d).view(max_len_d, 1).expand(max_len_d, batch)
@@ -477,8 +486,11 @@ class StackPtrNet(nn.Module):
         loss_type_leaf = loss_type * mask_leaf
         loss_type_non_leaf = loss_type * mask_non_leaf
 
+        loss_cov = (coverage - 2.0).clamp(min=0.)
+
         return -loss_arc_leaf.sum() / num_leaf, -loss_arc_non_leaf.sum() / num_non_leaf, \
                -loss_type_leaf.sum() / num_leaf, -loss_type_non_leaf.sum() / num_non_leaf, \
+               loss_cov.sum() / (num_leaf + num_non_leaf), \
                num_leaf, num_non_leaf
 
     def _decode_per_sentence(self, src_encoding, arc_c, type_c, hx, length, beam):

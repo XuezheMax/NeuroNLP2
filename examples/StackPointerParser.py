@@ -42,6 +42,7 @@ def main():
     args_parser.add_argument('--learning_rate', type=float, default=0.1, help='Learning rate')
     args_parser.add_argument('--decay_rate', type=float, default=0.05, help='Decay rate of learning rate')
     args_parser.add_argument('--gamma', type=float, default=0.0, help='weight for regularization')
+    args_parser.add_argument('--eta', type=float, default=1.0, help='weight for coverage loss')
     args_parser.add_argument('--p_rnn', nargs=2, type=float, required=True, help='dropout rate for RNN')
     args_parser.add_argument('--p_in', type=float, default=0.33, help='dropout rate for input embeddings')
     args_parser.add_argument('--p_out', type=float, default=0.33, help='dropout rate for output layer')
@@ -81,6 +82,7 @@ def main():
     betas = (0.9, 0.9)
     decay_rate = args.decay_rate
     gamma = args.gamma
+    eta = args.eta
     schedule = args.schedule
     p_rnn = tuple(args.p_rnn)
     p_in = args.p_in
@@ -206,8 +208,8 @@ def main():
     logger.info("Embedding dim: word=%d, char=%d, pos=%d" % (word_dim, char_dim, pos_dim))
     logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, arc_space=%d, type_space=%d" % (
         mode, num_layers, hidden_size, num_filters, arc_space, type_space))
-    logger.info("train: l2: %f, (#data: %d, batch: %d, dropout(in, out, rnn): (%.2f, %.2f, %s), unk replace: %.2f)" % (
-        gamma, num_data, batch_size, p_in, p_out, p_rnn, unk_replace))
+    logger.info("train: cov: %.1f, (#data: %d, batch: %d, dropout(in, out, rnn): (%.2f, %.2f, %s), unk_repl: %.2f)" % (
+        eta, num_data, batch_size, p_in, p_out, p_rnn, unk_replace))
     logger.info('prior order: %s, beam: %d' % ('left2right' if left2right else 'inside-out', beam))
 
     num_batches = num_data / batch_size + 1
@@ -246,6 +248,7 @@ def main():
         train_err_arc_non_leaf = 0.
         train_err_type_leaf = 0.
         train_err_type_non_leaf = 0.
+        train_err_cov = 0.
         train_total_leaf = 0.
         train_total_non_leaf = 0.
         start_time = time.time()
@@ -259,12 +262,13 @@ def main():
             optim.zero_grad()
             loss_arc_leaf, loss_arc_non_leaf, \
             loss_type_leaf, loss_type_non_leaf, \
+            loss_cov, \
             num_leaf, num_non_leaf = network.loss(word, char, pos, stacked_heads, children, stacked_types,
                                                   mask_e=masks_e, length_e=lengths_e, mask_d=masks_d,
                                                   length_d=lengths_d)
             loss_arc = loss_arc_leaf + loss_arc_non_leaf
             loss_type = loss_type_leaf + loss_type_non_leaf
-            loss = loss_arc + loss_type
+            loss = loss_arc + loss_type + eta * loss_cov
             loss.backward()
             optim.step()
 
@@ -276,6 +280,8 @@ def main():
 
             train_err_type_leaf += loss_type_leaf.data[0] * num_leaf
             train_err_type_non_leaf += loss_type_non_leaf.data[0] * num_non_leaf
+
+            train_err_cov += loss_cov.data[0] * (num_leaf + num_non_leaf)
 
             train_total_leaf += num_leaf
             train_total_non_leaf += num_non_leaf
@@ -295,10 +301,12 @@ def main():
                 err_type_leaf = train_err_type_leaf / train_total_leaf
                 err_type_non_leaf = train_err_type_non_leaf / train_total_non_leaf
                 err_type = err_type_leaf + err_type_non_leaf
+
+                err_cov = train_err_cov / (train_total_leaf + train_total_non_leaf)
                 log_info = 'train: %d/%d loss (leaf, non_leaf), arc: %.4f (%.4f, %.4f), ' \
-                           'type: %.4f (%.4f, %.4f), time left (estimated): %.2fs' % (
+                           'type: %.4f (%.4f, %.4f), coverage: %.4f, time left (estimated): %.2fs' % (
                                batch, num_batches, err_arc, err_arc_leaf, err_arc_non_leaf,
-                               err_type, err_type_leaf, err_type_non_leaf, time_left)
+                               err_type, err_type_leaf, err_type_non_leaf, err_cov, time_left)
                 sys.stdout.write(log_info)
                 sys.stdout.flush()
                 num_back = len(log_info)
@@ -313,9 +321,13 @@ def main():
         err_type_leaf = train_err_type_leaf / train_total_leaf
         err_type_non_leaf = train_err_type_non_leaf / train_total_non_leaf
         err_type = err_type_leaf + err_type_non_leaf
-        print('train: %d loss (leaf, non_leaf), arc: %.4f (%.4f, %.4f), type: %.4f (%.4f, %.4f), time: %.2fs' % (
-            num_batches, err_arc, err_arc_leaf, err_arc_non_leaf, err_type, err_type_leaf, err_type_non_leaf,
-            time.time() - start_time))
+
+        err_cov = train_err_cov / (train_total_leaf + train_total_non_leaf)
+        print('train: %d loss (leaf, non_leaf), arc: %.4f (%.4f, %.4f), type: %.4f (%.4f, %.4f), coverage: %.4f, '
+              'time: %.2fs' % (
+            num_batches, err_arc, err_arc_leaf, err_arc_non_leaf,
+            err_type, err_type_leaf, err_type_non_leaf,
+            err_cov, time.time() - start_time))
 
         # evaluate performance on dev data
         network.eval()
