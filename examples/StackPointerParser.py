@@ -303,9 +303,11 @@ def main():
                 err_type = err_type_leaf + err_type_non_leaf
 
                 err_cov = train_err_cov / (train_total_leaf + train_total_non_leaf)
-                log_info = 'train: %d/%d loss (leaf, non_leaf), arc: %.4f (%.4f, %.4f), ' \
+
+                err = err_arc + err_type + eta * err_cov
+                log_info = 'train: %d/%d loss (leaf, non_leaf): %.4f, arc: %.4f (%.4f, %.4f), ' \
                            'type: %.4f (%.4f, %.4f), coverage: %.4f, time left (estimated): %.2fs' % (
-                               batch, num_batches, err_arc, err_arc_leaf, err_arc_non_leaf,
+                               batch, num_batches, err, err_arc, err_arc_leaf, err_arc_non_leaf,
                                err_type, err_type_leaf, err_type_non_leaf, err_cov, time_left)
                 sys.stdout.write(log_info)
                 sys.stdout.flush()
@@ -323,9 +325,11 @@ def main():
         err_type = err_type_leaf + err_type_non_leaf
 
         err_cov = train_err_cov / (train_total_leaf + train_total_non_leaf)
-        print('train: %d loss (leaf, non_leaf), arc: %.4f (%.4f, %.4f), type: %.4f (%.4f, %.4f), coverage: %.4f, '
+
+        err = err_arc + err_type + eta * err_cov
+        print('train: %d loss (leaf, non_leaf): %.4f, arc: %.4f (%.4f, %.4f), type: %.4f (%.4f, %.4f), coverage: %.4f, '
               'time: %.2fs' % (
-            num_batches, err_arc, err_arc_leaf, err_arc_non_leaf,
+            num_batches, err, err_arc, err_arc_leaf, err_arc_non_leaf,
             err_type, err_type_leaf, err_type_non_leaf,
             err_cov, time.time() - start_time))
 
