@@ -4,7 +4,7 @@ CUDA_VISIBLE_DEVICES=1 python examples/GraphParser.py --mode FastLSTM --num_epoc
  --objective cross_entropy --learning_rate 0.02 --decay_rate 0.05 --schedule 1 --gamma 0.0 \
  --p_in 0.33 --p_rnn 0.33 0.33 --p_out 0.33 --unk_replace 0.5 --biaffine \
  --decode mst \
- --word_embedding glove --word_path "data/glove/glove.6B/glove.6B.100d.gz" --char_embedding random \
+ --word_embedding sskip --word_path "data/sskip/sskip.eng.100.gz" --char_embedding random \
  --punctuation '$(' '.' '``' "''" ':' ',' \
  --train "data/PTB3.0/PTB3.0-Stanford_dep/ptb3.0-stanford.auto.cpos.train.conll" \
  --dev "data/PTB3.0/PTB3.0-Stanford_dep/ptb3.0-stanford.auto.cpos.dev.conll" \
