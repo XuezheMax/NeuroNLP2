@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from ..nn import TreeCRF, VarMaskedGRU, VarMaskedRNN, VarMaskedLSTM, VarMaskedFastLSTM
 from ..nn import Embedding
 from ..nn import utils
-from ..nn import Attention, BiLinear
+from ..nn import BiAAttention, BiLinear
 from neuronlp2.tasks import parser
 
 
@@ -44,7 +44,7 @@ class BiRecurrentConvBiAffine(nn.Module):
         out_dim = hidden_size * 2
         self.arc_h = nn.Linear(out_dim, arc_space)
         self.arc_c = nn.Linear(out_dim, arc_space)
-        self.attention = Attention(arc_space, arc_space, 1, biaffine=biaffine)
+        self.attention = BiAAttention(arc_space, arc_space, 1, biaffine=biaffine)
 
         self.type_h = nn.Linear(out_dim, type_space)
         self.type_c = nn.Linear(out_dim, type_space)
@@ -302,7 +302,7 @@ class StackPtrNet(nn.Module):
         self.hx_dense = nn.Linear(2 * hidden_size, hidden_size)
         self.arc_h = nn.Linear(hidden_size, arc_space)  # arc dense for decoder
         self.arc_c = nn.Linear(hidden_size * 2, arc_space)  # arc dense for encoder
-        self.attention = Attention(arc_space, arc_space, 1, biaffine=biaffine)
+        self.attention = BiAAttention(arc_space, arc_space, 1, biaffine=biaffine)
 
         self.type_h = nn.Linear(hidden_size, type_space)  # type dense for decoder
         self.type_c = nn.Linear(hidden_size * 2, type_space)  # type dense for encoder

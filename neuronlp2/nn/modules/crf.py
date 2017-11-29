@@ -8,7 +8,7 @@ from torch.autograd import Variable
 from torch.nn.parameter import Parameter
 from neuronlp2.nlinalg import logsumexp, logdet
 from neuronlp2.tasks import parser
-from .attention import Attention
+from .attention import BiAAttention
 
 
 class ChainCRF(nn.Module):
@@ -218,7 +218,7 @@ class TreeCRF(nn.Module):
         super(TreeCRF, self).__init__()
         self.input_size = input_size
         self.num_labels = num_labels
-        self.attention = Attention(input_size, input_size, num_labels, biaffine=biaffine)
+        self.attention = BiAAttention(input_size, input_size, num_labels, biaffine=biaffine)
 
     def forward(self, input_h, input_c, mask=None):
         '''

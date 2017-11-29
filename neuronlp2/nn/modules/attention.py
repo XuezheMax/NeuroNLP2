@@ -5,7 +5,7 @@ import torch.nn as nn
 from torch.nn.parameter import Parameter
 
 
-class Attention(nn.Module):
+class BiAAttention(nn.Module):
     '''
     Bi-Affine layer.
     '''
@@ -24,7 +24,7 @@ class Attention(nn.Module):
                 if apply bi-affine parameter.
             **kwargs:
         '''
-        super(Attention, self).__init__()
+        super(BiAAttention, self).__init__()
         self.input_size_encoder = input_size_encoder
         self.input_size_decoder = input_size_decoder
         self.num_labels = num_labels
