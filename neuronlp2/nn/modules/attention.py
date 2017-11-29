@@ -101,6 +101,7 @@ class ConcatAttention(nn.Module):
     '''
     Concatenate attention layer.
     '''
+    # TODO test it!
 
     def __init__(self, input_size_encoder, input_size_decoder, hidden_size, num_labels, **kwargs):
         '''
