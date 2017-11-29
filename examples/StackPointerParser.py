@@ -45,7 +45,6 @@ def main():
     args_parser.add_argument('--p_rnn', nargs=2, type=float, required=True, help='dropout rate for RNN')
     args_parser.add_argument('--p_in', type=float, default=0.33, help='dropout rate for input embeddings')
     args_parser.add_argument('--p_out', type=float, default=0.33, help='dropout rate for output layer')
-    args_parser.add_argument('--biaffine', action='store_true', help='bi-gram parameter for CRF')
     args_parser.add_argument('--left2right', action='store_true', help='apply left to right prior order.')
     args_parser.add_argument('--schedule', type=int, help='schedule for learning rate decay')
     args_parser.add_argument('--unk_replace', type=float, default=0.,
@@ -87,7 +86,6 @@ def main():
     p_in = args.p_in
     p_out = args.p_out
     unk_replace = args.unk_replace
-    biaffine = args.biaffine
     left2right = args.left2right
     beam = args.beam
     punctuation = args.punctuation
@@ -186,7 +184,7 @@ def main():
                           mode, hidden_size, num_layers,
                           num_types, arc_space, type_space,
                           embedd_word=word_table, embedd_char=char_table,
-                          p_in=p_in, p_out=p_out, p_rnn=p_rnn, biaffine=biaffine)
+                          p_in=p_in, p_out=p_out, p_rnn=p_rnn, biaffine=True)
 
     if use_gpu:
         network.cuda()
@@ -206,8 +204,8 @@ def main():
         optim = SGD(network.parameters(), lr=lr, momentum=momentum, weight_decay=gamma, nesterov=True)
 
     logger.info("Embedding dim: word=%d, char=%d, pos=%d" % (word_dim, char_dim, pos_dim))
-    logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, arc_space=%d, type_space=%d, %s" % (
-        mode, num_layers, hidden_size, num_filters, arc_space, type_space, 'biaffine' if biaffine else 'affine'))
+    logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, arc_space=%d, type_space=%d" % (
+        mode, num_layers, hidden_size, num_filters, arc_space, type_space))
     logger.info("train: l2: %f, (#data: %d, batch: %d, dropout(in, out, rnn): (%.2f, %.2f, %s), unk replace: %.2f)" % (
         gamma, num_data, batch_size, p_in, p_out, p_rnn, unk_replace))
     logger.info('prior order: %s, beam: %d' % ('left2right' if left2right else 'inside-out', beam))
