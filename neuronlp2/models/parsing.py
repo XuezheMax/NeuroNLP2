@@ -103,13 +103,6 @@ class BiRecurrentConvBiAffine(nn.Module):
         type_h = type_h.contiguous()
         type_c = type_c.contiguous()
 
-        # [batch, length, dim] --> [batch, dim, length] --> [batch, length, dim]
-        # arc_h = self.dropout_out(arc_h.transpose(1, 2)).transpose(1, 2)
-        # arc_c = self.dropout_out(arc_c.transpose(1, 2)).transpose(1, 2)
-        #
-        # type_h = self.dropout_out(type_h.transpose(1, 2)).transpose(1, 2).contiguous()
-        # type_c = self.dropout_out(type_c.transpose(1, 2)).transpose(1, 2).contiguous()
-
         return (arc_h, arc_c), (type_h, type_c), hn, mask, length
 
     def forward(self, input_word, input_char, input_pos, mask=None, length=None, hx=None):
@@ -349,11 +342,6 @@ class StackPtrNet(nn.Module):
         # output size [batch, length, type_space]
         type_c = F.elu(self.type_c(output))
 
-        # apply dropout
-        # [batch, length, dim] --> [batch, dim, length] --> [batch, length, dim]
-        arc_c = self.dropout_out(arc_c.transpose(1, 2)).transpose(1, 2)
-        type_c = self.dropout_out(type_c.transpose(1, 2)).transpose(1, 2).contiguous()
-
         return src_encoding, arc_c, type_c, hn, mask_e, length_e
 
     def _get_decoder_output(self, src_encoding, heads_stack, hx, mask_d=None, length_d=None):
@@ -369,11 +357,6 @@ class StackPtrNet(nn.Module):
         arc_h = F.elu(self.arc_h(output))
         # output size [batch, length_decoder, type_space]
         type_h = F.elu(self.type_h(output))
-
-        # apply dropout
-        # [batch, length, dim] --> [batch, dim, length] --> [batch, length, dim]
-        arc_h = self.dropout_out(arc_h.transpose(1, 2)).transpose(1, 2)
-        type_h = self.dropout_out(type_h.transpose(1, 2)).transpose(1, 2).contiguous()
 
         return arc_h, type_h, hn, mask_d, length_d
 
@@ -419,6 +402,18 @@ class StackPtrNet(nn.Module):
         arc_h, type_h, _, mask_d, _ = self._get_decoder_output(src_encoding, stacked_heads, hn,
                                                                mask_d=mask_d, length_d=length_d)
         _, max_len_d, _ = arc_h.size()
+        # apply dropout
+        # [batch, length_decoder, dim] + [batch, length_encoder, dim] --> [batch, length_decoder + length_encoder, dim]
+        arc = torch.cat([arc_h, arc_c], dim=1)
+        type = torch.cat([type_h, type_c], dim=1)
+
+        arc = self.dropout_out(arc.transpose(1, 2)).transpose(1, 2)
+        arc_h = arc[:, :max_len_d]
+        arc_c = arc[:, max_len_d:]
+
+        type = self.dropout_out(type.transpose(1, 2)).transpose(1, 2)
+        type_h = type[:, :max_len_d].contiguous()
+        type_c = type[:, max_len_d:].contiguous()
 
         if mask_d is not None and children.size(1) != mask_d.size(1):
             stacked_heads = stacked_heads[:, :max_len_d]
