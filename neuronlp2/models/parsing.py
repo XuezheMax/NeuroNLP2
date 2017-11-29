@@ -455,7 +455,7 @@ class StackPtrNet(nn.Module):
 
         # compute coverage loss
         # [batch, length_decoder, length_encoder]
-        coverage = torch.exp(loss_arc)
+        coverage = torch.exp(loss_arc).cumsum(dim=1)
 
         # get leaf and non-leaf mask
         # shape = [batch, length_decoder]
@@ -477,10 +477,6 @@ class StackPtrNet(nn.Module):
             # number of valid positions which contribute to loss (remove the symbolic head for each sentence.
             num_leaf = max_len_e
             num_non_leaf = max_len_e - 1
-
-        # compute the real coverage vector for each time step
-        # [batch, length_decoder, length_encoder]
-        coverage = coverage.cumsum(dim=1)
 
         # first create index matrix [length, batch]
         head_index = torch.arange(0, max_len_d).view(max_len_d, 1).expand(max_len_d, batch)
