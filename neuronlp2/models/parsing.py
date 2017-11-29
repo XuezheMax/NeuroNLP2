@@ -413,7 +413,7 @@ class StackPtrNet(nn.Module):
 
         type = self.dropout_out(type.transpose(1, 2)).transpose(1, 2)
         type_h = type[:, :max_len_d].contiguous()
-        type_c = type[:, max_len_d:].contiguous()
+        type_c = type[:, max_len_d:]
 
         if mask_d is not None and children.size(1) != mask_d.size(1):
             stacked_heads = stacked_heads[:, :max_len_d]
