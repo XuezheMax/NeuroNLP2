@@ -6,6 +6,7 @@ Implementation of Bi-directional LSTM-CNNs-TreeCRF model for Graph-based depende
 """
 
 import sys
+import os
 
 sys.path.append(".")
 sys.path.append("..")
@@ -39,8 +40,8 @@ def main():
     args_parser.add_argument('--num_filters', type=int, default=50, help='Number of filters in CNN')
     args_parser.add_argument('--pos_dim', type=int, default=50, help='Dimension of POS embeddings')
     args_parser.add_argument('--char_dim', type=int, default=50, help='Dimension of Character embeddings')
-    args_parser.add_argument('--learning_rate', type=float, default=0.1, help='Learning rate')
-    args_parser.add_argument('--decay_rate', type=float, default=0.05, help='Decay rate of learning rate')
+    args_parser.add_argument('--learning_rate', type=float, default=0.001, help='Learning rate')
+    args_parser.add_argument('--decay_rate', type=float, default=0.5, help='Decay rate of learning rate')
     args_parser.add_argument('--gamma', type=float, default=0.0, help='weight for regularization')
     args_parser.add_argument('--eta', type=float, default=1.0, help='weight for coverage loss')
     args_parser.add_argument('--p_rnn', nargs=2, type=float, required=True, help='dropout rate for RNN')
@@ -61,6 +62,8 @@ def main():
     args_parser.add_argument('--train')  # "data/POS-penn/wsj/split1/wsj1.train.original"
     args_parser.add_argument('--dev')  # "data/POS-penn/wsj/split1/wsj1.dev.original"
     args_parser.add_argument('--test')  # "data/POS-penn/wsj/split1/wsj1.test.original"
+    args_parser.add_argument('--model_path', help='path for saving model file.', required=True)
+    args_parser.add_argument('--model_name', help='name for saving model file.', required=True)
 
     args = args_parser.parse_args()
 
@@ -70,6 +73,8 @@ def main():
     train_path = args.train
     dev_path = args.dev
     test_path = args.test
+    model_path = args.model_path
+    model_name = args.model_name
     num_epochs = args.num_epochs
     batch_size = args.batch_size
     hidden_size = args.hidden_size
@@ -104,8 +109,11 @@ def main():
     if char_embedding != 'random':
         char_dict, char_dim = utils.load_embedding_dict(char_embedding, char_path)
     logger.info("Creating Alphabets")
+
+    alphabet_path = os.path.join(model_path, 'alphabets/')
+    model_name = os.path.join(model_path, model_name)
     word_alphabet, char_alphabet, pos_alphabet, \
-    type_alphabet = conllx_stacked_data.create_alphabets("data/alphabets/ptr/", train_path,
+    type_alphabet = conllx_stacked_data.create_alphabets(alphabet_path, train_path,
                                                          data_paths=[dev_path, test_path],
                                                          max_vocabulary_size=50000, embedd_dict=word_dict)
 
@@ -194,16 +202,9 @@ def main():
     pred_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
     gold_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
 
-    adam_epochs = 50
-    adam_rate = 0.001
-    if adam_epochs > 0:
-        lr = adam_rate
-        opt = 'adam'
-        optim = Adam(network.parameters(), lr=adam_rate, betas=betas, weight_decay=gamma)
-    else:
-        opt = 'sgd'
-        lr = learning_rate
-        optim = SGD(network.parameters(), lr=lr, momentum=momentum, weight_decay=gamma, nesterov=True)
+    lr = learning_rate
+    opt = 'adam'
+    optim = Adam(network.parameters(), lr=learning_rate, betas=betas, weight_decay=gamma)
 
     logger.info("Embedding dim: word=%d, char=%d, pos=%d" % (word_dim, char_dim, pos_dim))
     logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, arc_space=%d, type_space=%d" % (
@@ -241,6 +242,7 @@ def main():
     test_total_inst = 0
     test_total_root = 0
 
+    patient = 0
     for epoch in range(1, num_epochs + 1):
         print('Epoch %d (%s, optim: %s, learning rate=%.4f, decay rate=%.4f (schedule=%d)): ' % (
             epoch, mode, opt, lr, decay_rate, schedule))
@@ -403,43 +405,28 @@ def main():
         print('Root: corr: %d, total: %d, acc: %.2f%%' %(
             dev_root_corr, dev_total_root, dev_root_corr * 100 / dev_total_root))
 
-        if dev_ucorrect_nopunc <= dev_ucorr_nopunc:
-            dev_ucorrect_nopunc = dev_ucorr_nopunc
-            dev_lcorrect_nopunc = dev_lcorr_nopunc
-            dev_ucomlpete_match_nopunc = dev_ucomlpete_nopunc
-            dev_lcomplete_match_nopunc = dev_lcomplete_nopunc
-
-            dev_ucorrect = dev_ucorr
-            dev_lcorrect = dev_lcorr
-            dev_ucomlpete_match = dev_ucomlpete
-            dev_lcomplete_match = dev_lcomplete
-
-            dev_root_correct = dev_root_corr
-
-            best_epoch = epoch
-
-            pred_filename = 'tmp/%spred_test%d' % (str(uid), epoch)
-            pred_writer.start(pred_filename)
-            gold_filename = 'tmp/%sgold_test%d' % (str(uid), epoch)
-            gold_writer.start(gold_filename)
-
-            test_ucorrect = 0.0
-            test_lcorrect = 0.0
-            test_ucomlpete_match = 0.0
-            test_lcomplete_match = 0.0
-            test_total = 0
-
-            test_ucorrect_nopunc = 0.0
-            test_lcorrect_nopunc = 0.0
-            test_ucomlpete_match_nopunc = 0.0
-            test_lcomplete_match_nopunc = 0.0
-            test_total_nopunc = 0
-            test_total_inst = 0
-
-            test_root_correct = 0.0
-            test_total_root = 0
-            for batch in conllx_stacked_data.iterate_batch_stacked_variable(data_test, batch_size):
-                input_encoder, _ = batch
+        if epoch % 2 == 1:
+            print('saving model %d' % epoch)
+            torch.save(network, model_name)
+        else:
+            print('loading model:')
+            network = torch.load(model_name)
+            network.eval()
+            dev_ucorr = 0.0
+            dev_lcorr = 0.0
+            dev_total = 0
+            dev_ucomlpete = 0.0
+            dev_lcomplete = 0.0
+            dev_ucorr_nopunc = 0.0
+            dev_lcorr_nopunc = 0.0
+            dev_total_nopunc = 0
+            dev_ucomlpete_nopunc = 0.0
+            dev_lcomplete_nopunc = 0.0
+            dev_root_corr = 0.0
+            dev_total_root = 0.0
+            dev_total_inst = 0.0
+            for batch in conllx_stacked_data.iterate_batch_stacked_variable(data_dev, batch_size):
+                input_encoder, input_decoder = batch
                 word, char, pos, heads, types, masks, lengths = input_encoder
                 heads_pred, types_pred = network.decode(word, char, pos, mask=masks, length=lengths, beam=beam)
 
@@ -453,68 +440,152 @@ def main():
                 gold_writer.write(word, pos, heads, types, lengths, symbolic_root=True)
 
                 stats, stats_nopunc, stats_root, num_inst = parser.eval(word, pos, heads_pred, types_pred, heads, types,
-                                                                        word_alphabet, pos_alphabet, lengths,
-                                                                        punct_set=punct_set, symbolic_root=True)
+                                                                    word_alphabet, pos_alphabet, lengths,
+                                                                    punct_set=punct_set, symbolic_root=True)
                 ucorr, lcorr, total, ucm, lcm = stats
                 ucorr_nopunc, lcorr_nopunc, total_nopunc, ucm_nopunc, lcm_nopunc = stats_nopunc
                 corr_root, total_root = stats_root
 
-                test_ucorrect += ucorr
-                test_lcorrect += lcorr
-                test_total += total
-                test_ucomlpete_match += ucm
-                test_lcomplete_match += lcm
+                dev_ucorr += ucorr
+                dev_lcorr += lcorr
+                dev_total += total
+                dev_ucomlpete += ucm
+                dev_lcomplete += lcm
 
-                test_ucorrect_nopunc += ucorr_nopunc
-                test_lcorrect_nopunc += lcorr_nopunc
-                test_total_nopunc += total_nopunc
-                test_ucomlpete_match_nopunc += ucm_nopunc
-                test_lcomplete_match_nopunc += lcm_nopunc
+                dev_ucorr_nopunc += ucorr_nopunc
+                dev_lcorr_nopunc += lcorr_nopunc
+                dev_total_nopunc += total_nopunc
+                dev_ucomlpete_nopunc += ucm_nopunc
+                dev_lcomplete_nopunc += lcm_nopunc
 
-                test_root_correct += corr_root
-                test_total_root += total_root
+                dev_root_corr += corr_root
+                dev_total_root += total_root
 
-                test_total_inst += num_inst
+                dev_total_inst += num_inst
 
             pred_writer.close()
             gold_writer.close()
+            print('W. Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%, ucm: %.2f%%, lcm: %.2f%%' % (
+                dev_ucorr, dev_lcorr, dev_total, dev_ucorr * 100 / dev_total, dev_lcorr * 100 / dev_total,
+                dev_ucomlpete * 100 / dev_total_inst, dev_lcomplete * 100 / dev_total_inst))
+            print('Wo Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%, ucm: %.2f%%, lcm: %.2f%%' % (
+                dev_ucorr_nopunc, dev_lcorr_nopunc, dev_total_nopunc, dev_ucorr_nopunc * 100 / dev_total_nopunc,
+                dev_lcorr_nopunc * 100 / dev_total_nopunc,
+                dev_ucomlpete_nopunc * 100 / dev_total_inst, dev_lcomplete_nopunc * 100 / dev_total_inst))
+            print('Root: corr: %d, total: %d, acc: %.2f%%' %(
+                dev_root_corr, dev_total_root, dev_root_corr * 100 / dev_total_root))
 
-        print('----------------------------------------------------------------------------------------------------------------------------')
-        print('best dev  W. Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%, ucm: %.2f%%, lcm: %.2f%% (epoch: %d)' % (
-            dev_ucorrect, dev_lcorrect, dev_total, dev_ucorrect * 100 / dev_total, dev_lcorrect * 100 / dev_total,
-            dev_ucomlpete_match * 100 / dev_total_inst, dev_lcomplete_match * 100 / dev_total_inst,
-            best_epoch))
-        print('best dev  Wo Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%, ucm: %.2f%%, lcm: %.2f%% (epoch: %d)' % (
-            dev_ucorrect_nopunc, dev_lcorrect_nopunc, dev_total_nopunc,
-            dev_ucorrect_nopunc * 100 / dev_total_nopunc, dev_lcorrect_nopunc * 100 / dev_total_nopunc,
-            dev_ucomlpete_match_nopunc * 100 / dev_total_inst, dev_lcomplete_match_nopunc * 100 / dev_total_inst,
-            best_epoch))
-        print('best dev  Root: corr: %d, total: %d, acc: %.2f%% (epoch: %d)' % (
-            dev_root_correct, dev_total_root, dev_root_correct * 100 / dev_total_root, best_epoch))
-        print('----------------------------------------------------------------------------------------------------------------------------')
-        print('best test W. Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%, ucm: %.2f%%, lcm: %.2f%% (epoch: %d)' % (
-            test_ucorrect, test_lcorrect, test_total, test_ucorrect * 100 / test_total, test_lcorrect * 100 / test_total,
-            test_ucomlpete_match * 100 / test_total_inst, test_lcomplete_match * 100 / test_total_inst,
-            best_epoch))
-        print('best test Wo Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%, ucm: %.2f%%, lcm: %.2f%% (epoch: %d)' % (
-            test_ucorrect_nopunc, test_lcorrect_nopunc, test_total_nopunc,
-            test_ucorrect_nopunc * 100 / test_total_nopunc, test_lcorrect_nopunc * 100 / test_total_nopunc,
-            test_ucomlpete_match_nopunc * 100 / test_total_inst, test_lcomplete_match_nopunc * 100 / test_total_inst,
-            best_epoch))
-        print('best test Root: corr: %d, total: %d, acc: %.2f%% (epoch: %d)' % (
-            test_root_correct, test_total_root, test_root_correct * 100 / test_total_root, best_epoch))
-        print('============================================================================================================================')
-
-        if epoch % schedule == 0:
-            # lr = lr * decay_rate
-            if epoch < adam_epochs:
-                opt = 'adam'
-                lr = adam_rate / (1.0 + epoch * decay_rate)
-                optim = Adam(network.parameters(), lr=lr, betas=(0.9, 0.9), weight_decay=gamma)
-            else:
-                opt = 'sgd'
-                lr = learning_rate / (1.0 + (epoch - adam_epochs) * decay_rate)
-                optim = SGD(network.parameters(), lr=lr, momentum=momentum, weight_decay=gamma, nesterov=True)
+        # if dev_ucorrect_nopunc <= dev_ucorr_nopunc:
+        #     dev_ucorrect_nopunc = dev_ucorr_nopunc
+        #     dev_lcorrect_nopunc = dev_lcorr_nopunc
+        #     dev_ucomlpete_match_nopunc = dev_ucomlpete_nopunc
+        #     dev_lcomplete_match_nopunc = dev_lcomplete_nopunc
+        #
+        #     dev_ucorrect = dev_ucorr
+        #     dev_lcorrect = dev_lcorr
+        #     dev_ucomlpete_match = dev_ucomlpete
+        #     dev_lcomplete_match = dev_lcomplete
+        #
+        #     dev_root_correct = dev_root_corr
+        #
+        #     best_epoch = epoch
+        #     patient = 0
+        #     torch.save(network, model_name)
+        #
+        #     pred_filename = 'tmp/%spred_test%d' % (str(uid), epoch)
+        #     pred_writer.start(pred_filename)
+        #     gold_filename = 'tmp/%sgold_test%d' % (str(uid), epoch)
+        #     gold_writer.start(gold_filename)
+        #
+        #     test_ucorrect = 0.0
+        #     test_lcorrect = 0.0
+        #     test_ucomlpete_match = 0.0
+        #     test_lcomplete_match = 0.0
+        #     test_total = 0
+        #
+        #     test_ucorrect_nopunc = 0.0
+        #     test_lcorrect_nopunc = 0.0
+        #     test_ucomlpete_match_nopunc = 0.0
+        #     test_lcomplete_match_nopunc = 0.0
+        #     test_total_nopunc = 0
+        #     test_total_inst = 0
+        #
+        #     test_root_correct = 0.0
+        #     test_total_root = 0
+        #     for batch in conllx_stacked_data.iterate_batch_stacked_variable(data_test, batch_size):
+        #         input_encoder, _ = batch
+        #         word, char, pos, heads, types, masks, lengths = input_encoder
+        #         heads_pred, types_pred = network.decode(word, char, pos, mask=masks, length=lengths, beam=beam)
+        #
+        #         word = word.data.cpu().numpy()
+        #         pos = pos.data.cpu().numpy()
+        #         lengths = lengths.cpu().numpy()
+        #         heads = heads.data.cpu().numpy()
+        #         types = types.data.cpu().numpy()
+        #
+        #         pred_writer.write(word, pos, heads_pred, types_pred, lengths, symbolic_root=True)
+        #         gold_writer.write(word, pos, heads, types, lengths, symbolic_root=True)
+        #
+        #         stats, stats_nopunc, stats_root, num_inst = parser.eval(word, pos, heads_pred, types_pred, heads, types,
+        #                                                                 word_alphabet, pos_alphabet, lengths,
+        #                                                                 punct_set=punct_set, symbolic_root=True)
+        #         ucorr, lcorr, total, ucm, lcm = stats
+        #         ucorr_nopunc, lcorr_nopunc, total_nopunc, ucm_nopunc, lcm_nopunc = stats_nopunc
+        #         corr_root, total_root = stats_root
+        #
+        #         test_ucorrect += ucorr
+        #         test_lcorrect += lcorr
+        #         test_total += total
+        #         test_ucomlpete_match += ucm
+        #         test_lcomplete_match += lcm
+        #
+        #         test_ucorrect_nopunc += ucorr_nopunc
+        #         test_lcorrect_nopunc += lcorr_nopunc
+        #         test_total_nopunc += total_nopunc
+        #         test_ucomlpete_match_nopunc += ucm_nopunc
+        #         test_lcomplete_match_nopunc += lcm_nopunc
+        #
+        #         test_root_correct += corr_root
+        #         test_total_root += total_root
+        #
+        #         test_total_inst += num_inst
+        #
+        #     pred_writer.close()
+        #     gold_writer.close()
+        # else:
+        #     if patient < schedule:
+        #         patient += 1
+        #     else:
+        #         network = torch.load(model_name)
+        #         lr = lr * decay_rate
+        #         optim = Adam(network.parameters(), lr=lr, betas=(0.9, 0.9), weight_decay=gamma)
+        #         patient = 0
+        #
+        # print('----------------------------------------------------------------------------------------------------------------------------')
+        # print('best dev  W. Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%, ucm: %.2f%%, lcm: %.2f%% (epoch: %d)' % (
+        #     dev_ucorrect, dev_lcorrect, dev_total, dev_ucorrect * 100 / dev_total, dev_lcorrect * 100 / dev_total,
+        #     dev_ucomlpete_match * 100 / dev_total_inst, dev_lcomplete_match * 100 / dev_total_inst,
+        #     best_epoch))
+        # print('best dev  Wo Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%, ucm: %.2f%%, lcm: %.2f%% (epoch: %d)' % (
+        #     dev_ucorrect_nopunc, dev_lcorrect_nopunc, dev_total_nopunc,
+        #     dev_ucorrect_nopunc * 100 / dev_total_nopunc, dev_lcorrect_nopunc * 100 / dev_total_nopunc,
+        #     dev_ucomlpete_match_nopunc * 100 / dev_total_inst, dev_lcomplete_match_nopunc * 100 / dev_total_inst,
+        #     best_epoch))
+        # print('best dev  Root: corr: %d, total: %d, acc: %.2f%% (epoch: %d)' % (
+        #     dev_root_correct, dev_total_root, dev_root_correct * 100 / dev_total_root, best_epoch))
+        # print('----------------------------------------------------------------------------------------------------------------------------')
+        # print('best test W. Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%, ucm: %.2f%%, lcm: %.2f%% (epoch: %d)' % (
+        #     test_ucorrect, test_lcorrect, test_total, test_ucorrect * 100 / test_total, test_lcorrect * 100 / test_total,
+        #     test_ucomlpete_match * 100 / test_total_inst, test_lcomplete_match * 100 / test_total_inst,
+        #     best_epoch))
+        # print('best test Wo Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%, ucm: %.2f%%, lcm: %.2f%% (epoch: %d)' % (
+        #     test_ucorrect_nopunc, test_lcorrect_nopunc, test_total_nopunc,
+        #     test_ucorrect_nopunc * 100 / test_total_nopunc, test_lcorrect_nopunc * 100 / test_total_nopunc,
+        #     test_ucomlpete_match_nopunc * 100 / test_total_inst, test_lcomplete_match_nopunc * 100 / test_total_inst,
+        #     best_epoch))
+        # print('best test Root: corr: %d, total: %d, acc: %.2f%% (epoch: %d)' % (
+        #     test_root_correct, test_total_root, test_root_correct * 100 / test_total_root, best_epoch))
+        # print('============================================================================================================================')
 
 
 if __name__ == '__main__':
