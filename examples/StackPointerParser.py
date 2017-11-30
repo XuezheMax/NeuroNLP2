@@ -244,8 +244,8 @@ def main():
 
     patient = 0
     for epoch in range(1, num_epochs + 1):
-        print('Epoch %d (%s, optim: %s, learning rate=%.4f, decay rate=%.4f (schedule=%d)): ' % (
-            epoch, mode, opt, lr, decay_rate, schedule))
+        print('Epoch %d (%s, optim: %s, learning rate=%.4f, decay rate=%.4f (schedule=%d, patient=%d)): ' % (
+            epoch, mode, opt, lr, decay_rate, schedule, patient))
         train_err_arc_leaf = 0.
         train_err_arc_non_leaf = 0.
         train_err_type_leaf = 0.
@@ -412,6 +412,10 @@ def main():
             print('loading model:')
             network = torch.load(model_name)
             network.eval()
+            pred_filename = 'tmp/%sload' % (str(uid))
+            pred_writer.start(pred_filename)
+            gold_filename = 'tmp/%sgold' % (str(uid))
+            gold_writer.start(gold_filename)
             dev_ucorr = 0.0
             dev_lcorr = 0.0
             dev_total = 0
