@@ -8,4 +8,4 @@ CUDA_VISIBLE_DEVICES=2 python examples/StackPointerParser.py --mode FastLSTM --n
  --train "data/PTB3.0/PTB3.0-Stanford_dep/ptb3.0-stanford.auto.cpos.train.conll" \
  --dev "data/PTB3.0/PTB3.0-Stanford_dep/ptb3.0-stanford.auto.cpos.dev.conll" \
  --test "data/PTB3.0/PTB3.0-Stanford_dep/ptb3.0-stanford.auto.cpos.test.conll" \
- --model_path "model/parsing/stack_ptr/" --model_name 'network.pt'
+ --model_path "models/parsing/stack_ptr/" --model_name 'network.pt'
