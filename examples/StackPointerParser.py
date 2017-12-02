@@ -272,6 +272,7 @@ def main():
             loss_type = loss_type_leaf + loss_type_non_leaf
             loss = loss_arc + loss_type + eta * loss_cov
             loss.backward()
+	    torch.nn.utils.clip_grad_norm(network.parameters(), 5)
             optim.step()
 
             num_leaf = num_leaf.data[0]
