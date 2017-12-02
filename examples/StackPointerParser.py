@@ -17,6 +17,7 @@ import uuid
 
 import numpy as np
 import torch
+from torch.nn.utils import clip_grad_norm
 from torch.optim import Adam, SGD
 from neuronlp2.io import get_logger, conllx_stacked_data
 from neuronlp2.models import StackPtrNet
@@ -42,6 +43,7 @@ def main():
     args_parser.add_argument('--char_dim', type=int, default=50, help='Dimension of Character embeddings')
     args_parser.add_argument('--learning_rate', type=float, default=0.001, help='Learning rate')
     args_parser.add_argument('--decay_rate', type=float, default=0.5, help='Decay rate of learning rate')
+    args_parser.add_argument('--clip', type=float, default=5.0, help='gradient clipping')
     args_parser.add_argument('--gamma', type=float, default=0.0, help='weight for regularization')
     args_parser.add_argument('--eta', type=float, default=1.0, help='weight for coverage loss')
     args_parser.add_argument('--p_rnn', nargs=2, type=float, required=True, help='dropout rate for RNN')
@@ -86,6 +88,7 @@ def main():
     momentum = 0.9
     betas = (0.9, 0.9)
     decay_rate = args.decay_rate
+    clip = args.clip
     gamma = args.gamma
     eta = args.eta
     schedule = args.schedule
@@ -209,8 +212,8 @@ def main():
     logger.info("Embedding dim: word=%d, char=%d, pos=%d" % (word_dim, char_dim, pos_dim))
     logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, arc_space=%d, type_space=%d" % (
         mode, num_layers, hidden_size, num_filters, arc_space, type_space))
-    logger.info("train: cov: %.1f, (#data: %d, batch: %d, dropout(in, out, rnn): (%.2f, %.2f, %s), unk_repl: %.2f)" % (
-        eta, num_data, batch_size, p_in, p_out, p_rnn, unk_replace))
+    logger.info("train: cov: %.1f, (#data: %d, batch: %d, clip: %.2f, dropout(in, out, rnn): (%.2f, %.2f, %s), unk_repl: %.2f)" % (
+        eta, num_data, batch_size, clip,  p_in, p_out, p_rnn, unk_replace))
     logger.info('prior order: %s, beam: %d' % ('left2right' if left2right else 'inside-out', beam))
 
     num_batches = num_data / batch_size + 1
@@ -272,7 +275,7 @@ def main():
             loss_type = loss_type_leaf + loss_type_non_leaf
             loss = loss_arc + loss_type + eta * loss_cov
             loss.backward()
-	    torch.nn.utils.clip_grad_norm(network.parameters(), 5)
+            clip_grad_norm(network.parameters(), clip)
             optim.step()
 
             num_leaf = num_leaf.data[0]
