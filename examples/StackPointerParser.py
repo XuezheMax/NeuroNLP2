@@ -18,7 +18,7 @@ import uuid
 import numpy as np
 import torch
 from torch.nn.utils import clip_grad_norm
-from torch.optim import Adam, SGD
+from torch.optim import Adam, SGD, Adadelta
 from neuronlp2.io import get_logger, conllx_stacked_data
 from neuronlp2.models import StackPtrNet
 from neuronlp2 import utils
@@ -41,6 +41,7 @@ def main():
     args_parser.add_argument('--num_filters', type=int, default=50, help='Number of filters in CNN')
     args_parser.add_argument('--pos_dim', type=int, default=50, help='Dimension of POS embeddings')
     args_parser.add_argument('--char_dim', type=int, default=50, help='Dimension of Character embeddings')
+    args_parser.add_argument('--opt', choices=['adam', 'sgd', 'adadelta'], help='optimization algorithm')
     args_parser.add_argument('--learning_rate', type=float, default=0.001, help='Learning rate')
     args_parser.add_argument('--decay_rate', type=float, default=0.5, help='Decay rate of learning rate')
     args_parser.add_argument('--clip', type=float, default=5.0, help='gradient clipping')
@@ -85,8 +86,11 @@ def main():
     num_layers = args.num_layers
     num_filters = args.num_filters
     learning_rate = args.learning_rate
+    opt = args.opt
     momentum = 0.9
-    betas = (0.9, 0.9)
+    betas = (0.9, 0.99)
+    rho = 0.9
+    eps = 1e-6
     decay_rate = args.decay_rate
     clip = args.clip
     gamma = args.gamma
@@ -205,9 +209,18 @@ def main():
     pred_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
     gold_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
 
+    def generate_optimizer(opt, lr, params):
+        if opt == 'adam':
+            return Adam(params, lr=lr, betas=betas, weight_decay=gamma, eps=eps)
+        elif opt == 'sgd':
+            return SGD(params, lr=lr, momentum=momentum, weight_decay=gamma, nesterov=True)
+        elif opt == 'adadelta':
+            return Adadelta(params, lr=lr, rho=rho, weight_decay=gamma, eps=eps)
+        else:
+            raise ValueError('Unknown optimization algorithm: %s' % opt)
+
     lr = learning_rate
-    opt = 'adam'
-    optim = Adam(network.parameters(), lr=learning_rate, betas=betas, weight_decay=gamma)
+    optim = generate_optimizer(opt, lr, network.parameters())
 
     logger.info("Embedding dim: word=%d, char=%d, pos=%d" % (word_dim, char_dim, pos_dim))
     logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, arc_space=%d, type_space=%d" % (
@@ -492,7 +505,7 @@ def main():
             else:
                 network = torch.load(model_name)
                 lr = lr * decay_rate
-                optim = Adam(network.parameters(), lr=lr, betas=(0.9, 0.9), weight_decay=gamma)
+                optim = generate_optimizer(opt, lr, network.parameters())
                 patient = 0
 
         print('----------------------------------------------------------------------------------------------------------------------------')
