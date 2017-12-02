@@ -459,7 +459,7 @@ class StackPtrNet(nn.Module):
 
         # get leaf and non-leaf mask
         # shape = [batch, length_decoder]
-        mask_leaf = torch.eq(stacked_heads, children).float()
+        mask_leaf = torch.eq(children, 0).float()
         mask_non_leaf = (1.0 - mask_leaf)
 
         # mask invalid position to 0 for sum loss
@@ -490,11 +490,11 @@ class StackPtrNet(nn.Module):
         loss_type_leaf = loss_type * mask_leaf
         loss_type_non_leaf = loss_type * mask_non_leaf
 
-        loss_cov = (coverage - 2.0).clamp(min=0.)
+        loss_cov = (coverage - 1.0).clamp(min=0.)[:, :, 1:]
 
         return -loss_arc_leaf.sum() / num_leaf, -loss_arc_non_leaf.sum() / num_non_leaf, \
                -loss_type_leaf.sum() / num_leaf, -loss_type_non_leaf.sum() / num_non_leaf, \
-               loss_cov.sum() / (num_leaf + num_non_leaf), \
+               loss_cov.sum() / num_non_leaf, \
                num_leaf, num_non_leaf
 
     def _decode_per_sentence(self, src_encoding, arc_c, type_c, hx, length, beam):
@@ -587,9 +587,9 @@ class StackPtrNet(nn.Module):
                 child_id = child_index[id]
                 head = heads[base_id]
                 new_hyp_score = new_hypothesis_scores[id]
-                if head == child_id:
+                if child_id == 0:
                     assert constraints[base_id, child_id], 'constrains error: %d, %d' % (base_id, child_id)
-                    if child_id != 0 or t + 1 == num_step:
+                    if head != 0 or t + 1 == num_step:
                         new_constraints[cc] = constraints[base_id]
 
                         new_stacked_heads[cc] = [stacked_heads[base_id][i] for i in range(len(stacked_heads[base_id]))]
@@ -656,7 +656,7 @@ class StackPtrNet(nn.Module):
             head = stack[-1]
             child = children[i]
             type = stacked_types[i]
-            if head != child:
+            if child != 0:
                 heads[child] = head
                 types[child] = type
                 stack.append(child)

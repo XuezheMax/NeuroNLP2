@@ -39,7 +39,7 @@ def _generate_stack_inputs(heads, types, left2right):
         stacked_heads.append(head)
         child_id = child_ids[head]
         if len(child_id) == 0:
-            children.append(head)
+            children.append(0)
             stacked_types.append(PAD_ID_TAG)
             stack.pop()
         else:

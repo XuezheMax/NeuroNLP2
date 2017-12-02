@@ -283,7 +283,7 @@ def main():
             train_err_type_leaf += loss_type_leaf.data[0] * num_leaf
             train_err_type_non_leaf += loss_type_non_leaf.data[0] * num_non_leaf
 
-            train_err_cov += loss_cov.data[0] * (num_leaf + num_non_leaf)
+            train_err_cov += loss_cov.data[0] * num_non_leaf
 
             train_total_leaf += num_leaf
             train_total_non_leaf += num_non_leaf
@@ -304,7 +304,7 @@ def main():
                 err_type_non_leaf = train_err_type_non_leaf / train_total_non_leaf
                 err_type = err_type_leaf + err_type_non_leaf
 
-                err_cov = train_err_cov / (train_total_leaf + train_total_non_leaf)
+                err_cov = train_err_cov / train_total_non_leaf
 
                 err = err_arc + err_type + eta * err_cov
                 log_info = 'train: %d/%d loss (leaf, non_leaf): %.4f, arc: %.4f (%.4f, %.4f), ' \
@@ -326,7 +326,7 @@ def main():
         err_type_non_leaf = train_err_type_non_leaf / train_total_non_leaf
         err_type = err_type_leaf + err_type_non_leaf
 
-        err_cov = train_err_cov / (train_total_leaf + train_total_non_leaf)
+        err_cov = train_err_cov / train_total_non_leaf
 
         err = err_arc + err_type + eta * err_cov
         print('train: %d loss (leaf, non_leaf): %.4f, arc: %.4f (%.4f, %.4f), type: %.4f (%.4f, %.4f), coverage: %.4f, '
