@@ -46,7 +46,7 @@ def main():
     args_parser.add_argument('--decay_rate', type=float, default=0.5, help='Decay rate of learning rate')
     args_parser.add_argument('--clip', type=float, default=5.0, help='gradient clipping')
     args_parser.add_argument('--gamma', type=float, default=0.0, help='weight for regularization')
-    args_parser.add_argument('--eta', type=float, default=1.0, help='weight for coverage loss')
+    args_parser.add_argument('--coverage', type=float, default=0.0, help='weight for coverage loss')
     args_parser.add_argument('--p_rnn', nargs=2, type=float, required=True, help='dropout rate for RNN')
     args_parser.add_argument('--p_in', type=float, default=0.33, help='dropout rate for input embeddings')
     args_parser.add_argument('--p_out', type=float, default=0.33, help='dropout rate for output layer')
@@ -94,7 +94,7 @@ def main():
     decay_rate = args.decay_rate
     clip = args.clip
     gamma = args.gamma
-    eta = args.eta
+    cov = args.coverage
     schedule = args.schedule
     p_rnn = tuple(args.p_rnn)
     p_in = args.p_in
@@ -226,7 +226,7 @@ def main():
     logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, arc_space=%d, type_space=%d" % (
         mode, num_layers, hidden_size, num_filters, arc_space, type_space))
     logger.info("train: cov: %.1f, (#data: %d, batch: %d, clip: %.2f, dropout(in, out, rnn): (%.2f, %.2f, %s), unk_repl: %.2f)" % (
-        eta, num_data, batch_size, clip,  p_in, p_out, p_rnn, unk_replace))
+        cov, num_data, batch_size, clip,  p_in, p_out, p_rnn, unk_replace))
     logger.info('prior order: %s, beam: %d' % ('left2right' if left2right else 'inside-out', beam))
 
     num_batches = num_data / batch_size + 1
@@ -286,7 +286,7 @@ def main():
                                                   length_d=lengths_d)
             loss_arc = loss_arc_leaf + loss_arc_non_leaf
             loss_type = loss_type_leaf + loss_type_non_leaf
-            loss = loss_arc + loss_type + eta * loss_cov
+            loss = loss_arc + loss_type + cov * loss_cov
             loss.backward()
             clip_grad_norm(network.parameters(), clip)
             optim.step()
@@ -323,7 +323,7 @@ def main():
 
                 err_cov = train_err_cov / train_total_non_leaf
 
-                err = err_arc + err_type + eta * err_cov
+                err = err_arc + err_type + cov * err_cov
                 log_info = 'train: %d/%d loss (leaf, non_leaf): %.4f, arc: %.4f (%.4f, %.4f), ' \
                            'type: %.4f (%.4f, %.4f), coverage: %.4f, time left (estimated): %.2fs' % (
                                batch, num_batches, err, err_arc, err_arc_leaf, err_arc_non_leaf,
@@ -345,7 +345,7 @@ def main():
 
         err_cov = train_err_cov / train_total_non_leaf
 
-        err = err_arc + err_type + eta * err_cov
+        err = err_arc + err_type + cov * err_cov
         print('train: %d loss (leaf, non_leaf): %.4f, arc: %.4f (%.4f, %.4f), type: %.4f (%.4f, %.4f), coverage: %.4f, '
               'time: %.2fs' % (
             num_batches, err, err_arc, err_arc_leaf, err_arc_non_leaf,
