@@ -4,7 +4,7 @@ CUDA_VISIBLE_DEVICES=2 python examples/StackPointerParser.py --mode FastLSTM --n
  --opt adam --learning_rate 0.001 --decay_rate 0.75 --schedule 5 --coverage 0.0 --gamma 0.0 --clip 5.0 \
  --p_in 0.33 --p_out 0.33 --p_rnn 0.33 0.33 --unk_replace 0.5 --beam 10 \
  --word_embedding glove --word_path "data/glove/glove.6B/glove.6B.100d.gz" --char_embedding random \
- --punctuation '$(' '.' '``' "''" ':' ',' \
+ --punctuation '.' '``' "''" ':' ',' \
  --train "data/PTB3.0/PTB3.0-Stanford_dep/ptb3.0-stanford.auto.cpos.train.conll" \
  --dev "data/PTB3.0/PTB3.0-Stanford_dep/ptb3.0-stanford.auto.cpos.dev.conll" \
  --test "data/PTB3.0/PTB3.0-Stanford_dep/ptb3.0-stanford.auto.cpos.test.conll" \
