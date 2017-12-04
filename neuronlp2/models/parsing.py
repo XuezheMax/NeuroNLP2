@@ -663,7 +663,7 @@ class StackPtrNet(nn.Module):
             else:
                 stack.pop()
 
-        return heads, types, length
+        return heads, types, length, children, stacked_types
 
     def decode(self, input_word, input_char, input_pos, mask=None, length=None, hx=None, beam=1):
         # output from encoder [batch, length_encoder, tag_space]
@@ -679,6 +679,9 @@ class StackPtrNet(nn.Module):
         heads = np.zeros([batch, max_len_e], dtype=np.int32)
         types = np.zeros([batch, max_len_e], dtype=np.int32)
 
+        children = np.zeros([batch, 2 * max_len_e - 1], dtype=np.int32)
+        stack_types = np.zeros([batch, 2 * max_len_e - 1], dtype=np.int32)
+
         for b in range(batch):
             sent_len = None if length is None else length[b]
             # hack to handle LSTM
@@ -690,8 +693,11 @@ class StackPtrNet(nn.Module):
             else:
                 hx = hn[:, b, :].contiguous()
 
-            hids, tids, sent_len = self._decode_per_sentence(src_encoding[b], arc_c[b], type_c[b], hx, sent_len, beam)
+            hids, tids, sent_len, chids, stids = self._decode_per_sentence(src_encoding[b], arc_c[b], type_c[b], hx, sent_len, beam)
             heads[b, :sent_len] = hids
             types[b, :sent_len] = tids
 
-        return heads, types
+            children[b, :2 * sent_len - 1] = chids
+            stack_types[b, :2 * sent_len - 1] = stids
+
+        return heads, types, children, stack_types

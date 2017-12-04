@@ -29,7 +29,7 @@ uid = uuid.uuid4().get_hex()[:6]
 
 
 def main():
-    args_parser = argparse.ArgumentParser(description='Tuning with graph-based parsing')
+    args_parser = argparse.ArgumentParser(description='Tuning with stack pointer parser')
     args_parser.add_argument('--mode', choices=['RNN', 'LSTM', 'GRU', 'FastLSTM'], help='architecture of rnn',
                              required=True)
     args_parser.add_argument('--num_epochs', type=int, default=200, help='Number of training epochs')
