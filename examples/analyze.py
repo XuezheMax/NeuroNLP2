@@ -135,6 +135,9 @@ def main():
         stacked_types = stacked_types.data
         children_pred = torch.from_numpy(children_pred).long()
         stacked_types_pred = torch.from_numpy(stacked_types_pred).long()
+        if use_gpu:
+            children_pred = children_pred.cuda()
+            stacked_types_pred = stacked_types_pred.cuda()
         mask_d = mask_d.data
         mask_leaf = torch.eq(children, 0).float()
         mask_non_leaf = (1.0 - mask_leaf)
