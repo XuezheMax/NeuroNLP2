@@ -214,14 +214,14 @@ def iterate_batch(data, batch_size, word_alphabet=None, unk_replace=0., shuffle=
 
         masks_e = np.zeros([bucket_size, bucket_length], dtype=np.float32)
         single = np.zeros([bucket_size, bucket_length], dtype=np.int64)
-        lengths_e = np.empty(batch_size, dtype=np.int64)
+        lengths_e = np.empty(bucket_size, dtype=np.int64)
 
-        stack_hid_inputs = np.empty([batch_size, 2 * bucket_length - 1], dtype=np.int64)
-        chid_inputs = np.empty([batch_size, 2 * bucket_length - 1], dtype=np.int64)
-        stack_tid_inputs = np.empty([batch_size, 2 * bucket_length - 1], dtype=np.int64)
+        stack_hid_inputs = np.empty([bucket_size, 2 * bucket_length - 1], dtype=np.int64)
+        chid_inputs = np.empty([bucket_size, 2 * bucket_length - 1], dtype=np.int64)
+        stack_tid_inputs = np.empty([bucket_size, 2 * bucket_length - 1], dtype=np.int64)
 
-        masks_d = np.zeros([batch_size, 2 * bucket_length - 1], dtype=np.float32)
-        lengths_d = np.empty(batch_size, dtype=np.int64)
+        masks_d = np.zeros([bucket_size, 2 * bucket_length - 1], dtype=np.float32)
+        lengths_d = np.empty(bucket_size, dtype=np.int64)
 
         for i, inst in enumerate(data[bucket_id]):
             wids, cid_seqs, pids, hids, tids, child_ids = inst
