@@ -281,7 +281,7 @@ def main():
                                                   length_d=lengths_d)
             loss_arc = loss_arc_leaf + loss_arc_non_leaf
             loss_type = loss_type_leaf + loss_type_non_leaf
-            loss = loss_arc + loss_type + cov * loss_cov
+            loss = loss_arc + loss_type #+ cov * loss_cov
             loss.backward()
             clip_grad_norm(network.parameters(), clip)
             optim.step()
