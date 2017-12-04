@@ -912,6 +912,8 @@ class StackPtrNet(nn.Module):
                 hx = hn[:, b, :].contiguous()
 
             hids, tids, sent_len, chids, stids = self._analyze_per_sentence(src_encoding[b], arc_c[b], type_c[b], hx, sent_len, beam)
+            if hids is None:
+                return None, None, None, None
             heads[b, :sent_len] = hids
             types[b, :sent_len] = tids
 
