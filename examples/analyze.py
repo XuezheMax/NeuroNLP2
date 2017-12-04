@@ -200,7 +200,7 @@ def main():
     pred_writer.close()
     gold_writer.close()
 
-    print('\ntime: %.2fs' % time.time() - start_time)
+    print('\ntime: %.2fs' % (time.time() - start_time))
 
     print('test W. Punct:  ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%, ucm: %.2f%%, lcm: %.2f%%' % (
         test_ucorrect, test_lcorrect, test_total, test_ucorrect * 100 / test_total, test_lcorrect * 100 / test_total,
