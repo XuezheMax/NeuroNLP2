@@ -19,7 +19,7 @@ import numpy as np
 import torch
 from torch.nn.utils import clip_grad_norm
 from torch.optim import Adam, SGD, Adadelta
-from neuronlp2.io import get_logger, conllx_stacked_data
+from neuronlp2.io import get_logger, conllx_random_data
 from neuronlp2.models import StackPtrNet
 from neuronlp2 import utils
 from neuronlp2.io import CoNLLXWriter
@@ -50,7 +50,6 @@ def main():
     args_parser.add_argument('--p_rnn', nargs=2, type=float, required=True, help='dropout rate for RNN')
     args_parser.add_argument('--p_in', type=float, default=0.33, help='dropout rate for input embeddings')
     args_parser.add_argument('--p_out', type=float, default=0.33, help='dropout rate for output layer')
-    args_parser.add_argument('--left2right', action='store_true', help='apply left to right prior order.')
     args_parser.add_argument('--schedule', type=int, help='schedule for learning rate decay')
     args_parser.add_argument('--unk_replace', type=float, default=0.,
                              help='The rate to replace a singleton word with UNK')
@@ -100,7 +99,6 @@ def main():
     p_in = args.p_in
     p_out = args.p_out
     unk_replace = args.unk_replace
-    left2right = args.left2right
     beam = args.beam
     punctuation = args.punctuation
 
@@ -120,9 +118,9 @@ def main():
     alphabet_path = os.path.join(model_path, 'alphabets/')
     model_name = os.path.join(model_path, model_name)
     word_alphabet, char_alphabet, pos_alphabet, \
-    type_alphabet = conllx_stacked_data.create_alphabets(alphabet_path, train_path,
-                                                         data_paths=[dev_path, test_path],
-                                                         max_vocabulary_size=50000, embedd_dict=word_dict)
+    type_alphabet = conllx_random_data.create_alphabets(alphabet_path, train_path,
+                                                        data_paths=[dev_path, test_path],
+                                                        max_vocabulary_size=50000, embedd_dict=word_dict)
 
     num_words = word_alphabet.size()
     num_chars = char_alphabet.size()
@@ -137,18 +135,14 @@ def main():
     logger.info("Reading Data")
     use_gpu = torch.cuda.is_available()
 
-    data_train = conllx_stacked_data.read_stacked_data_to_variable(train_path, word_alphabet, char_alphabet,
-                                                                   pos_alphabet, type_alphabet, use_gpu=use_gpu,
-                                                                   left2right=left2right)
-    num_data = sum(data_train[1])
+    data_train = conllx_random_data.read_stacked_data(train_path, word_alphabet, char_alphabet,
+                                                      pos_alphabet, type_alphabet)
+    num_data = sum([len(bucket) for bucket in data_train])
 
-    data_dev = conllx_stacked_data.read_stacked_data_to_variable(dev_path, word_alphabet, char_alphabet, pos_alphabet,
-                                                                 type_alphabet, use_gpu=use_gpu, volatile=True,
-                                                                 left2right=left2right)
-    data_test = conllx_stacked_data.read_stacked_data_to_variable(test_path, word_alphabet, char_alphabet,
-                                                                  pos_alphabet, type_alphabet,
-                                                                  use_gpu=use_gpu, volatile=True,
-                                                                  left2right=left2right)
+    data_dev = conllx_random_data.read_stacked_data(dev_path, word_alphabet, char_alphabet,
+                                                    pos_alphabet, type_alphabet)
+    data_test = conllx_random_data.read_stacked_data(test_path, word_alphabet, char_alphabet,
+                                                     pos_alphabet, type_alphabet)
 
     punct_set = None
     if punctuation is not None:
@@ -158,7 +152,7 @@ def main():
     def construct_word_embedding_table():
         scale = np.sqrt(3.0 / word_dim)
         table = np.empty([word_alphabet.size(), word_dim], dtype=np.float32)
-        table[conllx_stacked_data.UNK_ID, :] = np.random.uniform(-scale, scale, [1, word_dim]).astype(np.float32)
+        table[conllx_random_data.UNK_ID, :] = np.random.uniform(-scale, scale, [1, word_dim]).astype(np.float32)
         oov = 0
         for word, index in word_alphabet.items():
             if word in word_dict:
@@ -178,7 +172,7 @@ def main():
 
         scale = np.sqrt(3.0 / char_dim)
         table = np.empty([num_chars, char_dim], dtype=np.float32)
-        table[conllx_stacked_data.UNK_ID, :] = np.random.uniform(-scale, scale, [1, char_dim]).astype(np.float32)
+        table[conllx_random_data.UNK_ID, :] = np.random.uniform(-scale, scale, [1, char_dim]).astype(np.float32)
         oov = 0
         for char, index, in char_alphabet.items():
             if char in char_dict:
@@ -227,7 +221,7 @@ def main():
         mode, num_layers, hidden_size, num_filters, arc_space, type_space))
     logger.info("train: cov: %.1f, (#data: %d, batch: %d, clip: %.2f, dropout(in, out, rnn): (%.2f, %.2f, %s), unk_repl: %.2f)" % (
         cov, num_data, batch_size, clip,  p_in, p_out, p_rnn, unk_replace))
-    logger.info('prior order: %s, beam: %d' % ('left2right' if left2right else 'inside-out', beam))
+    logger.info('prior order: %s, beam: %d' % ('random', beam))
 
     num_batches = num_data / batch_size + 1
     dev_ucorrect = 0.0
@@ -273,8 +267,9 @@ def main():
         num_back = 0
         network.train()
         for batch in range(1, num_batches + 1):
-            input_encoder, input_decoder = conllx_stacked_data.get_batch_stacked_variable(data_train, batch_size,
-                                                                                          unk_replace=unk_replace)
+            input_encoder, input_decoder = conllx_random_data.get_batch(data_train, batch_size,
+                                                                        word_alphabet=word_alphabet,
+                                                                        unk_replace=unk_replace, use_gpu=use_gpu)
             word, char, pos, heads, types, masks_e, lengths_e = input_encoder
             stacked_heads, children, stacked_types, masks_d, lengths_d = input_decoder
             optim.zero_grad()
@@ -372,7 +367,8 @@ def main():
         dev_root_corr = 0.0
         dev_total_root = 0.0
         dev_total_inst = 0.0
-        for batch in conllx_stacked_data.iterate_batch_stacked_variable(data_dev, batch_size):
+        for batch in conllx_random_data.iterate_batch(data_dev, batch_size, word_alphabet=word_alphabet,
+                                                      use_gpu=use_gpu, volatile=True):
             input_encoder, _ = batch
             word, char, pos, heads, types, masks, lengths = input_encoder
             heads_pred, types_pred = network.decode(word, char, pos, mask=masks, length=lengths, beam=beam)
@@ -459,7 +455,8 @@ def main():
 
             test_root_correct = 0.0
             test_total_root = 0
-            for batch in conllx_stacked_data.iterate_batch_stacked_variable(data_test, batch_size):
+            for batch in conllx_random_data.iterate_batch(data_test, batch_size, word_alphabet=word_alphabet,
+                                                          use_gpu=use_gpu, volatile=True):
                 input_encoder, _ = batch
                 word, char, pos, heads, types, masks, lengths = input_encoder
                 heads_pred, types_pred = network.decode(word, char, pos, mask=masks, length=lengths, beam=beam)
