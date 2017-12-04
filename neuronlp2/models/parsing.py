@@ -663,9 +663,224 @@ class StackPtrNet(nn.Module):
             else:
                 stack.pop()
 
-        return heads, types, length, children, stacked_types
+        return heads, types, length
 
     def decode(self, input_word, input_char, input_pos, mask=None, length=None, hx=None, beam=1):
+        # output from encoder [batch, length_encoder, tag_space]
+        # src_encoding [batch, length, input_size]
+        # arc_c [batch, length, arc_space]
+        # type_c [batch, length, type_space]
+        # hn [num_direction, batch, hidden_size]
+        src_encoding, arc_c, type_c, hn, mask, length = self._get_encoder_output(input_word, input_char, input_pos,
+                                                                                 mask_e=mask, length_e=length, hx=hx)
+        hn = self._transform_decoder_init_state(hn)
+        batch, max_len_e, _ = src_encoding.size()
+
+        heads = np.zeros([batch, max_len_e], dtype=np.int32)
+        types = np.zeros([batch, max_len_e], dtype=np.int32)
+
+        for b in range(batch):
+            sent_len = None if length is None else length[b]
+            # hack to handle LSTM
+            if isinstance(hn, tuple):
+                hx, cx = hn
+                hx = hx[:, b, :].contiguous()
+                cx = cx[:, b, :].contiguous()
+                hx = (hx, cx)
+            else:
+                hx = hn[:, b, :].contiguous()
+
+            hids, tids, sent_len = self._decode_per_sentence(src_encoding[b], arc_c[b], type_c[b], hx, sent_len, beam)
+            heads[b, :sent_len] = hids
+            types[b, :sent_len] = tids
+
+        return heads, types
+
+    def _analyze_per_sentence(self, src_encoding, arc_c, type_c, hx, length, beam):
+        def valid_hyp(base_id, child_id, head):
+            if constraints[base_id, child_id]:
+                return False
+            elif child_orders[base_id, head] == 0:
+                return True
+            elif child_id < head:
+                return child_id < child_orders[base_id, head] < head
+            else:
+                return child_id > child_orders[base_id, head]
+
+        # src_encoding [length, input_size]
+        # arc_c [length, arc_space]
+        # type_c [length, type_space]
+        # hx [num_direction, hidden_size]
+        if length is not None:
+            src_encoding = src_encoding[:length]
+            arc_c = arc_c[:length]
+            type_c = type_c[:length]
+        else:
+            length = src_encoding.size(0)
+
+        # expand each tensor for beam search
+        # [1, length, input_size]
+        src_encoding = src_encoding.unsqueeze(0)
+        # [1, length, arc_space]
+        arc_c = arc_c.unsqueeze(0)
+        # [1, length, type_space]
+        type_c = type_c.unsqueeze(0)
+        # [num_direction, 1, hidden_size]
+        # hack to handle LSTM
+        if isinstance(hx, tuple):
+            hx, cx = hx
+            hx = hx.unsqueeze(1)
+            cx = cx.unsqueeze(1)
+            hx = (hx, cx)
+        else:
+            hx = hx.unsqueeze(1)
+
+        stacked_heads = [[0] for _ in range(beam)]
+        children = torch.zeros(beam, 2 * length - 1).type_as(src_encoding.data).long()
+        stacked_types = children.new(children.size()).zero_()
+        hypothesis_scores = src_encoding.data.new(beam).zero_()
+        constraints = np.zeros([beam, length], dtype=np.bool)
+        constraints[:, 0] = True
+        child_orders = np.zeros([beam, length], dtype=np.int32)
+
+        # temporal tensors for each step.
+        new_stacked_heads = [[] for _ in range(beam)]
+        new_children = children.new(children.size()).zero_()
+        new_stacked_types = stacked_types.new(stacked_types.size()).zero_()
+        num_hyp = 1
+        num_step = 2 * length - 1
+        for t in range(num_step):
+            # beam_index = torch.arange(0, num_hyp).type_as(src_encoding.data).long()
+            beam_index = src_encoding.data.new(num_hyp).zero_().long()
+            # [num_hyp]
+            heads = torch.LongTensor([stacked_heads[i][-1] for i in range(num_hyp)]).type_as(children)
+            # [num_hyp, 1, input_size]
+            input = src_encoding[beam_index, heads].unsqueeze(1)
+            # output [num_hyp, 1, hidden_size]
+            # hx [num_direction, num_hyp, hidden_size]
+            output, hx = self.decoder(input, hx=hx)
+
+            # arc_h size [num_hyp, 1, arc_space]
+            arc_h = F.elu(self.arc_h(output))
+
+            # [num_hyp, length_encoder]
+            out_arc = self.attention(arc_h, arc_c[beam_index]).squeeze(dim=1).squeeze(dim=1)
+            # [num_hyp, length_encoder]
+            arc_hyp_scores = self.logsoftmax(out_arc).data
+
+            # type_h size [num_hyp, length_encoder, type_space]
+            type_h = F.elu(self.type_h(output)).expand(num_hyp, length, type_c.size(2)).contiguous()
+            # type_c size [num_hyp, length_encoder, type_space]
+            type_c = type_c[beam_index].contiguous()
+
+            # compute output for type [num_hyp, length_encoder, num_labels]
+            out_type = self.bilinear(type_h, type_c)
+            # [num_hyp, length_encoder, num_labels] --> [num_labels, length_encoder, num_hyp]
+            # --> [num_hyp, length_encoder, num_labels]
+            type_hyp_scores = self.logsoftmax(out_type.transpose(0, 2)).transpose(0, 2).data
+            # compute the prediction of types [num_hyp, length_encoder]
+            type_hyp_scores, hyp_types = type_hyp_scores.max(dim=2)
+
+            # [num_hyp, length_encoder]
+            hyp_scores = arc_hyp_scores + type_hyp_scores
+            new_hypothesis_scores = hypothesis_scores[:num_hyp].unsqueeze(1) + hyp_scores
+            # [num_hyp * length_encoder]
+            new_hypothesis_scores, hyp_index = torch.sort(new_hypothesis_scores.view(-1), dim=0, descending=True)
+            base_index = hyp_index / length
+            child_index = hyp_index % length
+
+            cc = 0
+            ids = []
+            new_constraints = np.zeros([beam, length], dtype=np.bool)
+            new_child_orders = np.zeros([beam, length], dtype=np.int32)
+            for id in range(num_hyp * length):
+                base_id = base_index[id]
+                child_id = child_index[id]
+                head = heads[base_id]
+                new_hyp_score = new_hypothesis_scores[id]
+                if child_id == 0:
+                    assert constraints[base_id, child_id], 'constrains error: %d, %d' % (base_id, child_id)
+                    if head != 0 or t + 1 == num_step:
+                        new_constraints[cc] = constraints[base_id]
+
+                        new_stacked_heads[cc] = [stacked_heads[base_id][i] for i in range(len(stacked_heads[base_id]))]
+                        new_stacked_heads[cc].pop()
+
+                        new_children[cc] = children[base_id]
+                        new_children[cc, t] = child_id
+
+                        new_stacked_types[cc] = stacked_types[base_id]
+                        new_stacked_types[cc, t] = hyp_types[base_id, child_id]
+
+                        hypothesis_scores[cc] = new_hyp_score
+                        ids.append(id)
+                        cc += 1
+                elif valid_hyp(base_id, child_id, head):
+                    new_constraints[cc] = constraints[base_id]
+                    new_constraints[cc, child_id] = True
+
+                    new_child_orders[cc] = child_orders[base_id]
+                    new_child_orders[cc, head] = child_id
+
+                    new_stacked_heads[cc] = [stacked_heads[base_id][i] for i in range(len(stacked_heads[base_id]))]
+                    new_stacked_heads[cc].append(child_id)
+
+                    new_children[cc] = children[base_id]
+                    new_children[cc, t] = child_id
+
+                    new_stacked_types[cc] = stacked_types[base_id]
+                    new_stacked_types[cc, t] = hyp_types[base_id, child_id]
+
+                    hypothesis_scores[cc] = new_hyp_score
+                    ids.append(id)
+                    cc += 1
+
+                if cc == beam:
+                    break
+
+            # [num_hyp]
+            num_hyp = len(ids)
+            if num_hyp == 1:
+                index = base_index.new(1).fill_(ids[0])
+            else:
+                index = torch.from_numpy(np.array(ids)).type_as(base_index)
+            base_index = base_index[index]
+
+            stacked_heads = [[new_stacked_heads[i][j] for j in range(len(new_stacked_heads[i]))] for i in
+                             range(num_hyp)]
+            constraints = new_constraints
+            child_orders = new_child_orders
+            children.copy_(new_children)
+            stacked_types.copy_(new_stacked_types)
+            # hx [num_directions, num_hyp, hidden_size]
+            # hack to handle LSTM
+            if isinstance(hx, tuple):
+                hx, cx = hx
+                hx = hx[:, base_index, :]
+                cx = cx[:, base_index, :]
+                hx = (hx, cx)
+            else:
+                hx = hx[:, base_index, :]
+
+        children = children.cpu().numpy()[0]
+        stacked_types = stacked_types.cpu().numpy()[0]
+        heads = np.zeros(length, dtype=np.int32)
+        types = np.zeros(length, dtype=np.int32)
+        stack = [0]
+        for i in range(num_step):
+            head = stack[-1]
+            child = children[i]
+            type = stacked_types[i]
+            if child != 0:
+                heads[child] = head
+                types[child] = type
+                stack.append(child)
+            else:
+                stack.pop()
+
+        return heads, types, length, children, stacked_types
+
+    def analyze(self, input_word, input_char, input_pos, mask=None, length=None, hx=None, beam=1):
         # output from encoder [batch, length_encoder, tag_space]
         # src_encoding [batch, length, input_size]
         # arc_c [batch, length, arc_space]
@@ -693,7 +908,7 @@ class StackPtrNet(nn.Module):
             else:
                 hx = hn[:, b, :].contiguous()
 
-            hids, tids, sent_len, chids, stids = self._decode_per_sentence(src_encoding[b], arc_c[b], type_c[b], hx, sent_len, beam)
+            hids, tids, sent_len, chids, stids = self._analyze_per_sentence(src_encoding[b], arc_c[b], type_c[b], hx, sent_len, beam)
             heads[b, :sent_len] = hids
             types[b, :sent_len] = tids
 

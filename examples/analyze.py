@@ -72,7 +72,7 @@ def main():
                                                                   use_gpu=use_gpu, volatile=True,
                                                                   left2right=left2right)
 
-    logger.info('use gpu: %s' % use_gpu)
+    logger.info('use gpu: %s, beam: %d' % (use_gpu, beam))
     punct_set = None
     punctuation = args.punctuation
     if punctuation is not None:
@@ -128,8 +128,8 @@ def main():
         input_encoder, input_decoder = batch
         word, char, pos, heads, types, masks, lengths = input_encoder
         _, children, stacked_types, mask_d, lengths_d = input_decoder
-        heads_pred, types_pred, children_pred, stacked_types_pred = network.decode(word, char, pos,
-                                                                                   mask=masks, length=lengths, beam=beam)
+        heads_pred, types_pred, children_pred, stacked_types_pred = network.analyze(word, char, pos,
+                                                                                    mask=masks, length=lengths, beam=beam)
 
         children = children.data
         stacked_types = stacked_types.data
