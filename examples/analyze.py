@@ -66,13 +66,13 @@ def main():
     left2right = args.left2right
     beam = args.beam
 
-    logger.info('use gpu: %s' % use_gpu)
 
     data_test = conllx_stacked_data.read_stacked_data_to_variable(test_path, word_alphabet, char_alphabet,
                                                                   pos_alphabet, type_alphabet,
                                                                   use_gpu=use_gpu, volatile=True,
                                                                   left2right=left2right)
 
+    logger.info('use gpu: %s' % use_gpu)
     punct_set = None
     punctuation = args.punctuation
     if punctuation is not None:
@@ -132,8 +132,8 @@ def main():
 
         children = children.data
         stacked_types = stacked_types.data
-        children_pred = torch.from_numpy(children_pred)
-        stacked_types_pred = torch.from_numpy(stacked_types_pred)
+        children_pred = torch.from_numpy(children_pred).long()
+        stacked_types_pred = torch.from_numpy(stacked_types_pred).long()
         mask_d = mask_d.data
         mask_leaf = torch.eq(children, 0).float()
         mask_non_leaf = (1.0 - mask_leaf)
