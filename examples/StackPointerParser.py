@@ -373,7 +373,7 @@ def main():
         dev_total_root = 0.0
         dev_total_inst = 0.0
         for batch in conllx_stacked_data.iterate_batch_stacked_variable(data_dev, batch_size):
-            input_encoder, input_decoder = batch
+            input_encoder, _ = batch
             word, char, pos, heads, types, masks, lengths = input_encoder
             heads_pred, types_pred = network.decode(word, char, pos, mask=masks, length=lengths, beam=beam)
 

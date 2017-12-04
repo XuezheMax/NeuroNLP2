@@ -198,6 +198,8 @@ def get_batch(data, batch_size, word_alphabet=None, unk_replace=0.):
 
     bucket_length = _buckets[bucket_id]
     char_length = min(utils.MAX_CHAR_LENGTH, max_char_length[bucket_id] + utils.NUM_CHAR_PAD)
+    bucket_size = bucket_sizes[bucket_id]
+    batch_size = min(bucket_size, batch_size)
 
     wid_inputs = np.empty([batch_size, bucket_length], dtype=np.int64)
     cid_inputs = np.empty([batch_size, bucket_length, char_length], dtype=np.int64)
