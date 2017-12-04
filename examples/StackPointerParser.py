@@ -137,7 +137,7 @@ def main():
 
     data_train = conllx_random_data.read_stacked_data(train_path, word_alphabet, char_alphabet,
                                                       pos_alphabet, type_alphabet)
-    num_data = sum([len(bucket) for bucket in data_train])
+    num_data = sum([len(bucket) for bucket in data_train[0]])
 
     data_dev = conllx_random_data.read_stacked_data(dev_path, word_alphabet, char_alphabet,
                                                     pos_alphabet, type_alphabet)
