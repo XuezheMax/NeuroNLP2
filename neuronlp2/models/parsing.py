@@ -802,6 +802,7 @@ class StackPtrNet(nn.Module):
                     assert constraints[base_id, child_id], 'constrains error: %d, %d' % (base_id, child_id)
                     if head != 0 or t + 1 == num_step:
                         new_constraints[cc] = constraints[base_id]
+                        new_child_orders[cc] = child_orders[base_id]
 
                         new_stacked_heads[cc] = [stacked_heads[base_id][i] for i in range(len(stacked_heads[base_id]))]
                         new_stacked_heads[cc].pop()
