@@ -34,7 +34,7 @@ def main():
     args_parser.add_argument('--model_name', help='name for saving model file.', required=True)
     args_parser.add_argument('--punctuation', nargs='+', type=str, help='List of punctuations')
     args_parser.add_argument('--beam', type=int, default=1, help='Beam size for decoding')
-    args_parser.add_argument('--gpu', type=bool, default=False, help='Using GPU')
+    args_parser.add_argument('--gpu', action='store_true', help='Using GPU')
     args_parser.add_argument('--left2right', action='store_true', help='apply left to right prior order.')
 
     args = args_parser.parse_args()
