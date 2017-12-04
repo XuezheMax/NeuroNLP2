@@ -841,7 +841,9 @@ class StackPtrNet(nn.Module):
 
             # [num_hyp]
             num_hyp = len(ids)
-            if num_hyp == 1:
+            if num_hyp == 0:
+                return None, None, None, None, None
+            elif num_hyp == 1:
                 index = base_index.new(1).fill_(ids[0])
             else:
                 index = torch.from_numpy(np.array(ids)).type_as(base_index)
