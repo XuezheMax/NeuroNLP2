@@ -206,3 +206,7 @@ def main():
         test_ucorrect_stack_non_leaf, test_lcorrect_stack_non_leaf, test_non_leaf,
         test_ucorrect_stack_non_leaf * 100 / test_non_leaf, test_lcorrect_stack_non_leaf * 100 / test_non_leaf))
     print('============================================================================================================================')
+
+
+if __name__ == '__main__':
+    main()
