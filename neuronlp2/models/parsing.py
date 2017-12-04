@@ -696,10 +696,12 @@ class StackPtrNet(nn.Module):
 
         return heads, types
 
-    def _analyze_per_sentence(self, src_encoding, arc_c, type_c, hx, length, beam):
+    def _analyze_per_sentence(self, src_encoding, arc_c, type_c, hx, length, beam, ordered):
         def valid_hyp(base_id, child_id, head):
             if constraints[base_id, child_id]:
                 return False
+            elif not ordered:
+                return True
             elif child_orders[base_id, head] == 0:
                 return True
             elif child_id < head:
@@ -842,7 +844,7 @@ class StackPtrNet(nn.Module):
             # [num_hyp]
             num_hyp = len(ids)
             if num_hyp == 0:
-                return None, None, None, None, None
+                return None
             elif num_hyp == 1:
                 index = base_index.new(1).fill_(ids[0])
             else:
@@ -911,9 +913,10 @@ class StackPtrNet(nn.Module):
             else:
                 hx = hn[:, b, :].contiguous()
 
-            hids, tids, sent_len, chids, stids = self._analyze_per_sentence(src_encoding[b], arc_c[b], type_c[b], hx, sent_len, beam)
-            if hids is None:
-                return None, None, None, None
+            preds = self._analyze_per_sentence(src_encoding[b], arc_c[b], type_c[b], hx, sent_len, beam, True)
+            if preds is None:
+                preds = self._analyze_per_sentence(src_encoding[b], arc_c[b], type_c[b], hx, sent_len, beam, False)
+            hids, tids, sent_len, chids, stids = preds
             heads[b, :sent_len] = hids
             types[b, :sent_len] = tids
 

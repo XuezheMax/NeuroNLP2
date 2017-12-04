@@ -118,11 +118,10 @@ def main():
     test_non_leaf = 0
 
     sent = 0
-    fail_sent = 0
     network.eval()
     start_time = time.time()
     for batch in conllx_stacked_data.iterate_batch_stacked_variable(data_test, 1):
-        sys.stdout.write('%d (%d), ' % (sent, fail_sent))
+        sys.stdout.write('%d, ' % sent)
         sys.stdout.flush()
         sent += 1
 
@@ -131,9 +130,6 @@ def main():
         _, children, stacked_types, mask_d, lengths_d = input_decoder
         heads_pred, types_pred, children_pred, stacked_types_pred = network.analyze(word, char, pos,
                                                                                     mask=masks, length=lengths, beam=beam)
-        if heads_pred is None:
-            fail_sent += 1
-            continue
 
         children = children.data
         stacked_types = stacked_types.data
