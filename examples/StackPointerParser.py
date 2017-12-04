@@ -88,7 +88,7 @@ def main():
     learning_rate = args.learning_rate
     opt = args.opt
     momentum = 0.9
-    betas = (0.9, 0.99)
+    betas = (0.9, 0.9)
     rho = 0.9
     eps = 1e-6
     decay_rate = args.decay_rate
