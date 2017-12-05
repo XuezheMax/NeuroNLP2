@@ -201,7 +201,8 @@ def main():
                           mode, hidden_size, num_layers,
                           num_types, arc_space, type_space,
                           embedd_word=word_table, embedd_char=char_table,
-                          p_in=p_in, p_out=p_out, p_rnn=p_rnn, biaffine=True)
+                          p_in=p_in, p_out=p_out, p_rnn=p_rnn,
+                          biaffine=True, left2right=left2right)
 
     if use_gpu:
         network.cuda()
@@ -375,7 +376,7 @@ def main():
         for batch in conllx_stacked_data.iterate_batch_stacked_variable(data_dev, batch_size):
             input_encoder, _ = batch
             word, char, pos, heads, types, masks, lengths = input_encoder
-            heads_pred, types_pred = network.decode(word, char, pos, mask=masks, length=lengths, beam=beam)
+            heads_pred, types_pred, _, _ = network.decode(word, char, pos, mask=masks, length=lengths, beam=beam)
 
             word = word.data.cpu().numpy()
             pos = pos.data.cpu().numpy()
@@ -462,7 +463,7 @@ def main():
             for batch in conllx_stacked_data.iterate_batch_stacked_variable(data_test, batch_size):
                 input_encoder, _ = batch
                 word, char, pos, heads, types, masks, lengths = input_encoder
-                heads_pred, types_pred = network.decode(word, char, pos, mask=masks, length=lengths, beam=beam)
+                heads_pred, types_pred, _, _ = network.decode(word, char, pos, mask=masks, length=lengths, beam=beam)
 
                 word = word.data.cpu().numpy()
                 pos = pos.data.cpu().numpy()

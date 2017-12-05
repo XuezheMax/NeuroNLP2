@@ -27,6 +27,7 @@ from neuronlp2.tasks import parser
 
 uid = uuid.uuid4().get_hex()[:6]
 
+
 def main():
     args_parser = argparse.ArgumentParser(description='Tuning with stack pointer parser')
     args_parser.add_argument('--test')  # "data/POS-penn/wsj/split1/wsj1.test.original"
@@ -65,7 +66,6 @@ def main():
     use_gpu = args.gpu
     left2right = args.left2right
     beam = args.beam
-
 
     data_test = conllx_stacked_data.read_stacked_data_to_variable(test_path, word_alphabet, char_alphabet,
                                                                   pos_alphabet, type_alphabet,
@@ -128,8 +128,8 @@ def main():
         input_encoder, input_decoder = batch
         word, char, pos, heads, types, masks, lengths = input_encoder
         _, children, stacked_types, mask_d, lengths_d = input_decoder
-        heads_pred, types_pred, children_pred, stacked_types_pred = network.analyze(word, char, pos,
-                                                                                    mask=masks, length=lengths, beam=beam)
+        heads_pred, types_pred, children_pred, stacked_types_pred = network.decode(word, char, pos,
+                                                                                   mask=masks, length=lengths, beam=beam)
 
         children = children.data
         stacked_types = stacked_types.data
