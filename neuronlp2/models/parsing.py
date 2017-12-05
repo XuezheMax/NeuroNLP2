@@ -718,7 +718,7 @@ class StackPtrNet(nn.Module):
             else:
                 hx = hn[:, b, :].contiguous()
 
-            preds = self._analyze_per_sentence(src_encoding[b], arc_c[b], type_c[b], hx, sent_len, beam, True)
+            preds = self._decode_per_sentence(src_encoding[b], arc_c[b], type_c[b], hx, sent_len, beam, True)
             if preds is None:
                 preds = self._decode_per_sentence(src_encoding[b], arc_c[b], type_c[b], hx, sent_len, beam, False)
             hids, tids, sent_len, chids, stids = preds
