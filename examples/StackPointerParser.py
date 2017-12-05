@@ -251,9 +251,10 @@ def main():
         for batch in range(1, num_batches + 1):
             input_encoder, input_decoder = conllx_stacked_data.get_batch(data_train, batch_size, word_alphabet=word_alphabet, unk_replace=unk_replace, use_gpu=use_gpu)
             word, char, pos, heads, types, masks_e, lengths_e = input_encoder
-            stacked_heads, children, stacked_types, masks_d, lengths_d = input_decoder
+            stacked_heads, stacked_children, stacked_types, children, masks_d, lengths_d = input_decoder
             optim.zero_grad()
-            loss_arc_leaf, loss_arc_non_leaf, loss_type_leaf, loss_type_non_leaf, loss_cov, num_leaf, num_non_leaf = network.loss(word, char, pos, stacked_heads, children, stacked_types,
+            loss_arc_leaf, loss_arc_non_leaf, loss_type_leaf, loss_type_non_leaf, loss_cov, num_leaf, num_non_leaf = network.loss(word, char, pos,
+                                                                                                                                  stacked_heads, stacked_children, stacked_types, children,
                                                                                                                                   mask_e=masks_e, length_e=lengths_e,
                                                                                                                                   mask_d=masks_d, length_d=lengths_d)
 

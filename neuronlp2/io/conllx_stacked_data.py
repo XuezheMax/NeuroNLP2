@@ -27,6 +27,7 @@ def _generate_stack_inputs(types, child_ids):
     for childs in new_child_ids:
         random.shuffle(childs)
     stacked_heads = []
+    stacked_children = []
     children = []
     stacked_types = []
     stack = [0]
@@ -35,16 +36,17 @@ def _generate_stack_inputs(types, child_ids):
         stacked_heads.append(head)
         child_id = new_child_ids[head]
         if len(child_id) == 0:
-            children.append(0)
+            children.append([0])
+            stacked_children.append(0)
             stacked_types.append(PAD_ID_TAG)
             stack.pop()
         else:
+            children.append(copy.copy(child_id))
             child = child_id.pop(0)
-            children.append(child)
+            stacked_children.append(child)
             stack.append(child)
             stacked_types.append(types[child])
-
-    return stacked_heads, children, stacked_types
+    return stacked_heads, stacked_children, stacked_types, children
 
 
 def read_stacked_data(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, max_size=None, normalize_digits=True):
@@ -106,8 +108,9 @@ def get_batch(data, batch_size, word_alphabet=None, unk_replace=0., use_gpu=Fals
     lengths_e = np.empty(batch_size, dtype=np.int64)
 
     stack_hid_inputs = np.empty([batch_size, 2 * bucket_length - 1], dtype=np.int64)
-    chid_inputs = np.empty([batch_size, 2 * bucket_length - 1], dtype=np.int64)
+    stack_chid_inputs = np.empty([batch_size, 2 * bucket_length - 1], dtype=np.int64)
     stack_tid_inputs = np.empty([batch_size, 2 * bucket_length - 1], dtype=np.int64)
+    children_inputs = np.zeros([batch_size, 2 * bucket_length - 1, bucket_length], dtype=np.float32)
 
     masks_d = np.zeros([batch_size, 2 * bucket_length - 1], dtype=np.float32)
     lengths_d = np.empty(batch_size, dtype=np.int64)
@@ -139,19 +142,22 @@ def get_batch(data, batch_size, word_alphabet=None, unk_replace=0., use_gpu=Fals
             if word_alphabet.is_singleton(wid):
                 single[b, j] = 1
 
-        stack_hids, chids, stack_tids = _generate_stack_inputs(tids, child_ids)
+        stack_hids, stack_chids, stack_tids, chids = _generate_stack_inputs(tids, child_ids)
         inst_size_decoder = 2 * inst_size - 1
         lengths_d[b] = inst_size_decoder
 
         # stacked heads
         stack_hid_inputs[b, :inst_size_decoder] = stack_hids
         stack_hid_inputs[b, inst_size_decoder:] = PAD_ID_TAG
-        # children
-        chid_inputs[b, :inst_size_decoder] = chids
-        chid_inputs[b, inst_size_decoder:] = PAD_ID_TAG
+        # stacked children
+        stack_chid_inputs[b, :inst_size_decoder] = stack_chids
+        stack_chid_inputs[b, inst_size_decoder:] = PAD_ID_TAG
         # stacked types
         stack_tid_inputs[b, :inst_size_decoder] = stack_tids
         stack_tid_inputs[b, inst_size_decoder:] = PAD_ID_TAG
+        # children
+        for j, chid in zip(range(inst_size_decoder), chids):
+            children_inputs[b, j, chid] = 1.0 / len(chid)
         # masks_d
         masks_d[b, :inst_size_decoder] = 1.0
 
@@ -168,8 +174,9 @@ def get_batch(data, batch_size, word_alphabet=None, unk_replace=0., use_gpu=Fals
     lengths_e = torch.from_numpy(lengths_e)
 
     stacked_heads = Variable(torch.from_numpy(stack_hid_inputs), volatile=volatile)
-    children = Variable(torch.from_numpy(chid_inputs), volatile=volatile)
+    stacked_children = Variable(torch.from_numpy(stack_chid_inputs), volatile=volatile)
     stacked_types = Variable(torch.from_numpy(stack_tid_inputs), volatile=volatile)
+    children = Variable(torch.from_numpy(children_inputs), volatile=volatile)
     masks_d = Variable(torch.from_numpy(masks_d), volatile=volatile)
     lengths_d = torch.from_numpy(lengths_d)
 
@@ -182,13 +189,14 @@ def get_batch(data, batch_size, word_alphabet=None, unk_replace=0., use_gpu=Fals
         masks_e = masks_e.cuda()
         lengths_e = lengths_e.cuda()
         stacked_heads = stacked_heads.cuda()
-        children = children.cuda()
+        stacked_children = stacked_children.cuda()
         stacked_types = stacked_types.cuda()
+        children = children.cuda()
         masks_d = masks_d.cuda()
         lengths_d = lengths_d.cuda()
 
     return (words, chars, pos, heads, types, masks_e, lengths_e), \
-           (stacked_heads, children, stacked_types, masks_d, lengths_d)
+           (stacked_heads, stacked_children, stacked_types, children, masks_d, lengths_d)
 
 
 def iterate_batch(data, batch_size, word_alphabet=None, unk_replace=0., shuffle=False, use_gpu=False, volatile=False):
@@ -217,8 +225,9 @@ def iterate_batch(data, batch_size, word_alphabet=None, unk_replace=0., shuffle=
         lengths_e = np.empty(bucket_size, dtype=np.int64)
 
         stack_hid_inputs = np.empty([bucket_size, 2 * bucket_length - 1], dtype=np.int64)
-        chid_inputs = np.empty([bucket_size, 2 * bucket_length - 1], dtype=np.int64)
+        stack_chid_inputs = np.empty([bucket_size, 2 * bucket_length - 1], dtype=np.int64)
         stack_tid_inputs = np.empty([bucket_size, 2 * bucket_length - 1], dtype=np.int64)
+        children_inputs = np.zeros([bucket_size, 2 * bucket_length - 1, bucket_length], dtype=np.float32)
 
         masks_d = np.zeros([bucket_size, 2 * bucket_length - 1], dtype=np.float32)
         lengths_d = np.empty(bucket_size, dtype=np.int64)
@@ -249,7 +258,7 @@ def iterate_batch(data, batch_size, word_alphabet=None, unk_replace=0., shuffle=
                 if word_alphabet.is_singleton(wid):
                     single[i, j] = 1
 
-            stack_hids, chids, stack_tids = _generate_stack_inputs(tids, child_ids)
+            stack_hids, stack_chids, stack_tids, chids = _generate_stack_inputs(tids, child_ids)
             inst_size_decoder = 2 * inst_size - 1
             lengths_d[i] = inst_size_decoder
 
@@ -257,11 +266,14 @@ def iterate_batch(data, batch_size, word_alphabet=None, unk_replace=0., shuffle=
             stack_hid_inputs[i, :inst_size_decoder] = stack_hids
             stack_hid_inputs[i, inst_size_decoder:] = PAD_ID_TAG
             # children
-            chid_inputs[i, :inst_size_decoder] = chids
-            chid_inputs[i, inst_size_decoder:] = PAD_ID_TAG
+            stack_chid_inputs[i, :inst_size_decoder] = stack_chids
+            stack_chid_inputs[i, inst_size_decoder:] = PAD_ID_TAG
             # stacked types
             stack_tid_inputs[i, :inst_size_decoder] = stack_tids
             stack_tid_inputs[i, inst_size_decoder:] = PAD_ID_TAG
+            # children
+            for j, chid in zip(range(inst_size_decoder), chids):
+                children_inputs[i, j, chid] = 1.0 / len(chid)
             # masks_d
             masks_d[i, :inst_size_decoder] = 1.0
 
@@ -279,8 +291,9 @@ def iterate_batch(data, batch_size, word_alphabet=None, unk_replace=0., shuffle=
         lengths_e = torch.from_numpy(lengths_e)
 
         stacked_heads = Variable(torch.from_numpy(stack_hid_inputs), volatile=volatile)
-        children = Variable(torch.from_numpy(chid_inputs), volatile=volatile)
+        stacked_children = Variable(torch.from_numpy(stack_chid_inputs), volatile=volatile)
         stacked_types = Variable(torch.from_numpy(stack_tid_inputs), volatile=volatile)
+        children = Variable(torch.from_numpy(children_inputs), volatile=volatile)
         masks_d = Variable(torch.from_numpy(masks_d), volatile=volatile)
         lengths_d = torch.from_numpy(lengths_d)
 
@@ -293,8 +306,9 @@ def iterate_batch(data, batch_size, word_alphabet=None, unk_replace=0., shuffle=
             masks_e = masks_e.cuda()
             lengths_e = lengths_e.cuda()
             stacked_heads = stacked_heads.cuda()
-            children = children.cuda()
+            stacked_children = stacked_children.cuda()
             stacked_types = stacked_types.cuda()
+            children = children.cuda()
             masks_d = masks_d.cuda()
             lengths_d = lengths_d.cuda()
 
@@ -311,6 +325,6 @@ def iterate_batch(data, batch_size, word_alphabet=None, unk_replace=0., shuffle=
                 excerpt = slice(start_idx, start_idx + batch_size)
             yield (words[excerpt], chars[excerpt], pos[excerpt], heads[excerpt], types[excerpt],
                    masks_e[excerpt], lengths_e[excerpt]), \
-                  (stacked_heads[excerpt], children[excerpt], stacked_types[excerpt],
+                  (stacked_heads[excerpt], stacked_children[excerpt], stacked_types[excerpt], children[excerpt],
                    masks_d[excerpt], lengths_d[excerpt])
 

@@ -392,7 +392,7 @@ class StackPtrNet(nn.Module):
             hn = F.tanh(self.hx_dense(hn))
         return hn
 
-    def loss(self, input_word, input_char, input_pos, stacked_heads, children, stacked_types, mask_e=None, length_e=None, mask_d=None, length_d=None, hx=None):
+    def loss(self, input_word, input_char, input_pos, stacked_heads, stacked_children, stacked_types, children, mask_e=None, length_e=None, mask_d=None, length_d=None, hx=None):
 
         # output from encoder [batch, length_encoder, tag_space]
         src_encoding, arc_c, type_c, hn, mask_e, _ = self._get_encoder_output(input_word, input_char, input_pos, mask_e=mask_e, length_e=length_e, hx=hx)
@@ -416,10 +416,11 @@ class StackPtrNet(nn.Module):
         type_h = type[:, :max_len_d].contiguous()
         type_c = type[:, max_len_d:]
 
-        if mask_d is not None and children.size(1) != mask_d.size(1):
-            stacked_heads = stacked_heads[:, :max_len_d]
-            children = children[:, :max_len_d]
-            stacked_types = stacked_types[:, :max_len_d]
+        # if mask_d is not None and stacked_children.size(1) != mask_d.size(1):
+        #     stacked_heads = stacked_heads[:, :max_len_d]
+        #     stacked_children = stacked_children[:, :max_len_d]
+        #     stacked_types = stacked_types[:, :max_len_d]
+        #     children = children[:, :max_len_d]
 
         # [batch, length_decoder, length_encoder]
         out_arc = self.attention(arc_h, arc_c, mask_d=mask_d, mask_e=mask_e).squeeze(dim=1)
@@ -427,7 +428,7 @@ class StackPtrNet(nn.Module):
         # create batch index [batch]
         batch_index = torch.arange(0, batch).type_as(out_arc.data).long()
         # get vector for heads [batch, length_decoder, type_space],
-        type_c = type_c[batch_index, children.data.t()].transpose(0, 1).contiguous()
+        type_c = type_c[batch_index, stacked_children.data.t()].transpose(0, 1).contiguous()
         # compute output for type [batch, length_decoder, num_labels]
         out_type = self.bilinear(type_h, type_c)
 
@@ -452,7 +453,7 @@ class StackPtrNet(nn.Module):
 
         # get leaf and non-leaf mask
         # shape = [batch, length_decoder]
-        mask_leaf = torch.eq(children, 0).float()
+        mask_leaf = torch.eq(stacked_children, 0).float()
         mask_non_leaf = (1.0 - mask_leaf)
 
         # mask invalid position to 0 for sum loss
@@ -475,7 +476,8 @@ class StackPtrNet(nn.Module):
         head_index = torch.arange(0, max_len_d).view(max_len_d, 1).expand(max_len_d, batch)
         head_index = head_index.type_as(out_arc.data).long()
         # [batch, length_decoder]
-        loss_arc = loss_arc[batch_index, head_index, children.data.t()].transpose(0, 1)
+        # loss_arc = loss_arc[batch_index, head_index, stacked_children.data.t()].transpose(0, 1)
+        loss_arc = (loss_arc * children).sum(dim=2)
         loss_arc_leaf = loss_arc * mask_leaf
         loss_arc_non_leaf = loss_arc * mask_non_leaf
 
