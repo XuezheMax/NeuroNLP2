@@ -476,7 +476,6 @@ class StackPtrNet(nn.Module):
         head_index = torch.arange(0, max_len_d).view(max_len_d, 1).expand(max_len_d, batch)
         head_index = head_index.type_as(out_arc.data).long()
         # [batch, length_decoder]
-        # loss_arc = loss_arc[batch_index, head_index, stacked_children.data.t()].transpose(0, 1)
         loss_arc = (loss_arc * children).sum(dim=2)
         loss_arc_leaf = loss_arc * mask_leaf
         loss_arc_non_leaf = loss_arc * mask_non_leaf
