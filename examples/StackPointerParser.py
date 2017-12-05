@@ -222,6 +222,13 @@ def main():
 
     lr = learning_rate
     optim = generate_optimizer(opt, lr, network.parameters())
+    opt_info = 'opt: %s, ' % opt
+    if opt == 'adam':
+        opt_info += 'betas=%s, eps=%.1e' % (betas, eps)
+    elif opt == 'sgd':
+        opt_info += 'momentum=%.2f' % momentum
+    elif opt == 'adadelta':
+        opt_info += 'rho=%.2f, eps=%.1e' % (rho, eps)
 
     logger.info("Embedding dim: word=%d, char=%d, pos=%d" % (word_dim, char_dim, pos_dim))
     logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, arc_space=%d, type_space=%d" % (
@@ -229,6 +236,7 @@ def main():
     logger.info("train: cov: %.1f, (#data: %d, batch: %d, clip: %.2f, dropout(in, out, rnn): (%.2f, %.2f, %s), unk_repl: %.2f)" % (
         cov, num_data, batch_size, clip,  p_in, p_out, p_rnn, unk_replace))
     logger.info('prior order: %s, beam: %d' % ('left2right' if left2right else 'inside-out', beam))
+    logger.info(opt_info)
 
     num_batches = num_data / batch_size + 1
     dev_ucorrect = 0.0
