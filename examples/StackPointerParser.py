@@ -202,11 +202,11 @@ def main():
     optim = generate_optimizer(opt, lr, network.parameters())
     opt_info = 'opt: %s, ' % opt
     if opt == 'adam':
-        opt_info += 'betas=%s, eps=%f' % (betas, eps)
+        opt_info += 'betas=%s, eps=%.1e' % (betas, eps)
     elif opt == 'sgd':
         opt_info += 'momentum=%.2f' % momentum
     elif opt == 'adadelta':
-        opt_info += 'rho=%.2f, eps=%f' % (rho, eps)
+        opt_info += 'rho=%.2f, eps=%.1e' % (rho, eps)
 
     logger.info("Embedding dim: word=%d, char=%d, pos=%d" % (word_dim, char_dim, pos_dim))
     logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, arc_space=%d, type_space=%d" % (mode, num_layers, hidden_size, num_filters, arc_space, type_space))
