@@ -1,7 +1,7 @@
 __author__ = 'max'
 
-import os.path
 import random
+import copy
 import numpy as np
 from .reader import CoNLLXReader
 import utils
@@ -18,11 +18,13 @@ def _get_children(heads):
     for child in range(1, len(heads)):
         head = heads[child]
         child_ids[head].append(child)
+
     return child_ids
 
 
 def _generate_stack_inputs(types, child_ids):
-    for childs in child_ids:
+    new_child_ids = copy.deepcopy(child_ids)
+    for childs in new_child_ids:
         random.shuffle(childs)
     stacked_heads = []
     children = []
@@ -31,7 +33,7 @@ def _generate_stack_inputs(types, child_ids):
     while len(stack) > 0:
         head = stack[-1]
         stacked_heads.append(head)
-        child_id = child_ids[head]
+        child_id = new_child_ids[head]
         if len(child_id) == 0:
             children.append(0)
             stacked_types.append(PAD_ID_TAG)
@@ -45,8 +47,7 @@ def _generate_stack_inputs(types, child_ids):
     return stacked_heads, children, stacked_types
 
 
-def read_stacked_data(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, max_size=None,
-                      normalize_digits=True):
+def read_stacked_data(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, max_size=None, normalize_digits=True):
     data = [[] for _ in _buckets]
     max_char_length = [0 for _ in _buckets]
     print('Reading data from %s' % source_path)
@@ -63,8 +64,7 @@ def read_stacked_data(source_path, word_alphabet, char_alphabet, pos_alphabet, t
         for bucket_id, bucket_size in enumerate(_buckets):
             if inst_size < bucket_size:
                 children = _get_children(inst.heads)
-                data[bucket_id].append([sent.word_ids, sent.char_id_seqs, inst.pos_ids, inst.heads, inst.type_ids,
-                                        children])
+                data[bucket_id].append([sent.word_ids, sent.char_id_seqs, inst.pos_ids, inst.heads, inst.type_ids, children])
                 max_len = max([len(char_seq) for char_seq in sent.char_seqs])
                 if max_char_length[bucket_id] < max_len:
                     max_char_length[bucket_id] = max_len

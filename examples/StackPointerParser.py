@@ -30,8 +30,7 @@ uid = uuid.uuid4().get_hex()[:6]
 
 def main():
     args_parser = argparse.ArgumentParser(description='Tuning with stack pointer parser')
-    args_parser.add_argument('--mode', choices=['RNN', 'LSTM', 'GRU', 'FastLSTM'], help='architecture of rnn',
-                             required=True)
+    args_parser.add_argument('--mode', choices=['RNN', 'LSTM', 'GRU', 'FastLSTM'], help='architecture of rnn', required=True)
     args_parser.add_argument('--num_epochs', type=int, default=200, help='Number of training epochs')
     args_parser.add_argument('--batch_size', type=int, default=64, help='Number of sentences in each batch')
     args_parser.add_argument('--hidden_size', type=int, default=256, help='Number of hidden units in RNN')
@@ -51,15 +50,12 @@ def main():
     args_parser.add_argument('--p_in', type=float, default=0.33, help='dropout rate for input embeddings')
     args_parser.add_argument('--p_out', type=float, default=0.33, help='dropout rate for output layer')
     args_parser.add_argument('--schedule', type=int, help='schedule for learning rate decay')
-    args_parser.add_argument('--unk_replace', type=float, default=0.,
-                             help='The rate to replace a singleton word with UNK')
+    args_parser.add_argument('--unk_replace', type=float, default=0., help='The rate to replace a singleton word with UNK')
     args_parser.add_argument('--punctuation', nargs='+', type=str, help='List of punctuations')
     args_parser.add_argument('--beam', type=int, default=1, help='Beam size for decoding')
-    args_parser.add_argument('--word_embedding', choices=['glove', 'senna', 'sskip', 'polyglot'],
-                             help='Embedding for words', required=True)
+    args_parser.add_argument('--word_embedding', choices=['glove', 'senna', 'sskip', 'polyglot'], help='Embedding for words', required=True)
     args_parser.add_argument('--word_path', help='path for word embedding dict')
-    args_parser.add_argument('--char_embedding', choices=['random', 'polyglot'], help='Embedding for characters',
-                             required=True)
+    args_parser.add_argument('--char_embedding', choices=['random', 'polyglot'], help='Embedding for characters', required=True)
     args_parser.add_argument('--char_path', help='path for character embedding dict')
     args_parser.add_argument('--train')  # "data/POS-penn/wsj/split1/wsj1.train.original"
     args_parser.add_argument('--dev')  # "data/POS-penn/wsj/split1/wsj1.dev.original"
@@ -118,9 +114,7 @@ def main():
     alphabet_path = os.path.join(model_path, 'alphabets/')
     model_name = os.path.join(model_path, model_name)
     word_alphabet, char_alphabet, pos_alphabet, \
-    type_alphabet = conllx_random_data.create_alphabets(alphabet_path, train_path,
-                                                        data_paths=[dev_path, test_path],
-                                                        max_vocabulary_size=50000, embedd_dict=word_dict)
+    type_alphabet = conllx_random_data.create_alphabets(alphabet_path, train_path, data_paths=[dev_path, test_path], max_vocabulary_size=50000, embedd_dict=word_dict)
 
     num_words = word_alphabet.size()
     num_chars = char_alphabet.size()
@@ -135,14 +129,11 @@ def main():
     logger.info("Reading Data")
     use_gpu = torch.cuda.is_available()
 
-    data_train = conllx_random_data.read_stacked_data(train_path, word_alphabet, char_alphabet,
-                                                      pos_alphabet, type_alphabet)
+    data_train = conllx_random_data.read_stacked_data(train_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
     num_data = sum([len(bucket) for bucket in data_train[0]])
 
-    data_dev = conllx_random_data.read_stacked_data(dev_path, word_alphabet, char_alphabet,
-                                                    pos_alphabet, type_alphabet)
-    data_test = conllx_random_data.read_stacked_data(test_path, word_alphabet, char_alphabet,
-                                                     pos_alphabet, type_alphabet)
+    data_dev = conllx_random_data.read_stacked_data(dev_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
+    data_test = conllx_random_data.read_stacked_data(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
 
     punct_set = None
     if punctuation is not None:
@@ -188,14 +179,8 @@ def main():
     char_table = construct_char_embedding_table()
 
     window = 3
-    network = StackPtrNet(word_dim, num_words,
-                          char_dim, num_chars,
-                          pos_dim, num_pos,
-                          num_filters, window,
-                          mode, hidden_size, num_layers,
-                          num_types, arc_space, type_space,
-                          embedd_word=word_table, embedd_char=char_table,
-                          p_in=p_in, p_out=p_out, p_rnn=p_rnn, biaffine=True)
+    network = StackPtrNet(word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, num_filters, window, mode, hidden_size, num_layers, num_types, arc_space, type_space,
+                          embedd_word=word_table, embedd_char=char_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn, biaffine=True)
 
     if use_gpu:
         network.cuda()
@@ -217,10 +202,8 @@ def main():
     optim = generate_optimizer(opt, lr, network.parameters())
 
     logger.info("Embedding dim: word=%d, char=%d, pos=%d" % (word_dim, char_dim, pos_dim))
-    logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, arc_space=%d, type_space=%d" % (
-        mode, num_layers, hidden_size, num_filters, arc_space, type_space))
-    logger.info("train: cov: %.1f, (#data: %d, batch: %d, clip: %.2f, dropout(in, out, rnn): (%.2f, %.2f, %s), unk_repl: %.2f)" % (
-        cov, num_data, batch_size, clip,  p_in, p_out, p_rnn, unk_replace))
+    logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, arc_space=%d, type_space=%d" % (mode, num_layers, hidden_size, num_filters, arc_space, type_space))
+    logger.info("train: cov: %.1f, (#data: %d, batch: %d, clip: %.2f, dropout(in, out, rnn): (%.2f, %.2f, %s), unk_repl: %.2f)" % (cov, num_data, batch_size, clip, p_in, p_out, p_rnn, unk_replace))
     logger.info('prior order: %s, beam: %d' % ('random', beam))
 
     num_batches = num_data / batch_size + 1
@@ -254,8 +237,7 @@ def main():
 
     patient = 0
     for epoch in range(1, num_epochs + 1):
-        print('Epoch %d (%s, optim: %s, learning rate=%.4f, decay rate=%.4f (schedule=%d, patient=%d)): ' % (
-            epoch, mode, opt, lr, decay_rate, schedule, patient))
+        print('Epoch %d (%s, optim: %s, learning rate=%.4f, decay rate=%.4f (schedule=%d, patient=%d)): ' % (epoch, mode, opt, lr, decay_rate, schedule, patient))
         train_err_arc_leaf = 0.
         train_err_arc_non_leaf = 0.
         train_err_type_leaf = 0.
@@ -267,21 +249,17 @@ def main():
         num_back = 0
         network.train()
         for batch in range(1, num_batches + 1):
-            input_encoder, input_decoder = conllx_random_data.get_batch(data_train, batch_size,
-                                                                        word_alphabet=word_alphabet,
-                                                                        unk_replace=unk_replace, use_gpu=use_gpu)
+            input_encoder, input_decoder = conllx_random_data.get_batch(data_train, batch_size, word_alphabet=word_alphabet, unk_replace=unk_replace, use_gpu=use_gpu)
             word, char, pos, heads, types, masks_e, lengths_e = input_encoder
             stacked_heads, children, stacked_types, masks_d, lengths_d = input_decoder
             optim.zero_grad()
-            loss_arc_leaf, loss_arc_non_leaf, \
-            loss_type_leaf, loss_type_non_leaf, \
-            loss_cov, \
-            num_leaf, num_non_leaf = network.loss(word, char, pos, stacked_heads, children, stacked_types,
-                                                  mask_e=masks_e, length_e=lengths_e, mask_d=masks_d,
-                                                  length_d=lengths_d)
+            loss_arc_leaf, loss_arc_non_leaf, loss_type_leaf, loss_type_non_leaf, loss_cov, num_leaf, num_non_leaf = network.loss(word, char, pos, stacked_heads, children, stacked_types,
+                                                                                                                                  mask_e=masks_e, length_e=lengths_e,
+                                                                                                                                  mask_d=masks_d, length_d=lengths_d)
+
             loss_arc = loss_arc_leaf + loss_arc_non_leaf
             loss_type = loss_type_leaf + loss_type_non_leaf
-            loss = loss_arc + loss_type #+ cov * loss_cov
+            loss = loss_arc + loss_type + cov * loss_cov
             loss.backward()
             clip_grad_norm(network.parameters(), clip)
             optim.step()
@@ -319,10 +297,8 @@ def main():
                 err_cov = train_err_cov / train_total_non_leaf
 
                 err = err_arc + err_type + cov * err_cov
-                log_info = 'train: %d/%d loss (leaf, non_leaf): %.4f, arc: %.4f (%.4f, %.4f), ' \
-                           'type: %.4f (%.4f, %.4f), coverage: %.4f, time left (estimated): %.2fs' % (
-                               batch, num_batches, err, err_arc, err_arc_leaf, err_arc_non_leaf,
-                               err_type, err_type_leaf, err_type_non_leaf, err_cov, time_left)
+                log_info = 'train: %d/%d loss (leaf, non_leaf): %.4f, arc: %.4f (%.4f, %.4f), type: %.4f (%.4f, %.4f), coverage: %.4f, time left (estimated): %.2fs' % (
+                    batch, num_batches, err, err_arc, err_arc_leaf, err_arc_non_leaf, err_type, err_type_leaf, err_type_non_leaf, err_cov, time_left)
                 sys.stdout.write(log_info)
                 sys.stdout.flush()
                 num_back = len(log_info)
@@ -341,11 +317,8 @@ def main():
         err_cov = train_err_cov / train_total_non_leaf
 
         err = err_arc + err_type + cov * err_cov
-        print('train: %d loss (leaf, non_leaf): %.4f, arc: %.4f (%.4f, %.4f), type: %.4f (%.4f, %.4f), coverage: %.4f, '
-              'time: %.2fs' % (
-            num_batches, err, err_arc, err_arc_leaf, err_arc_non_leaf,
-            err_type, err_type_leaf, err_type_non_leaf,
-            err_cov, time.time() - start_time))
+        print('train: %d loss (leaf, non_leaf): %.4f, arc: %.4f (%.4f, %.4f), type: %.4f (%.4f, %.4f), coverage: %.4f, time: %.2fs' % (
+            num_batches, err, err_arc, err_arc_leaf, err_arc_non_leaf, err_type, err_type_leaf, err_type_non_leaf, err_cov, time.time() - start_time))
 
         # evaluate performance on dev data
         network.eval()
@@ -367,8 +340,7 @@ def main():
         dev_root_corr = 0.0
         dev_total_root = 0.0
         dev_total_inst = 0.0
-        for batch in conllx_random_data.iterate_batch(data_dev, batch_size, word_alphabet=word_alphabet,
-                                                      use_gpu=use_gpu, volatile=True):
+        for batch in conllx_random_data.iterate_batch(data_dev, batch_size, word_alphabet=word_alphabet, use_gpu=use_gpu, volatile=True):
             input_encoder, _ = batch
             word, char, pos, heads, types, masks, lengths = input_encoder
             heads_pred, types_pred = network.decode(word, char, pos, mask=masks, length=lengths, beam=beam)
@@ -382,9 +354,7 @@ def main():
             pred_writer.write(word, pos, heads_pred, types_pred, lengths, symbolic_root=True)
             gold_writer.write(word, pos, heads, types, lengths, symbolic_root=True)
 
-            stats, stats_nopunc, stats_root, num_inst = parser.eval(word, pos, heads_pred, types_pred, heads, types,
-                                                                    word_alphabet, pos_alphabet, lengths,
-                                                                    punct_set=punct_set, symbolic_root=True)
+            stats, stats_nopunc, stats_root, num_inst = parser.eval(word, pos, heads_pred, types_pred, heads, types, word_alphabet, pos_alphabet, lengths, punct_set=punct_set, symbolic_root=True)
             ucorr, lcorr, total, ucm, lcm = stats
             ucorr_nopunc, lcorr_nopunc, total_nopunc, ucm_nopunc, lcm_nopunc = stats_nopunc
             corr_root, total_root = stats_root
@@ -409,14 +379,11 @@ def main():
         pred_writer.close()
         gold_writer.close()
         print('W. Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%, ucm: %.2f%%, lcm: %.2f%%' % (
-            dev_ucorr, dev_lcorr, dev_total, dev_ucorr * 100 / dev_total, dev_lcorr * 100 / dev_total,
-            dev_ucomlpete * 100 / dev_total_inst, dev_lcomplete * 100 / dev_total_inst))
+            dev_ucorr, dev_lcorr, dev_total, dev_ucorr * 100 / dev_total, dev_lcorr * 100 / dev_total, dev_ucomlpete * 100 / dev_total_inst, dev_lcomplete * 100 / dev_total_inst))
         print('Wo Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%, ucm: %.2f%%, lcm: %.2f%%' % (
-            dev_ucorr_nopunc, dev_lcorr_nopunc, dev_total_nopunc, dev_ucorr_nopunc * 100 / dev_total_nopunc,
-            dev_lcorr_nopunc * 100 / dev_total_nopunc,
+            dev_ucorr_nopunc, dev_lcorr_nopunc, dev_total_nopunc, dev_ucorr_nopunc * 100 / dev_total_nopunc, dev_lcorr_nopunc * 100 / dev_total_nopunc,
             dev_ucomlpete_nopunc * 100 / dev_total_inst, dev_lcomplete_nopunc * 100 / dev_total_inst))
-        print('Root: corr: %d, total: %d, acc: %.2f%%' %(
-            dev_root_corr, dev_total_root, dev_root_corr * 100 / dev_total_root))
+        print('Root: corr: %d, total: %d, acc: %.2f%%' % (dev_root_corr, dev_total_root, dev_root_corr * 100 / dev_total_root))
 
         if dev_ucorrect_nopunc <= dev_ucorr_nopunc or dev_lcorrect_nopunc <= dev_lcorr_nopunc:
             dev_ucorrect_nopunc = dev_ucorr_nopunc
@@ -455,8 +422,7 @@ def main():
 
             test_root_correct = 0.0
             test_total_root = 0
-            for batch in conllx_random_data.iterate_batch(data_test, batch_size, word_alphabet=word_alphabet,
-                                                          use_gpu=use_gpu, volatile=True):
+            for batch in conllx_random_data.iterate_batch(data_test, batch_size, word_alphabet=word_alphabet, use_gpu=use_gpu, volatile=True):
                 input_encoder, _ = batch
                 word, char, pos, heads, types, masks, lengths = input_encoder
                 heads_pred, types_pred = network.decode(word, char, pos, mask=masks, length=lengths, beam=beam)
@@ -470,9 +436,7 @@ def main():
                 pred_writer.write(word, pos, heads_pred, types_pred, lengths, symbolic_root=True)
                 gold_writer.write(word, pos, heads, types, lengths, symbolic_root=True)
 
-                stats, stats_nopunc, stats_root, num_inst = parser.eval(word, pos, heads_pred, types_pred, heads, types,
-                                                                        word_alphabet, pos_alphabet, lengths,
-                                                                        punct_set=punct_set, symbolic_root=True)
+                stats, stats_nopunc, stats_root, num_inst = parser.eval(word, pos, heads_pred, types_pred, heads, types, word_alphabet, pos_alphabet, lengths, punct_set=punct_set, symbolic_root=True)
                 ucorr, lcorr, total, ucm, lcm = stats
                 ucorr_nopunc, lcorr_nopunc, total_nopunc, ucm_nopunc, lcm_nopunc = stats_nopunc
                 corr_root, total_root = stats_root
