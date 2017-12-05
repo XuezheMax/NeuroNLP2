@@ -85,7 +85,7 @@ def main():
     momentum = 0.9
     betas = (0.9, 0.999)
     rho = 0.9
-    eps = 1e-8
+    eps = 1e-6
     decay_rate = args.decay_rate
     clip = args.clip
     gamma = args.gamma
