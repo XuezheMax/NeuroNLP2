@@ -127,7 +127,7 @@ def main():
 
         input_encoder, input_decoder = batch
         word, char, pos, heads, types, masks, lengths = input_encoder
-        _, children, stacked_types, mask_d, lengths_d = input_decoder
+        stacked_heads, children, stacked_types, mask_d, lengths_d = input_decoder
         heads_pred, types_pred, children_pred, stacked_types_pred = network.decode(word, char, pos,
                                                                                    mask=masks, length=lengths, beam=beam)
 
@@ -139,7 +139,7 @@ def main():
             children_pred = children_pred.cuda()
             stacked_types_pred = stacked_types_pred.cuda()
         mask_d = mask_d.data
-        mask_leaf = torch.eq(children, 0).float()
+        mask_leaf = torch.eq(children, stacked_heads).float()
         mask_non_leaf = (1.0 - mask_leaf)
         mask_leaf = mask_leaf * mask_d
         mask_non_leaf = mask_non_leaf * mask_d
