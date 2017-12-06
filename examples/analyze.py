@@ -131,6 +131,7 @@ def main():
         heads_pred, types_pred, children_pred, stacked_types_pred = network.decode(word, char, pos,
                                                                                    mask=masks, length=lengths, beam=beam)
 
+        stacked_heads = stacked_heads.data
         children = children.data
         stacked_types = stacked_types.data
         children_pred = torch.from_numpy(children_pred).long()
