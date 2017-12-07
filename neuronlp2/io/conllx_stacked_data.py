@@ -17,7 +17,7 @@ def _obtain_child_index_for_depth_first(child_ids, heads):
         for child in children:
             depth = calc_depth(child)
             child_with_depth[head].append((child, depth))
-            max_depth = max(max_depth, depth)
+            max_depth = max(max_depth, depth + 1)
         child_with_depth[head] = sorted(child_with_depth[head], key=lambda x: x[1], reverse=True)
         return max_depth
 
@@ -31,13 +31,10 @@ def _obtain_child_index_for_depth_first(child_ids, heads):
             if heads[child] == head:
                 child_ids[head].append(child)
 
-    print(child_ids)
     child_with_depth = [[] for _ in range(len(heads))]
     calc_depth(0)
     child_ids = [[child for child, depth in child_with_depth[head]] for head in range(len(heads))]
-    print(child_with_depth)
-    print(child_ids)
-    raw_input()
+
 
 def _generate_stack_inputs(heads, types, prior_order):
     child_ids = [[] for _ in range(len(heads))]
