@@ -10,7 +10,30 @@ from .conllx_data import NUM_SYMBOLIC_TAGS
 from .conllx_data import create_alphabets
 
 
-def _obtain_child_index_for_depth_first(child_ids, heads):
+def _obtain_child_index_for_left2right(heads):
+    child_ids = [[] for _ in range(len(heads))]
+    # skip the symbolic root.
+    for child in range(1, len(heads)):
+        head = heads[child]
+        child_ids[head].append(child)
+    return child_ids
+
+
+def _obtain_child_index_for_inside_out(heads):
+    child_ids = [[] for _ in range(len(heads))]
+    for head in range(len(heads)):
+        # first find left children inside-out
+        for child in reversed(range(1, head)):
+            if heads[child] == head:
+                child_ids[head].append(child)
+        # second find right children inside-out
+        for child in range(head + 1, len(heads)):
+            if heads[child] == head:
+                child_ids[head].append(child)
+    return child_ids
+
+
+def _obtain_child_index_for_depth_first(heads):
     def calc_depth(head):
         children = child_ids[head]
         max_depth = 0
@@ -21,40 +44,19 @@ def _obtain_child_index_for_depth_first(child_ids, heads):
         child_with_depth[head] = sorted(child_with_depth[head], key=lambda x: x[1], reverse=True)
         return max_depth
 
-    for head in range(len(heads)):
-        # first find left children inside-out
-        for child in reversed(range(1, head)):
-            if heads[child] == head:
-                child_ids[head].append(child)
-        # second find right children inside-out
-        for child in range(head + 1, len(heads)):
-            if heads[child] == head:
-                child_ids[head].append(child)
-
+    child_ids = _obtain_child_index_for_inside_out(heads)
     child_with_depth = [[] for _ in range(len(heads))]
     calc_depth(0)
-    child_ids = [[child for child, depth in child_with_depth[head]] for head in range(len(heads))]
+    return [[child for child, depth in child_with_depth[head]] for head in range(len(heads))]
 
 
 def _generate_stack_inputs(heads, types, prior_order):
-    child_ids = [[] for _ in range(len(heads))]
     if prior_order == 'depth_first':
-        _obtain_child_index_for_depth_first(child_ids, heads)
+        child_ids = _obtain_child_index_for_depth_first(heads)
     elif prior_order == 'left2right':
-        # skip the symbolic root.
-        for child in range(1, len(heads)):
-            head = heads[child]
-            child_ids[head].append(child)
+        child_ids = _obtain_child_index_for_left2right(heads)
     elif prior_order == 'inside_out':
-        for head in range(len(heads)):
-            # first find left children inside-out
-            for child in reversed(range(1, head)):
-                if heads[child] == head:
-                    child_ids[head].append(child)
-            # second find right children inside-out
-            for child in range(head + 1, len(heads)):
-                if heads[child] == head:
-                    child_ids[head].append(child)
+        child_ids = _obtain_child_index_for_inside_out(heads)
     else:
         raise ValueError('Unknown prior order: %s' % prior_order)
 
@@ -110,7 +112,6 @@ def read_stacked_data(source_path, word_alphabet, char_alphabet, pos_alphabet, t
 
 def read_stacked_data_to_variable(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
                                   max_size=None, normalize_digits=True, prior_order='depth_first', use_gpu=False, volatile=False):
-
     data, max_char_length = read_stacked_data(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, max_size=max_size, normalize_digits=normalize_digits, prior_order=prior_order)
     bucket_sizes = [len(data[b]) for b in range(len(_buckets))]
 
