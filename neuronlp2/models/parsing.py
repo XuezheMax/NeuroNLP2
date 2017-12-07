@@ -4,11 +4,9 @@ import numpy as np
 from enum import Enum
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
 import torch.nn.functional as F
 from ..nn import TreeCRF, VarMaskedGRU, VarMaskedRNN, VarMaskedLSTM, VarMaskedFastLSTM
 from ..nn import Embedding
-from ..nn import utils
 from ..nn import BiAAttention, BiLinear
 from neuronlp2.tasks import parser
 
