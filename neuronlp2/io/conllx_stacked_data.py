@@ -33,7 +33,7 @@ def _obtain_child_index_for_inside_out(heads):
     return child_ids
 
 
-def _obtain_child_index_for_depth_first(heads):
+def _obtain_child_index_for_depth(heads, reverse):
     def calc_depth(head):
         children = child_ids[head]
         max_depth = 0
@@ -41,7 +41,7 @@ def _obtain_child_index_for_depth_first(heads):
             depth = calc_depth(child)
             child_with_depth[head].append((child, depth))
             max_depth = max(max_depth, depth + 1)
-        child_with_depth[head] = sorted(child_with_depth[head], key=lambda x: x[1], reverse=True)
+        child_with_depth[head] = sorted(child_with_depth[head], key=lambda x: x[1], reverse=reverse)
         return max_depth
 
     child_ids = _obtain_child_index_for_inside_out(heads)
@@ -51,8 +51,10 @@ def _obtain_child_index_for_depth_first(heads):
 
 
 def _generate_stack_inputs(heads, types, prior_order):
-    if prior_order == 'depth_first':
-        child_ids = _obtain_child_index_for_depth_first(heads)
+    if prior_order == 'deep_first':
+        child_ids = _obtain_child_index_for_depth(heads, True)
+    elif prior_order == 'shallow_first':
+        child_ids = _obtain_child_index_for_depth(heads, False)
     elif prior_order == 'left2right':
         child_ids = _obtain_child_index_for_left2right(heads)
     elif prior_order == 'inside_out':
@@ -81,7 +83,7 @@ def _generate_stack_inputs(heads, types, prior_order):
     return stacked_heads, children, stacked_types
 
 
-def read_stacked_data(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, max_size=None, normalize_digits=True, prior_order='depth_first'):
+def read_stacked_data(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, max_size=None, normalize_digits=True, prior_order='deep_first'):
     data = [[] for _ in _buckets]
     max_char_length = [0 for _ in _buckets]
     print('Reading data from %s' % source_path)
@@ -111,7 +113,7 @@ def read_stacked_data(source_path, word_alphabet, char_alphabet, pos_alphabet, t
 
 
 def read_stacked_data_to_variable(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
-                                  max_size=None, normalize_digits=True, prior_order='depth_first', use_gpu=False, volatile=False):
+                                  max_size=None, normalize_digits=True, prior_order='deep_first', use_gpu=False, volatile=False):
     data, max_char_length = read_stacked_data(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, max_size=max_size, normalize_digits=normalize_digits, prior_order=prior_order)
     bucket_sizes = [len(data[b]) for b in range(len(_buckets))]
 

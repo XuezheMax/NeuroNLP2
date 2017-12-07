@@ -49,7 +49,7 @@ def main():
     args_parser.add_argument('--p_rnn', nargs=2, type=float, required=True, help='dropout rate for RNN')
     args_parser.add_argument('--p_in', type=float, default=0.33, help='dropout rate for input embeddings')
     args_parser.add_argument('--p_out', type=float, default=0.33, help='dropout rate for output layer')
-    args_parser.add_argument('--prior_order', choices=['inside_out', 'left2right', 'depth_first'], help='prior order of children.', required=True)
+    args_parser.add_argument('--prior_order', choices=['inside_out', 'left2right', 'deep_first', 'shallow_first'], help='prior order of children.', required=True)
     args_parser.add_argument('--schedule', type=int, help='schedule for learning rate decay')
     args_parser.add_argument('--unk_replace', type=float, default=0., help='The rate to replace a singleton word with UNK')
     args_parser.add_argument('--punctuation', nargs='+', type=str, help='List of punctuations')
