@@ -1,6 +1,7 @@
 __author__ = 'max'
 
 import numpy as np
+from enum import Enum
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
@@ -10,6 +11,12 @@ from ..nn import Embedding
 from ..nn import utils
 from ..nn import BiAAttention, BiLinear
 from neuronlp2.tasks import parser
+
+
+class PriorOrder(Enum):
+    DEPTH_FIRST = 0
+    INSIDE_OUT = 1
+    LEFT2RIGTH = 2
 
 
 class BiRecurrentConvBiAffine(nn.Module):
@@ -268,10 +275,9 @@ class BiRecurrentConvBiAffine(nn.Module):
 
 
 class StackPtrNet(nn.Module):
-    def __init__(self, word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, num_filters, kernel_size,
-                 rnn_mode, hidden_size, num_layers, num_labels, arc_space, type_space,
-                 embedd_word=None, embedd_char=None, embedd_pos=None,
-                 p_in=0.2, p_out=0.5, p_rnn=(0.5, 0.5), biaffine=True, left2right=False):
+
+    def __init__(self, word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, num_filters, kernel_size, rnn_mode, hidden_size, num_layers, num_labels, arc_space, type_space,
+                 embedd_word=None, embedd_char=None, embedd_pos=None, p_in=0.2, p_out=0.5, p_rnn=(0.5, 0.5), biaffine=True, prior_order='depth_first'):
 
         super(StackPtrNet, self).__init__()
         self.word_embedd = Embedding(num_words, word_dim, init_embedding=embedd_word)
@@ -281,7 +287,14 @@ class StackPtrNet(nn.Module):
         self.dropout_in = nn.Dropout2d(p=p_in)
         self.dropout_out = nn.Dropout2d(p=p_out)
         self.num_labels = num_labels
-        self.left2right = left2right
+        if prior_order == 'depth_first':
+            self.prior_order = PriorOrder.DEPTH_FIRST
+        elif prior_order == 'inside_out':
+            self.prior_order = PriorOrder.INSIDE_OUT
+        elif prior_order == 'left2right':
+            self.prior_order = PriorOrder.LEFT2RIGTH
+        else:
+            raise ValueError('Unknown prior order: %s' % prior_order)
 
         if rnn_mode == 'RNN':
             RNN = VarMaskedRNN
@@ -501,11 +514,9 @@ class StackPtrNet(nn.Module):
         def valid_hyp(base_id, child_id, head):
             if constraints[base_id, child_id]:
                 return False
-            elif not ordered:
+            elif not ordered or self.prior_order == PriorOrder.DEPTH_FIRST or child_orders[base_id, head] == 0:
                 return True
-            elif child_orders[base_id, head] == 0:
-                return True
-            elif self.left2right:
+            elif self.prior_order == PriorOrder.LEFT2RIGTH:
                 return child_id > child_orders[base_id, head]
             else:
                 if child_id < head:
