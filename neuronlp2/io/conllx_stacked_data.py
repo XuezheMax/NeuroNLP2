@@ -44,7 +44,7 @@ def _obtain_child_index_for_depth(heads, reverse):
         child_with_depth[head] = sorted(child_with_depth[head], key=lambda x: x[1], reverse=reverse)
         return max_depth
 
-    child_ids = _obtain_child_index_for_inside_out(heads)
+    child_ids = _obtain_child_index_for_left2right(heads)
     child_with_depth = [[] for _ in range(len(heads))]
     calc_depth(0)
     return [[child for child, depth in child_with_depth[head]] for head in range(len(heads))]
