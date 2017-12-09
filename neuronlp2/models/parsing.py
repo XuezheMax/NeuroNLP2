@@ -594,6 +594,12 @@ class StackPtrNet(nn.Module):
             # [num_hyp, length_encoder, num_labels] --> [num_labels, length_encoder, num_hyp]
             # --> [num_hyp, length_encoder, num_labels]
             type_hyp_scores = self.logsoftmax(out_type.transpose(0, 2)).transpose(0, 2).data
+            # create a leaf_mask tensor to set type score of non-leaf with "PAD" to -inf
+            # [num_hyp, length_encoder]
+            leaf_mask = type_hyp_scores.new(arc_hyp_scores.size()).fill_(-1e8)
+            beam_index = torch.arange(0, beam_index.size(0)).type_as(beam_index)
+            leaf_mask[beam_index, heads] = 0
+            type_hyp_scores[:, :, 0].add_(leaf_mask)
             # compute the prediction of types [num_hyp, length_encoder]
             type_hyp_scores, hyp_types = type_hyp_scores.max(dim=2)
 
