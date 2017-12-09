@@ -36,7 +36,7 @@ def main():
     args_parser.add_argument('--punctuation', nargs='+', type=str, help='List of punctuations')
     args_parser.add_argument('--beam', type=int, default=1, help='Beam size for decoding')
     args_parser.add_argument('--gpu', action='store_true', help='Using GPU')
-    args_parser.add_argument('--left2right', action='store_true', help='apply left to right prior order.')
+    args_parser.add_argument('--prior_order', choices=['inside_out', 'left2right', 'deep_first', 'shallow_first'], help='prior order of children.', required=True)
 
     args = args_parser.parse_args()
 
@@ -49,9 +49,7 @@ def main():
     alphabet_path = os.path.join(model_path, 'alphabets/')
     model_name = os.path.join(model_path, model_name)
     word_alphabet, char_alphabet, pos_alphabet, \
-    type_alphabet = conllx_stacked_data.create_alphabets(alphabet_path, None,
-                                                         data_paths=[None, None],
-                                                         max_vocabulary_size=50000, embedd_dict=None)
+    type_alphabet = conllx_stacked_data.create_alphabets(alphabet_path, None, data_paths=[None, None], max_vocabulary_size=50000, embedd_dict=None)
 
     num_words = word_alphabet.size()
     num_chars = char_alphabet.size()
@@ -64,13 +62,11 @@ def main():
     logger.info("Type Alphabet Size: %d" % num_types)
 
     use_gpu = args.gpu
-    left2right = args.left2right
+    prior_order = args.prior_order
     beam = args.beam
 
-    data_test = conllx_stacked_data.read_stacked_data_to_variable(test_path, word_alphabet, char_alphabet,
-                                                                  pos_alphabet, type_alphabet,
-                                                                  use_gpu=use_gpu, volatile=True,
-                                                                  left2right=left2right)
+    data_test = conllx_stacked_data.read_stacked_data_to_variable(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
+                                                                  use_gpu=use_gpu, volatile=True, prior_order=prior_order)
 
     logger.info('use gpu: %s, beam: %d' % (use_gpu, beam))
     punct_set = None
@@ -128,8 +124,7 @@ def main():
         input_encoder, input_decoder = batch
         word, char, pos, heads, types, masks, lengths = input_encoder
         stacked_heads, children, stacked_types, mask_d, lengths_d = input_decoder
-        heads_pred, types_pred, children_pred, stacked_types_pred = network.decode(word, char, pos,
-                                                                                   mask=masks, length=lengths, beam=beam)
+        heads_pred, types_pred, children_pred, stacked_types_pred = network.decode(word, char, pos, mask=masks, length=lengths, beam=beam)
 
         stacked_heads = stacked_heads.data
         children = children.data
