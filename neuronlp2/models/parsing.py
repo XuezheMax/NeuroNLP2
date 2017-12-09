@@ -569,7 +569,6 @@ class StackPtrNet(nn.Module):
             beam_index = src_encoding.data.new(num_hyp).zero_().long()
             # [num_hyp]
             heads = torch.LongTensor([stacked_heads[i][-1] for i in range(num_hyp)]).type_as(children)
-            print(heads)
             # [num_hyp, 1, input_size]
             input = src_encoding[beam_index, heads].unsqueeze(1)
             # output [num_hyp, 1, hidden_size]
