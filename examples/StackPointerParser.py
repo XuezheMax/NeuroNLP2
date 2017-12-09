@@ -396,7 +396,7 @@ def main():
             dev_lcorr_nopunc * 100 / dev_total_nopunc, dev_ucomlpete_nopunc * 100 / dev_total_inst, dev_lcomplete_nopunc * 100 / dev_total_inst))
         print('Root: corr: %d, total: %d, acc: %.2f%%' % (dev_root_corr, dev_total_root, dev_root_corr * 100 / dev_total_root))
 
-        if dev_ucorrect_nopunc <= dev_ucorr_nopunc or dev_ucorrect <=dev_ucorr:
+        if dev_ucorrect_nopunc <= dev_ucorr_nopunc:
             dev_ucorrect_nopunc = dev_ucorr_nopunc
             dev_lcorrect_nopunc = dev_lcorr_nopunc
             dev_ucomlpete_match_nopunc = dev_ucomlpete_nopunc
