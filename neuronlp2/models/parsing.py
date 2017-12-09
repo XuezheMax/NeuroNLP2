@@ -569,6 +569,7 @@ class StackPtrNet(nn.Module):
             beam_index = src_encoding.data.new(num_hyp).zero_().long()
             # [num_hyp]
             heads = torch.LongTensor([stacked_heads[i][-1] for i in range(num_hyp)]).type_as(children)
+            print(heads)
             # [num_hyp, 1, input_size]
             input = src_encoding[beam_index, heads].unsqueeze(1)
             # output [num_hyp, 1, hidden_size]
@@ -582,6 +583,8 @@ class StackPtrNet(nn.Module):
             out_arc = self.attention(arc_h, arc_c[beam_index]).squeeze(dim=1).squeeze(dim=1)
             # [num_hyp, length_encoder]
             arc_hyp_scores = self.logsoftmax(out_arc).data
+            print('arc score')
+            print(arc_hyp_scores)
 
             # type_h size [num_hyp, length_encoder, type_space]
             type_h = F.elu(self.type_h(output)).expand(num_hyp, length, type_c.size(2)).contiguous()
@@ -593,8 +596,12 @@ class StackPtrNet(nn.Module):
             # [num_hyp, length_encoder, num_labels] --> [num_labels, length_encoder, num_hyp]
             # --> [num_hyp, length_encoder, num_labels]
             type_hyp_scores = self.logsoftmax(out_type.transpose(0, 2)).transpose(0, 2).data
+            print('type score')
+            print(type_hyp_scores)
             # compute the prediction of types [num_hyp, length_encoder]
             type_hyp_scores, hyp_types = type_hyp_scores.max(dim=2)
+            print(type_hyp_scores)
+            print(hyp_types)
 
             # [num_hyp, length_encoder]
             hyp_scores = arc_hyp_scores + type_hyp_scores
@@ -603,6 +610,10 @@ class StackPtrNet(nn.Module):
             new_hypothesis_scores, hyp_index = torch.sort(new_hypothesis_scores.view(-1), dim=0, descending=True)
             base_index = hyp_index / length
             child_index = hyp_index % length
+            print('index')
+            print(base_index)
+            print(child_index)
+            raw_input()
 
             cc = 0
             ids = []
