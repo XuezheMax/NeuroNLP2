@@ -508,7 +508,7 @@ class StackPtrNet(nn.Module):
                -loss_type_leaf.sum() / num_leaf, -loss_type_non_leaf.sum() / num_non_leaf, \
                loss_cov.sum() / (num_leaf + num_non_leaf), num_leaf, num_non_leaf
 
-    def _decode_per_sentence(self, src_encoding, arc_c, type_c, hx, length, beam, ordered):
+    def _decode_per_sentence(self, src_encoding, arc_c, type_c, hx, length, beam, ordered, leading_symbolic):
         def valid_hyp(base_id, child_id, head):
             if constraints[base_id, child_id]:
                 return False
@@ -593,12 +593,17 @@ class StackPtrNet(nn.Module):
             # [num_hyp, length_encoder, num_labels] --> [num_labels, length_encoder, num_hyp]
             # --> [num_hyp, length_encoder, num_labels]
             type_hyp_scores = self.logsoftmax(out_type.transpose(0, 2)).transpose(0, 2).data
-            # create a leaf_mask tensor to set type score of non-leaf with "PAD" to -inf
-            # [num_hyp, length_encoder]
-            leaf_mask = type_hyp_scores.new(arc_hyp_scores.size()).fill_(-1e8)
-            beam_index = torch.arange(0, beam_index.size(0)).type_as(beam_index)
-            leaf_mask[beam_index, heads] = 0
-            type_hyp_scores[:, :, 0].add_(leaf_mask)
+
+            if leading_symbolic > 0:
+                # create a leaf_mask tensor to set type score of non-leaf with "PAD" to -inf
+                # [num_hyp, length_encoder, leading_symbolic]
+                leaf_mask = type_hyp_scores.new(arc_hyp_scores.size() + (leading_symbolic, )).fill_(-1e8)
+                batch_index = torch.arange(0, beam_index.size(0)).type_as(beam_index)
+                leaf_mask[batch_index, heads, beam_index] = 0
+                type_hyp_scores[:, :, 0:leading_symbolic].add_(leaf_mask)
+                print(leaf_mask)
+                print(type_hyp_scores)
+                raw_input()
             # compute the prediction of types [num_hyp, length_encoder]
             type_hyp_scores, hyp_types = type_hyp_scores.max(dim=2)
 
@@ -704,7 +709,7 @@ class StackPtrNet(nn.Module):
 
         return heads, types, length, children, stacked_types
 
-    def decode(self, input_word, input_char, input_pos, mask=None, length=None, hx=None, beam=1):
+    def decode(self, input_word, input_char, input_pos, mask=None, length=None, hx=None, beam=1, leading_symbolic=0):
         # output from encoder [batch, length_encoder, tag_space]
         # src_encoding [batch, length, input_size]
         # arc_c [batch, length, arc_space]
@@ -732,9 +737,9 @@ class StackPtrNet(nn.Module):
             else:
                 hx = hn[:, b, :].contiguous()
 
-            preds = self._decode_per_sentence(src_encoding[b], arc_c[b], type_c[b], hx, sent_len, beam, True)
+            preds = self._decode_per_sentence(src_encoding[b], arc_c[b], type_c[b], hx, sent_len, beam, True, leading_symbolic)
             if preds is None:
-                preds = self._decode_per_sentence(src_encoding[b], arc_c[b], type_c[b], hx, sent_len, beam, False)
+                preds = self._decode_per_sentence(src_encoding[b], arc_c[b], type_c[b], hx, sent_len, beam, False, leading_symbolic)
             hids, tids, sent_len, chids, stids = preds
             heads[b, :sent_len] = hids
             types[b, :sent_len] = tids
