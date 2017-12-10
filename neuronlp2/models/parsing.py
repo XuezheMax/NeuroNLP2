@@ -600,11 +600,7 @@ class StackPtrNet(nn.Module):
                 leaf_mask = type_hyp_scores.new(arc_hyp_scores.size() + (leading_symbolic, )).fill_(-1e8)
                 batch_index = torch.arange(0, beam_index.size(0)).type_as(beam_index)
                 leaf_mask[batch_index, heads, beam_index] = 0
-                print(leaf_mask)
-                print(type_hyp_scores)
                 type_hyp_scores[:, :, 0:leading_symbolic].add_(leaf_mask)
-                print(type_hyp_scores)
-                raw_input()
             # compute the prediction of types [num_hyp, length_encoder]
             type_hyp_scores, hyp_types = type_hyp_scores.max(dim=2)
 
