@@ -464,14 +464,14 @@ def main():
 
         if epoch % schedule == 0:
             # lr = lr * decay_rate
-            if epoch < adam_epochs:
+            # if epoch < adam_epochs:
                 opt = 'adam'
                 lr = adam_rate / (1.0 + epoch * decay_rate)
                 optim = Adam(network.parameters(), lr=lr, betas=(0.9, 0.9), weight_decay=gamma)
-            else:
-                opt = 'sgd'
-                lr = learning_rate / (1.0 + (epoch - adam_epochs) * decay_rate)
-                optim = SGD(network.parameters(), lr=lr, momentum=momentum, weight_decay=gamma, nesterov=True)
+            # else:
+            #     opt = 'sgd'
+            #     lr = learning_rate / (1.0 + (epoch - adam_epochs) * decay_rate)
+            #     optim = SGD(network.parameters(), lr=lr, momentum=momentum, weight_decay=gamma, nesterov=True)
 
 
 if __name__ == '__main__':
