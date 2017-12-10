@@ -1,15 +1,20 @@
 __author__ = 'max'
 
 import numpy as np
+from enum import Enum
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
 import torch.nn.functional as F
 from ..nn import TreeCRF, VarMaskedGRU, VarMaskedRNN, VarMaskedLSTM, VarMaskedFastLSTM
 from ..nn import Embedding
-from ..nn import utils
 from ..nn import BiAAttention, BiLinear
 from neuronlp2.tasks import parser
+
+
+class PriorOrder(Enum):
+    DEPTH = 0
+    INSIDE_OUT = 1
+    LEFT2RIGTH = 2
 
 
 class BiRecurrentConvBiAffine(nn.Module):
@@ -268,8 +273,9 @@ class BiRecurrentConvBiAffine(nn.Module):
 
 
 class StackPtrNet(nn.Module):
+
     def __init__(self, word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, num_filters, kernel_size, rnn_mode, hidden_size, num_layers, num_labels, arc_space, type_space,
-                 embedd_word=None, embedd_char=None, embedd_pos=None, p_in=0.2, p_out=0.5, p_rnn=(0.5, 0.5), biaffine=True):
+                 embedd_word=None, embedd_char=None, embedd_pos=None, p_in=0.2, p_out=0.5, p_rnn=(0.5, 0.5), biaffine=True, prior_order='deep_first'):
 
         super(StackPtrNet, self).__init__()
         self.word_embedd = Embedding(num_words, word_dim, init_embedding=embedd_word)
@@ -279,6 +285,14 @@ class StackPtrNet(nn.Module):
         self.dropout_in = nn.Dropout2d(p=p_in)
         self.dropout_out = nn.Dropout2d(p=p_out)
         self.num_labels = num_labels
+        if prior_order in ['deep_first', 'shallow_first']:
+            self.prior_order = PriorOrder.DEPTH
+        elif prior_order == 'inside_out':
+            self.prior_order = PriorOrder.INSIDE_OUT
+        elif prior_order == 'left2right':
+            self.prior_order = PriorOrder.LEFT2RIGTH
+        else:
+            raise ValueError('Unknown prior order: %s' % prior_order)
 
         if rnn_mode == 'RNN':
             RNN = VarMaskedRNN
@@ -291,9 +305,11 @@ class StackPtrNet(nn.Module):
         else:
             raise ValueError('Unknown RNN mode: %s' % rnn_mode)
 
-        self.encoder = RNN(word_dim + num_filters + pos_dim, hidden_size, num_layers=num_layers, batch_first=True, bidirectional=True, dropout=p_rnn)
+        self.encoder = RNN(word_dim + num_filters + pos_dim, hidden_size, num_layers=num_layers,
+                           batch_first=True, bidirectional=True, dropout=p_rnn)
 
-        self.decoder = RNN(word_dim + num_filters + pos_dim, hidden_size, num_layers=num_layers, batch_first=True, bidirectional=False, dropout=p_rnn)
+        self.decoder = RNN(word_dim + num_filters + pos_dim, hidden_size, num_layers=num_layers,
+                           batch_first=True, bidirectional=False, dropout=p_rnn)
 
         self.hx_dense = nn.Linear(2 * hidden_size, hidden_size)
         self.arc_h = nn.Linear(hidden_size, arc_space)  # arc dense for decoder
@@ -392,16 +408,19 @@ class StackPtrNet(nn.Module):
             hn = F.tanh(self.hx_dense(hn))
         return hn
 
-    def loss(self, input_word, input_char, input_pos, stacked_heads, stacked_children, stacked_types, children, mask_e=None, length_e=None, mask_d=None, length_d=None, hx=None):
+    def loss(self, input_word, input_char, input_pos, stacked_heads, children, stacked_types,
+             mask_e=None, length_e=None, mask_d=None, length_d=None, hx=None):
 
         # output from encoder [batch, length_encoder, tag_space]
-        src_encoding, arc_c, type_c, hn, mask_e, _ = self._get_encoder_output(input_word, input_char, input_pos, mask_e=mask_e, length_e=length_e, hx=hx)
+        src_encoding, arc_c, type_c, hn, mask_e, _ = self._get_encoder_output(input_word, input_char, input_pos,
+                                                                              mask_e=mask_e, length_e=length_e, hx=hx)
 
         batch, max_len_e, _ = arc_c.size()
         # transform hn to [num_layers, batch, hidden_size]
         hn = self._transform_decoder_init_state(hn)
         # output from decoder [batch, length_decoder, tag_space]
-        arc_h, type_h, _, mask_d, _ = self._get_decoder_output(src_encoding, stacked_heads, hn, mask_d=mask_d, length_d=length_d)
+        arc_h, type_h, _, mask_d, _ = self._get_decoder_output(src_encoding, stacked_heads, hn,
+                                                               mask_d=mask_d, length_d=length_d)
         _, max_len_d, _ = arc_h.size()
         # apply dropout
         # [batch, length_decoder, dim] + [batch, length_encoder, dim] --> [batch, length_decoder + length_encoder, dim]
@@ -416,11 +435,10 @@ class StackPtrNet(nn.Module):
         type_h = type[:, :max_len_d].contiguous()
         type_c = type[:, max_len_d:]
 
-        # if mask_d is not None and stacked_children.size(1) != mask_d.size(1):
-        #     stacked_heads = stacked_heads[:, :max_len_d]
-        #     stacked_children = stacked_children[:, :max_len_d]
-        #     stacked_types = stacked_types[:, :max_len_d]
-        #     children = children[:, :max_len_d]
+        if mask_d is not None and children.size(1) != mask_d.size(1):
+            stacked_heads = stacked_heads[:, :max_len_d]
+            children = children[:, :max_len_d]
+            stacked_types = stacked_types[:, :max_len_d]
 
         # [batch, length_decoder, length_encoder]
         out_arc = self.attention(arc_h, arc_c, mask_d=mask_d, mask_e=mask_e).squeeze(dim=1)
@@ -428,7 +446,7 @@ class StackPtrNet(nn.Module):
         # create batch index [batch]
         batch_index = torch.arange(0, batch).type_as(out_arc.data).long()
         # get vector for heads [batch, length_decoder, type_space],
-        type_c = type_c[batch_index, stacked_children.data.t()].transpose(0, 1).contiguous()
+        type_c = type_c[batch_index, children.data.t()].transpose(0, 1).contiguous()
         # compute output for type [batch, length_decoder, num_labels]
         out_type = self.bilinear(type_h, type_c)
 
@@ -453,7 +471,7 @@ class StackPtrNet(nn.Module):
 
         # get leaf and non-leaf mask
         # shape = [batch, length_decoder]
-        mask_leaf = torch.eq(stacked_children, 0).float()
+        mask_leaf = torch.eq(children, stacked_heads).float()
         mask_non_leaf = (1.0 - mask_leaf)
 
         # mask invalid position to 0 for sum loss
@@ -476,7 +494,7 @@ class StackPtrNet(nn.Module):
         head_index = torch.arange(0, max_len_d).view(max_len_d, 1).expand(max_len_d, batch)
         head_index = head_index.type_as(out_arc.data).long()
         # [batch, length_decoder]
-        loss_arc = (loss_arc * children).sum(dim=2)
+        loss_arc = loss_arc[batch_index, head_index, children.data.t()].transpose(0, 1)
         loss_arc_leaf = loss_arc * mask_leaf
         loss_arc_non_leaf = loss_arc * mask_non_leaf
 
@@ -484,12 +502,26 @@ class StackPtrNet(nn.Module):
         loss_type_leaf = loss_type * mask_leaf
         loss_type_non_leaf = loss_type * mask_non_leaf
 
-        loss_cov = (coverage - 1.0).clamp(min=0.)[:, :, 1:]
+        loss_cov = (coverage - 2.0).clamp(min=0.)
 
-        return -loss_arc_leaf.sum() / num_leaf, -loss_arc_non_leaf.sum() / num_non_leaf, -loss_type_leaf.sum() / num_leaf, -loss_type_non_leaf.sum() / num_non_leaf, \
-               loss_cov.sum() / num_non_leaf, num_leaf, num_non_leaf
+        return -loss_arc_leaf.sum() / num_leaf, -loss_arc_non_leaf.sum() / num_non_leaf, \
+               -loss_type_leaf.sum() / num_leaf, -loss_type_non_leaf.sum() / num_non_leaf, \
+               loss_cov.sum() / (num_leaf + num_non_leaf), num_leaf, num_non_leaf
 
-    def _decode_per_sentence(self, src_encoding, arc_c, type_c, hx, length, beam):
+    def _decode_per_sentence(self, src_encoding, arc_c, type_c, hx, length, beam, ordered, leading_symbolic):
+        def valid_hyp(base_id, child_id, head):
+            if constraints[base_id, child_id]:
+                return False
+            elif not ordered or self.prior_order == PriorOrder.DEPTH or child_orders[base_id, head] == 0:
+                return True
+            elif self.prior_order == PriorOrder.LEFT2RIGTH:
+                return child_id > child_orders[base_id, head]
+            else:
+                if child_id < head:
+                    return child_id < child_orders[base_id, head] < head
+                else:
+                    return child_id > child_orders[base_id, head]
+
         # src_encoding [length, input_size]
         # arc_c [length, arc_space]
         # type_c [length, type_space]
@@ -524,6 +556,7 @@ class StackPtrNet(nn.Module):
         hypothesis_scores = src_encoding.data.new(beam).zero_()
         constraints = np.zeros([beam, length], dtype=np.bool)
         constraints[:, 0] = True
+        child_orders = np.zeros([beam, length], dtype=np.int32)
 
         # temporal tensors for each step.
         new_stacked_heads = [[] for _ in range(beam)]
@@ -560,6 +593,14 @@ class StackPtrNet(nn.Module):
             # [num_hyp, length_encoder, num_labels] --> [num_labels, length_encoder, num_hyp]
             # --> [num_hyp, length_encoder, num_labels]
             type_hyp_scores = self.logsoftmax(out_type.transpose(0, 2)).transpose(0, 2).data
+
+            if leading_symbolic > 0:
+                # create a leaf_mask tensor to set type score of non-leaf with "PAD" to -inf
+                # [num_hyp, length_encoder, leading_symbolic]
+                leaf_mask = type_hyp_scores.new(arc_hyp_scores.size() + (leading_symbolic, )).fill_(-1e8)
+                batch_index = torch.arange(0, beam_index.size(0)).type_as(beam_index)
+                leaf_mask[batch_index, heads, beam_index] = 0
+                type_hyp_scores[:, :, 0:leading_symbolic].add_(leaf_mask)
             # compute the prediction of types [num_hyp, length_encoder]
             type_hyp_scores, hyp_types = type_hyp_scores.max(dim=2)
 
@@ -574,15 +615,17 @@ class StackPtrNet(nn.Module):
             cc = 0
             ids = []
             new_constraints = np.zeros([beam, length], dtype=np.bool)
+            new_child_orders = np.zeros([beam, length], dtype=np.int32)
             for id in range(num_hyp * length):
                 base_id = base_index[id]
                 child_id = child_index[id]
                 head = heads[base_id]
                 new_hyp_score = new_hypothesis_scores[id]
-                if child_id == 0:
+                if child_id == head:
                     assert constraints[base_id, child_id], 'constrains error: %d, %d' % (base_id, child_id)
                     if head != 0 or t + 1 == num_step:
                         new_constraints[cc] = constraints[base_id]
+                        new_child_orders[cc] = child_orders[base_id]
 
                         new_stacked_heads[cc] = [stacked_heads[base_id][i] for i in range(len(stacked_heads[base_id]))]
                         new_stacked_heads[cc].pop()
@@ -596,9 +639,12 @@ class StackPtrNet(nn.Module):
                         hypothesis_scores[cc] = new_hyp_score
                         ids.append(id)
                         cc += 1
-                elif not constraints[base_id, child_id]:
+                elif valid_hyp(base_id, child_id, head):
                     new_constraints[cc] = constraints[base_id]
                     new_constraints[cc, child_id] = True
+
+                    new_child_orders[cc] = child_orders[base_id]
+                    new_child_orders[cc, head] = child_id
 
                     new_stacked_heads[cc] = [stacked_heads[base_id][i] for i in range(len(stacked_heads[base_id]))]
                     new_stacked_heads[cc].append(child_id)
@@ -618,7 +664,9 @@ class StackPtrNet(nn.Module):
 
             # [num_hyp]
             num_hyp = len(ids)
-            if num_hyp == 1:
+            if num_hyp == 0:
+                return None
+            elif num_hyp == 1:
                 index = base_index.new(1).fill_(ids[0])
             else:
                 index = torch.from_numpy(np.array(ids)).type_as(base_index)
@@ -627,6 +675,7 @@ class StackPtrNet(nn.Module):
             stacked_heads = [[new_stacked_heads[i][j] for j in range(len(new_stacked_heads[i]))] for i in
                              range(num_hyp)]
             constraints = new_constraints
+            child_orders = new_child_orders
             children.copy_(new_children)
             stacked_types.copy_(new_stacked_types)
             # hx [num_directions, num_hyp, hidden_size]
@@ -648,16 +697,16 @@ class StackPtrNet(nn.Module):
             head = stack[-1]
             child = children[i]
             type = stacked_types[i]
-            if child != 0:
+            if child != head:
                 heads[child] = head
                 types[child] = type
                 stack.append(child)
             else:
                 stack.pop()
 
-        return heads, types, length
+        return heads, types, length, children, stacked_types
 
-    def decode(self, input_word, input_char, input_pos, mask=None, length=None, hx=None, beam=1):
+    def decode(self, input_word, input_char, input_pos, mask=None, length=None, hx=None, beam=1, leading_symbolic=0):
         # output from encoder [batch, length_encoder, tag_space]
         # src_encoding [batch, length, input_size]
         # arc_c [batch, length, arc_space]
@@ -671,6 +720,9 @@ class StackPtrNet(nn.Module):
         heads = np.zeros([batch, max_len_e], dtype=np.int32)
         types = np.zeros([batch, max_len_e], dtype=np.int32)
 
+        children = np.zeros([batch, 2 * max_len_e - 1], dtype=np.int32)
+        stack_types = np.zeros([batch, 2 * max_len_e - 1], dtype=np.int32)
+
         for b in range(batch):
             sent_len = None if length is None else length[b]
             # hack to handle LSTM
@@ -682,8 +734,14 @@ class StackPtrNet(nn.Module):
             else:
                 hx = hn[:, b, :].contiguous()
 
-            hids, tids, sent_len = self._decode_per_sentence(src_encoding[b], arc_c[b], type_c[b], hx, sent_len, beam)
+            preds = self._decode_per_sentence(src_encoding[b], arc_c[b], type_c[b], hx, sent_len, beam, True, leading_symbolic)
+            if preds is None:
+                preds = self._decode_per_sentence(src_encoding[b], arc_c[b], type_c[b], hx, sent_len, beam, False, leading_symbolic)
+            hids, tids, sent_len, chids, stids = preds
             heads[b, :sent_len] = hids
             types[b, :sent_len] = tids
 
-        return heads, types
+            children[b, :2 * sent_len - 1] = chids
+            stack_types[b, :2 * sent_len - 1] = stids
+
+        return heads, types, children, stack_types
