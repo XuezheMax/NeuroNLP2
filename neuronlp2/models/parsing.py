@@ -409,7 +409,6 @@ class StackPtrNet(nn.Module):
         return hn
 
     def loss(self, input_word, input_char, input_pos, stacked_heads, children, stacked_types, mask_e=None, length_e=None, mask_d=None, length_d=None, hx=None):
-
         # output from encoder [batch, length_encoder, tag_space]
         src_encoding, arc_c, type_c, hn, mask_e, _ = self._get_encoder_output(input_word, input_char, input_pos, mask_e=mask_e, length_e=length_e, hx=hx)
 
