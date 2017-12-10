@@ -669,8 +669,7 @@ class StackPtrNet(nn.Module):
                 index = torch.from_numpy(np.array(ids)).type_as(base_index)
             base_index = base_index[index]
 
-            stacked_heads = [[new_stacked_heads[i][j] for j in range(len(new_stacked_heads[i]))] for i in
-                             range(num_hyp)]
+            stacked_heads = [[new_stacked_heads[i][j] for j in range(len(new_stacked_heads[i]))] for i in range(num_hyp)]
             constraints = new_constraints
             child_orders = new_child_orders
             children.copy_(new_children)
