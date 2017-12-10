@@ -339,6 +339,8 @@ class StackPtrNet(nn.Module):
         # reshape to [batch, length, char_filters]
         char = torch.tanh(char).view(char_size[0], char_size[1], -1)
 
+        embedd_tuple = (word, char, pos)
+
         # apply dropout on input
         word = self.dropout_in(word)
         pos = self.dropout_in(pos)
@@ -358,9 +360,17 @@ class StackPtrNet(nn.Module):
         # output size [batch, length, type_space]
         type_c = F.elu(self.type_c(output))
 
-        return src_encoding, arc_c, type_c, hn, mask_e, length_e
+        return embedd_tuple, arc_c, type_c, hn, mask_e, length_e
 
     def _get_decoder_output(self, src_encoding, heads_stack, hx, mask_d=None, length_d=None):
+        word, char, pos = src_encoding
+        # apply dropout on input
+        word = self.dropout_in(word)
+        pos = self.dropout_in(pos)
+        char = self.dropout_in(char)
+        # concatenate word and char [batch, length, word_dim+char_filter]
+        src_encoding = torch.cat([word, char, pos], dim=2)
+
         batch, _, _ = src_encoding.size()
         # create batch index [batch]
         batch_index = torch.arange(0, batch).type_as(src_encoding.data).long()
@@ -710,6 +720,14 @@ class StackPtrNet(nn.Module):
         # hn [num_direction, batch, hidden_size]
         src_encoding, arc_c, type_c, hn, mask, length = self._get_encoder_output(input_word, input_char, input_pos, mask_e=mask, length_e=length, hx=hx)
         hn = self._transform_decoder_init_state(hn)
+
+        word, char, pos = src_encoding
+        # apply dropout on input
+        word = self.dropout_in(word)
+        pos = self.dropout_in(pos)
+        char = self.dropout_in(char)
+        # concatenate word and char [batch, length, word_dim+char_filter]
+        src_encoding = torch.cat([word, char, pos], dim=2)
         batch, max_len_e, _ = src_encoding.size()
 
         heads = np.zeros([batch, max_len_e], dtype=np.int32)
