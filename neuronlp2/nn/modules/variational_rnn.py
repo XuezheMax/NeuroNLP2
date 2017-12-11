@@ -43,10 +43,7 @@ class VarMaskedRNNBase(nn.Module):
         batch_size = input.size(0) if self.batch_first else input.size(1)
         if hx is None:
             num_directions = 2 if self.bidirectional else 1
-            hx = torch.autograd.Variable(input.data.new(self.num_layers *
-                                                        num_directions,
-                                                        batch_size,
-                                                        self.hidden_size).zero_())
+            hx = torch.autograd.Variable(input.data.new(self.num_layers * num_directions, batch_size, self.hidden_size).zero_())
             if self.lstm:
                 hx = (hx, hx)
 
