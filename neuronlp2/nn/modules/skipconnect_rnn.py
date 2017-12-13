@@ -40,6 +40,10 @@ class SkipConnectRNNBase(nn.Module):
         for cell in self.all_cells:
             cell.reset_parameters()
 
+    def reset_noise(self, batch_size):
+        for cell in self.all_cells:
+            cell.reset_noise(batch_size)
+
     def forward(self, input, skip_connect, mask=None, hx=None):
         batch_size = input.size(0) if self.batch_first else input.size(1)
         if hx is None:
@@ -52,8 +56,7 @@ class SkipConnectRNNBase(nn.Module):
                                             batch_first=self.batch_first,
                                             bidirectional=self.bidirectional,
                                             lstm=self.lstm)
-        for cell in self.all_cells:
-            cell.reset_noise(batch_size)
+        self.reset_noise(batch_size)
 
         output, hidden = func(input, skip_connect, self.all_cells, hx, None if mask is None else mask.view(mask.size() + (1,)))
         return output, hidden
@@ -64,6 +67,7 @@ class SkipConnectRNNBase(nn.Module):
         Args:
             input (batch, input_size): input tensor of this step.
             hx (num_layers, batch, hidden_size): the hidden state of last step.
+            hs (batch. hidden_size): tensor containing the skip connection state for each element in the batch.
             mask (batch): the mask tensor of this step.
 
         Returns:
@@ -71,6 +75,15 @@ class SkipConnectRNNBase(nn.Module):
             hn (num_layers, batch, hidden_size): tensor containing the hidden state of this step
         '''
         assert not self.bidirectional, "step only cannot be applied to bidirectional RNN."
+        batch_size = input.size(0)
+        if hx is None:
+            hx = torch.autograd.Variable(input.data.new(self.num_layers, batch_size, self.hidden_size).zero_())
+            if self.lstm:
+                hx = (hx, hx)
+        if hs is None:
+            hs = torch.autograd.Variable(input.data.new(self.num_layers, batch_size, self.hidden_size).zero_())
+            if self.lstm:
+                hs = (hs, hs)
 
 
 class SkipConnectRNN(SkipConnectRNNBase):

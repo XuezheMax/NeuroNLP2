@@ -75,13 +75,12 @@ class VarMaskedRNNBase(nn.Module):
         '''
         assert not self.bidirectional, "step only cannot be applied to bidirectional RNN."
         batch_size = input.size(0)
-        lstm = self.Cell is nn.LSTMCell
         if hx is None:
             hx = torch.autograd.Variable(input.data.new(self.num_layers, batch_size, self.hidden_size).zero_())
-            if lstm:
+            if self.lstm:
                 hx = (hx, hx)
 
-        func = rnn_F.AutogradVarMaskedStep(num_layers=self.num_layers, lstm=lstm)
+        func = rnn_F.AutogradVarMaskedStep(num_layers=self.num_layers, lstm=self.lstm)
 
         output, hidden = func(input, self.all_cells, hx, mask)
         return output, hidden
