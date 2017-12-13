@@ -49,6 +49,7 @@ def main():
     args_parser.add_argument('--p_rnn', nargs=2, type=float, required=True, help='dropout rate for RNN')
     args_parser.add_argument('--p_in', type=float, default=0.33, help='dropout rate for input embeddings')
     args_parser.add_argument('--p_out', type=float, default=0.33, help='dropout rate for output layer')
+    args_parser.add_argument('--skipConnect', action='store_true', help='use skip connection for decoder RNN.')
     args_parser.add_argument('--prior_order', choices=['inside_out', 'left2right', 'deep_first', 'shallow_first'], help='prior order of children.', required=True)
     args_parser.add_argument('--schedule', type=int, help='schedule for learning rate decay')
     args_parser.add_argument('--unk_replace', type=float, default=0., help='The rate to replace a singleton word with UNK')
@@ -97,6 +98,7 @@ def main():
     p_out = args.p_out
     unk_replace = args.unk_replace
     prior_order = args.prior_order
+    skipConnect = args.skipConnect
     beam = args.beam
     punctuation = args.punctuation
 
@@ -182,7 +184,7 @@ def main():
 
     window = 3
     network = StackPtrNet(word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, num_filters, window, mode, hidden_size, num_layers, num_types, arc_space, type_space,
-                          embedd_word=word_table, embedd_char=char_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn, biaffine=True, prior_order=prior_order)
+                          embedd_word=word_table, embedd_char=char_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn, biaffine=True, prior_order=prior_order, skipConnect=skipConnect)
 
     if use_gpu:
         network.cuda()
@@ -262,11 +264,11 @@ def main():
             input_encoder, input_decoder = conllx_stacked_data.get_batch_stacked_variable(data_train, batch_size,
                                                                                           unk_replace=unk_replace)
             word, char, pos, heads, types, masks_e, lengths_e = input_encoder
-            stacked_heads, children, stacked_types, masks_d, lengths_d = input_decoder
+            stacked_heads, children, stacked_types, skip_connect, masks_d, lengths_d = input_decoder
             optim.zero_grad()
             loss_arc_leaf, loss_arc_non_leaf, \
             loss_type_leaf, loss_type_non_leaf, \
-            loss_cov, num_leaf, num_non_leaf = network.loss(word, char, pos, stacked_heads, children, stacked_types,
+            loss_cov, num_leaf, num_non_leaf = network.loss(word, char, pos, stacked_heads, children, stacked_types, skip_connect=skip_connect,
                                                             mask_e=masks_e, length_e=lengths_e, mask_d=masks_d, length_d=lengths_d)
             loss_arc = loss_arc_leaf + loss_arc_non_leaf
             loss_type = loss_type_leaf + loss_type_non_leaf

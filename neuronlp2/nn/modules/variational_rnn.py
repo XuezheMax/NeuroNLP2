@@ -156,7 +156,6 @@ class VarMaskedLSTM(VarMaskedRNNBase):
         - **c_0** (num_layers \* num_directions, batch, hidden_size): tensor
           containing the initial cell state for each element in the batch.
 
-
     Outputs: output, (h_n, c_n)
         - **output** (seq_len, batch, hidden_size * num_directions): tensor
           containing the output features `(h_t)` from the last layer of the RNN,
@@ -503,11 +502,11 @@ class VarLSTMCell(VarRNNCellBase):
 
     Attributes:
         weight_ih: the learnable input-hidden weights, of shape
-            `(4*hidden_size x input_size)`
+            `(4 x input_size x hidden_size)`
         weight_hh: the learnable hidden-hidden weights, of shape
-            `(4*hidden_size x hidden_size)`
-        bias_ih: the learnable input-hidden bias, of shape `(4*hidden_size)`
-        bias_hh: the learnable hidden-hidden bias, of shape `(4*hidden_size)`
+            `(4 x hidden_size x hidden_size)`
+        bias_ih: the learnable input-hidden bias, of shape `(4 x hidden_size)`
+        bias_hh: the learnable hidden-hidden bias, of shape `(4 x hidden_size)`
     """
 
     def __init__(self, input_size, hidden_size, bias=True, p=(0.5, 0.5)):
@@ -597,11 +596,11 @@ class VarGRUCell(VarRNNCellBase):
 
     Attributes:
         weight_ih: the learnable input-hidden weights, of shape
-            `(3*hidden_size x input_size)`
+            `(3 x input_size x hidden_size)`
         weight_hh: the learnable hidden-hidden weights, of shape
-            `(3*hidden_size x hidden_size)`
-        bias_ih: the learnable input-hidden bias, of shape `(3*hidden_size)`
-        bias_hh: the learnable hidden-hidden bias, of shape `(3*hidden_size)`
+            `(3x hidden_size x hidden_size)`
+        bias_ih: the learnable input-hidden bias, of shape `(3 x hidden_size)`
+        bias_hh: the learnable hidden-hidden bias, of shape `(3 x hidden_size)`
     """
 
     def __init__(self, input_size, hidden_size, bias=True, p=(0.5, 0.5)):
