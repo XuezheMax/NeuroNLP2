@@ -130,11 +130,13 @@ def SkipConnectFastGRUCell(input, hidden, hidden_skip, w_ih, w_hh, b_ih=None, b_
 
 def SkipConnectRecurrent(reverse=False):
     def forward(input, skip_connect, hidden, cell, mask):
+        # hack to handle LSTM
+        h0 = hidden[0] if isinstance(hidden, tuple) else hidden
         # [length + 1, batch, hidden_size]
-        output = Variable(input.data.new(input.size(0) + 1, *hidden.size()).zero_()) + (hidden[0] if isinstance(hidden, tuple) else hidden)
+        output = Variable(input.data.new(input.size(0) + 1, *h0.size()).zero_()) + h0
         steps = range(input.size(0) - 1, -1, -1) if reverse else range(input.size(0))
         # create batch index
-        batch_index = torch.arange(0, hidden.size(0)).type_as(skip_connect)
+        batch_index = torch.arange(0, h0.size(0)).type_as(skip_connect)
         for i in steps:
             if mask is None or mask[i].data.min() > 0.5:
                 hidden_skip = output[skip_connect[i], batch_index]
