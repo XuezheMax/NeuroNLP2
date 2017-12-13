@@ -37,7 +37,6 @@ def SkipConnectLSTMCell(input, hidden, hidden_skip, w_ih, w_hh, b_ih=None, b_hh=
     hx = torch.cat([hx, hidden_skip], dim=1)
     hx = hx.expand(4, *hx.size()) if noise_hidden is None else hx.unsqueeze(0) * noise_hidden
 
-
     gates = torch.baddbmm(b_ih.unsqueeze(1), input, w_ih) + torch.baddbmm(b_hh.unsqueeze(1), hx, w_hh)
 
     ingate, forgetgate, cellgate, outgate = gates
@@ -236,6 +235,69 @@ def AutogradSkipConnectRNN(num_layers=1, batch_first=False, bidirectional=False,
         if batch_first:
             output = output.transpose(0, 1)
 
+        return output, nexth
+
+    return forward
+
+
+def SkipConnectStep():
+    def forward(input, hidden, hidden_skip, cell, mask):
+        if mask is None or mask.data.min() > 0.5:
+            hidden = cell(input, hidden, hidden_skip)
+        elif mask.data.max() > 0.5:
+            hidden_next = cell(input, hidden, hidden_skip)
+            # hack to handle LSTM
+            if isinstance(hidden, tuple):
+                hx, cx = hidden
+                hp1, cp1 = hidden_next
+                hidden = (hx + (hp1 - hx) * mask, cx + (cp1 - cx) * mask)
+            else:
+                hidden = hidden + (hidden_next - hidden) * mask
+        # hack to handle LSTM
+        output = hidden[0] if isinstance(hidden, tuple) else hidden
+
+        return hidden, output
+
+    return forward
+
+
+def StackedStep(layer, num_layers, lstm=False):
+    def forward(input, hidden, hidden_skip, cells, mask):
+        assert (len(cells) == num_layers)
+        next_hidden = []
+
+        if lstm:
+            hidden = list(zip(*hidden))
+            hidden_skip = list(zip(*hidden_skip))
+
+        for l in range(num_layers):
+            hy, output = layer(input, hidden[l], hidden_skip[l], cells[l], mask)
+            next_hidden.append(hy)
+            input = output
+
+        if lstm:
+            next_h, next_c = zip(*next_hidden)
+            next_hidden = (
+                torch.cat(next_h, 0).view(num_layers, *next_h[0].size()),
+                torch.cat(next_c, 0).view(num_layers, *next_c[0].size())
+            )
+        else:
+            next_hidden = torch.cat(next_hidden, 0).view(num_layers, *next_hidden[0].size())
+
+        return next_hidden, input
+
+    return forward
+
+
+def AutogradSkipConnectStep(num_layers=1, lstm=False):
+    layer = SkipConnectStep()
+
+    func = StackedStep(layer,
+                       num_layers,
+                       lstm=lstm)
+
+    def forward(input, cells, hidden, hidden_skip, mask):
+        nexth, output = func(input, hidden, hidden_skip, cells, mask)
         return output, nexth
 
     return forward

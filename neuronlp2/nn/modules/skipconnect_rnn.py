@@ -85,6 +85,11 @@ class SkipConnectRNNBase(nn.Module):
             if self.lstm:
                 hs = (hs, hs)
 
+        func = rnn_F.AutogradSkipConnectStep(num_layers=self.num_layers, lstm=self.lstm)
+
+        output, hidden = func(input, self.all_cells, hx, hs, mask)
+        return output, hidden
+
 
 class SkipConnectRNN(SkipConnectRNNBase):
     r"""Applies a multi-layer Elman RNN with costomized non-linearity to an
