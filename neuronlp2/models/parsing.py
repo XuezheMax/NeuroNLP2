@@ -571,12 +571,11 @@ class StackPtrNet(nn.Module):
             hx, cx = hx
             hx = hx.unsqueeze(1)
             cx = cx.unsqueeze(1)
+            h0 = hx
             hx = (hx, cx)
         else:
             hx = hx.unsqueeze(1)
-
-        # remember the initial state
-        h0 = hx
+            h0 = hx
 
         stacked_heads = [[0] for _ in range(beam)]
         skip_connects = [[h0] for _ in range(beam)] if self.skipConnect else None
@@ -600,16 +599,8 @@ class StackPtrNet(nn.Module):
             # [num_hyp]
             heads = torch.LongTensor([stacked_heads[i][-1] for i in range(num_hyp)]).type_as(children)
 
-            hs = None
-            if self.skipConnect:
-                # [num_layers, num_hyp, hidden_size]
-                hs = [skip_connects[i].pop() for i in range(num_hyp)]
-                # hack to handle LSTM
-                if isinstance(hs[0], tuple):
-                    hs, cs = zip(*hs)
-                    hs = (torch.cat(hs, dim=1), torch.cat(cs, dim=1))
-                else:
-                    hs = torch.cat(hs, dim=1)
+            # [num_layers, num_hyp, hidden_size]
+            hs = torch.cat([skip_connects[i].pop() for i in range(num_hyp)], dim=1) if self.skipConnect else None
 
             # [num_hyp, input_size]
             input = src_encoding[beam_index, heads]
@@ -701,10 +692,7 @@ class StackPtrNet(nn.Module):
                         new_skip_connects[cc] = [skip_connects[base_id][i] for i in range(len(skip_connects[base_id]))]
                         # hack to handle LSTM
                         if isinstance(hx, tuple):
-                            hx_next, cx_next = hx
-                            hx_next = hx_next[:, base_id, :].unsqueeze(1)
-                            cx_next = cx_next[:, base_id, :].unsqueeze(1)
-                            new_skip_connects[cc].append((hx_next, cx_next))
+                            new_skip_connects[cc].append(hx[0][:, base_id, :].unsqueeze(1))
                         else:
                             new_skip_connects[cc].append(hx[:, base_id, :].unsqueeze(1))
                         new_skip_connects[cc].append(h0)
