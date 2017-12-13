@@ -565,7 +565,7 @@ class StackPtrNet(nn.Module):
         arc_c = arc_c.unsqueeze(0)
         # [1, length, type_space]
         type_c = type_c.unsqueeze(0)
-        # [num_direction, 1, hidden_size]
+        # [num_layers, 1, hidden_size]
         # hack to handle LSTM
         if isinstance(hx, tuple):
             hx, cx = hx
@@ -575,8 +575,11 @@ class StackPtrNet(nn.Module):
         else:
             hx = hx.unsqueeze(1)
 
+        # remember the initial state
+        h0 = hx
+
         stacked_heads = [[0] for _ in range(beam)]
-        skip_connects = [[0] for _ in range(beam)]
+        skip_connects = [[h0] for _ in range(beam)] if self.skipConnect else None
         children = torch.zeros(beam, 2 * length - 1).type_as(src_encoding.data).long()
         stacked_types = children.new(children.size()).zero_()
         hypothesis_scores = src_encoding.data.new(beam).zero_()
@@ -586,7 +589,7 @@ class StackPtrNet(nn.Module):
 
         # temporal tensors for each step.
         new_stacked_heads = [[] for _ in range(beam)]
-        new_skip_connects = [[] for _ in range(beam)]
+        new_skip_connects = [[] for _ in range(beam)] if self.skipConnect else None
         new_children = children.new(children.size()).zero_()
         new_stacked_types = stacked_types.new(stacked_types.size()).zero_()
         num_hyp = 1
@@ -597,15 +600,23 @@ class StackPtrNet(nn.Module):
             # [num_hyp]
             heads = torch.LongTensor([stacked_heads[i][-1] for i in range(num_hyp)]).type_as(children)
 
-            # [num_hyp, 1]
-            skip_connect = torch.LongTensor([skip_connects[i].pop() for i in range(num_hyp)]).type_as(children).unsqueeze(1)
+            hs = None
+            if self.skipConnect:
+                # [num_layers, num_hyp, hidden_size]
+                hs = [skip_connects[i].pop() for i in range(num_hyp)]
+                # hack to handle LSTM
+                if isinstance(hs[0], tuple):
+                    hs, cs = zip(*hs)
+                    hs = (torch.cat(hs, dim=1), torch.cat(cs, dim=1))
+                else:
+                    hs = torch.cat(hs, dim=1)
 
             # [num_hyp, input_size]
             input = src_encoding[beam_index, heads]
 
             # output [num_hyp, hidden_size]
             # hx [num_layer, num_hyp, hidden_size]
-            output, hx = self.decoder.step(input, hx=hx, hs=None) if self.skipConnect else self.decoder.step(input, hx=hx)
+            output, hx = self.decoder.step(input, hx=hx, hs=hs) if self.skipConnect else self.decoder.step(input, hx=hx)
             # output [num_hyp, hidden_size] --> [num_hyp, 1, hidden_size]
             output = output.unsqueeze(1)
 
@@ -664,7 +675,8 @@ class StackPtrNet(nn.Module):
                         new_stacked_heads[cc] = [stacked_heads[base_id][i] for i in range(len(stacked_heads[base_id]))]
                         new_stacked_heads[cc].pop()
 
-                        new_skip_connects[cc] = [skip_connects[base_id][i] for i in range(len(skip_connects[base_id]))]
+                        if self.skipConnect:
+                            new_skip_connects[cc] = [skip_connects[base_id][i] for i in range(len(skip_connects[base_id]))]
 
                         new_children[cc] = children[base_id]
                         new_children[cc, t] = child_id
@@ -685,9 +697,17 @@ class StackPtrNet(nn.Module):
                     new_stacked_heads[cc] = [stacked_heads[base_id][i] for i in range(len(stacked_heads[base_id]))]
                     new_stacked_heads[cc].append(child_id)
 
-                    new_skip_connects[cc] = [skip_connects[base_id][i] for i in range(len(skip_connects[base_id]))]
-                    new_skip_connects[cc].append(t + 1)
-                    new_skip_connects[cc].append(0)
+                    if self.skipConnect:
+                        new_skip_connects[cc] = [skip_connects[base_id][i] for i in range(len(skip_connects[base_id]))]
+                        # hack to handle LSTM
+                        if isinstance(hx, tuple):
+                            hx_next, cx_next = hx
+                            hx_next = hx_next[:, base_id, :].unsqueeze(1)
+                            cx_next = cx_next[:, base_id, :].unsqueeze(1)
+                            new_skip_connects[cc].append((hx_next, cx_next))
+                        else:
+                            new_skip_connects[cc].append(hx[:, base_id, :].unsqueeze(1))
+                        new_skip_connects[cc].append(h0)
 
                     new_children[cc] = children[base_id]
                     new_children[cc, t] = child_id
@@ -713,7 +733,8 @@ class StackPtrNet(nn.Module):
             base_index = base_index[index]
 
             stacked_heads = [[new_stacked_heads[i][j] for j in range(len(new_stacked_heads[i]))] for i in range(num_hyp)]
-            skip_connects = [[new_skip_connects[i][j] for j in range(len(new_skip_connects[i]))] for i in range(num_hyp)]
+            if self.skipConnect:
+                skip_connects = [[new_skip_connects[i][j] for j in range(len(new_skip_connects[i]))] for i in range(num_hyp)]
             constraints = new_constraints
             child_orders = new_child_orders
             children.copy_(new_children)
