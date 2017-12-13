@@ -1,5 +1,6 @@
 __author__ = 'max'
 
+import copy
 import numpy as np
 from enum import Enum
 import torch
@@ -575,6 +576,7 @@ class StackPtrNet(nn.Module):
             hx = hx.unsqueeze(1)
 
         stacked_heads = [[0] for _ in range(beam)]
+        skip_connects = [[0] for _ in range(beam)]
         children = torch.zeros(beam, 2 * length - 1).type_as(src_encoding.data).long()
         stacked_types = children.new(children.size()).zero_()
         hypothesis_scores = src_encoding.data.new(beam).zero_()
@@ -584,6 +586,7 @@ class StackPtrNet(nn.Module):
 
         # temporal tensors for each step.
         new_stacked_heads = [[] for _ in range(beam)]
+        new_skip_connects = [[] for _ in range(beam)]
         new_children = children.new(children.size()).zero_()
         new_stacked_types = stacked_types.new(stacked_types.size()).zero_()
         num_hyp = 1
@@ -593,11 +596,12 @@ class StackPtrNet(nn.Module):
             beam_index = src_encoding.data.new(num_hyp).zero_().long()
             # [num_hyp]
             heads = torch.LongTensor([stacked_heads[i][-1] for i in range(num_hyp)]).type_as(children)
+            skip_connect = torch.LongTensor([skip_connects[i].pop() for i in range(num_hyp)]).type_as(children)
             # [num_hyp, 1, input_size]
             input = src_encoding[beam_index, heads].unsqueeze(1)
             # output [num_hyp, 1, hidden_size]
             # hx [num_direction, num_hyp, hidden_size]
-            output, hx = self.decoder(input, hx=hx)
+            output, hx = self.decoder(input, skip_connect, hx=hx) if self.skipConnect else self.decoder(input, hx=hx)
 
             # arc_h size [num_hyp, 1, arc_space]
             arc_h = F.elu(self.arc_h(output))
@@ -654,6 +658,8 @@ class StackPtrNet(nn.Module):
                         new_stacked_heads[cc] = [stacked_heads[base_id][i] for i in range(len(stacked_heads[base_id]))]
                         new_stacked_heads[cc].pop()
 
+                        new_skip_connects[cc] = [skip_connects[base_id][i] for i in range(len(skip_connects[base_id]))]
+
                         new_children[cc] = children[base_id]
                         new_children[cc, t] = child_id
 
@@ -672,6 +678,10 @@ class StackPtrNet(nn.Module):
 
                     new_stacked_heads[cc] = [stacked_heads[base_id][i] for i in range(len(stacked_heads[base_id]))]
                     new_stacked_heads[cc].append(child_id)
+
+                    new_skip_connects[cc] = [skip_connects[base_id][i] for i in range(len(skip_connects[base_id]))]
+                    new_skip_connects[cc].append(t + 1)
+                    new_skip_connects[cc].append(0)
 
                     new_children[cc] = children[base_id]
                     new_children[cc, t] = child_id
@@ -697,6 +707,7 @@ class StackPtrNet(nn.Module):
             base_index = base_index[index]
 
             stacked_heads = [[new_stacked_heads[i][j] for j in range(len(new_stacked_heads[i]))] for i in range(num_hyp)]
+            skip_connects = [[new_skip_connects[i][j] for j in range(len(new_skip_connects[i]))] for i in range(num_hyp)]
             constraints = new_constraints
             child_orders = new_child_orders
             children.copy_(new_children)
