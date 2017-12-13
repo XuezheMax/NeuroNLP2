@@ -253,7 +253,7 @@ def StackedStep(layer, num_layers, lstm=False):
 
 
 def AutogradVarMaskedStep(num_layers=1, lstm=False):
-    layer = VarMaskedStep
+    layer = VarMaskedStep()
 
     func = StackedStep(layer,
                        num_layers,
