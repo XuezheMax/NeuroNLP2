@@ -57,6 +57,31 @@ class VarMaskedRNNBase(nn.Module):
         output, hidden = func(input, self.all_cells, hx, None if mask is None else mask.view(mask.size() + (1,)))
         return output, hidden
 
+    def step(self, input, hx=None, mask=None):
+        '''
+        execute one step forward (only for one-directional RNN).
+        Args:
+            input (batch, input_size): input tensor of this step.
+            hx (num_layers, batch, hidden_size): the hidden state of last step.
+            mask (batch): the mask tensor of this step.
+
+        Returns:
+            output (batch, hidden_size): tensor containing the output of this step from the last layer of RNN.
+            hn (num_layers, batch, hidden_size): tensor containing the hidden state of this step
+        '''
+        assert not self.bidirectional, "step only cannot be applied to bidirectional RNN."
+        batch_size = input.size(0)
+        lstm = self.Cell is nn.LSTMCell
+        if hx is None:
+            hx = torch.autograd.Variable(input.data.new(self.num_layers, batch_size, self.hidden_size).zero_())
+            if lstm:
+                hx = (hx, hx)
+
+        func = rnn_F.AutogradVarMaskedStep(num_layers=self.num_layers, lstm=lstm)
+
+        output, hidden = func(input, self.all_cells, hx, mask)
+        return output, hidden
+
 
 class VarMaskedRNN(VarMaskedRNNBase):
     r"""Applies a multi-layer Elman RNN with costomized non-linearity to an

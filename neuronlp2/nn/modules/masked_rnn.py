@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from torch.nn.parameter import Parameter
 import torch.nn.functional as F
-from .._functions.masked_rnn import AutogradMaskedRNN
+from .._functions.masked_rnn import AutogradMaskedRNN, AutogradMaskedStep
 
 
 class MaskedRNNBase(nn.Module):
@@ -44,10 +44,7 @@ class MaskedRNNBase(nn.Module):
         lstm = self.Cell is nn.LSTMCell
         if hx is None:
             num_directions = 2 if self.bidirectional else 1
-            hx = torch.autograd.Variable(input.data.new(self.num_layers *
-                                                        num_directions,
-                                                        batch_size,
-                                                        self.hidden_size).zero_())
+            hx = torch.autograd.Variable(input.data.new(self.num_layers * num_directions, batch_size, self.hidden_size).zero_())
             if lstm:
                 hx = (hx, hx)
 
@@ -59,6 +56,34 @@ class MaskedRNNBase(nn.Module):
                                  lstm=lstm)
 
         output, hidden = func(input, self.all_cells, hx, None if mask is None else mask.view(mask.size() + (1, )))
+        return output, hidden
+
+    def step(self, input, hx=None, mask=None):
+        '''
+        execute one step forward (only for one-directional RNN).
+        Args:
+            input (batch, input_size): input tensor of this step.
+            hx (num_layers, batch, hidden_size): the hidden state of last step.
+            mask (batch): the mask tensor of this step.
+
+        Returns:
+            output (batch, hidden_size): tensor containing the output of this step from the last layer of RNN.
+            hn (num_layers, batch, hidden_size): tensor containing the hidden state of this step
+        '''
+        assert not self.bidirectional, "step only cannot be applied to bidirectional RNN."
+        batch_size = input.size(0)
+        lstm = self.Cell is nn.LSTMCell
+        if hx is None:
+            hx = torch.autograd.Variable(input.data.new(self.num_layers, batch_size, self.hidden_size).zero_())
+            if lstm:
+                hx = (hx, hx)
+
+        func = AutogradMaskedStep(num_layers=self.num_layers,
+                                 dropout=self.dropout,
+                                 train=self.training,
+                                 lstm=lstm)
+
+        output, hidden = func(input, self.all_cells, hx, mask)
         return output, hidden
 
 

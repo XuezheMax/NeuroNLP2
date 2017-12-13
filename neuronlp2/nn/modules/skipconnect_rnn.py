@@ -58,6 +58,20 @@ class SkipConnectRNNBase(nn.Module):
         output, hidden = func(input, skip_connect, self.all_cells, hx, None if mask is None else mask.view(mask.size() + (1,)))
         return output, hidden
 
+    def step(self, input, hx=None, hs=None, mask=None):
+        '''
+        execute one step forward (only for one-directional RNN).
+        Args:
+            input (batch, input_size): input tensor of this step.
+            hx (num_layers, batch, hidden_size): the hidden state of last step.
+            mask (batch): the mask tensor of this step.
+
+        Returns:
+            output (batch, hidden_size): tensor containing the output of this step from the last layer of RNN.
+            hn (num_layers, batch, hidden_size): tensor containing the hidden state of this step
+        '''
+        assert not self.bidirectional, "step only cannot be applied to bidirectional RNN."
+
 
 class SkipConnectRNN(SkipConnectRNNBase):
     r"""Applies a multi-layer Elman RNN with costomized non-linearity to an

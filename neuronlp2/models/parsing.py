@@ -596,13 +596,18 @@ class StackPtrNet(nn.Module):
             beam_index = src_encoding.data.new(num_hyp).zero_().long()
             # [num_hyp]
             heads = torch.LongTensor([stacked_heads[i][-1] for i in range(num_hyp)]).type_as(children)
+
             # [num_hyp, 1]
             skip_connect = torch.LongTensor([skip_connects[i].pop() for i in range(num_hyp)]).type_as(children).unsqueeze(1)
-            # [num_hyp, 1, input_size]
-            input = src_encoding[beam_index, heads].unsqueeze(1)
-            # output [num_hyp, 1, hidden_size]
-            # hx [num_direction, num_hyp, hidden_size]
-            output, hx = self.decoder(input, skip_connect, hx=hx) if self.skipConnect else self.decoder(input, hx=hx)
+
+            # [num_hyp, input_size]
+            input = src_encoding[beam_index, heads]
+
+            # output [num_hyp, hidden_size]
+            # hx [num_layer, num_hyp, hidden_size]
+            output, hx = self.decoder.step(input, hx=hx, hs=None) if self.skipConnect else self.decoder.step(input, hx=hx)
+            # output [num_hyp, hidden_size] --> [num_hyp, 1, hidden_size]
+            output = output.unsqueeze(1)
 
             # arc_h size [num_hyp, 1, arc_space]
             arc_h = F.elu(self.arc_h(output))
