@@ -747,6 +747,9 @@ class StackPtrNet(nn.Module):
         return heads, types, length, children, stacked_types
 
     def decode(self, input_word, input_char, input_pos, mask=None, length=None, hx=None, beam=1, leading_symbolic=0):
+        # reset noise for decoder
+        self.decoder.reset_noise(0)
+
         # output from encoder [batch, length_encoder, tag_space]
         # src_encoding [batch, length, input_size]
         # arc_c [batch, length, arc_space]

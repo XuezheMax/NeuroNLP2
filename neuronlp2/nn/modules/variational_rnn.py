@@ -39,6 +39,10 @@ class VarMaskedRNNBase(nn.Module):
         for cell in self.all_cells:
             cell.reset_parameters()
 
+    def reset_noise(self, batch_size):
+        for cell in self.all_cells:
+            cell.reset_noise(batch_size)
+
     def forward(self, input, mask=None, hx=None):
         batch_size = input.size(0) if self.batch_first else input.size(1)
         if hx is None:
@@ -51,8 +55,8 @@ class VarMaskedRNNBase(nn.Module):
                                           batch_first=self.batch_first,
                                           bidirectional=self.bidirectional,
                                           lstm=self.lstm)
-        for cell in self.all_cells:
-            cell.reset_noise(batch_size)
+
+        self.reset_noise(batch_size)
 
         output, hidden = func(input, self.all_cells, hx, None if mask is None else mask.view(mask.size() + (1,)))
         return output, hidden
