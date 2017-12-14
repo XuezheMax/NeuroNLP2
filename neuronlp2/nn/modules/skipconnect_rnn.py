@@ -82,8 +82,6 @@ class SkipConnectRNNBase(nn.Module):
                 hx = (hx, hx)
         if hs is None:
             hs = torch.autograd.Variable(input.data.new(self.num_layers, batch_size, self.hidden_size).zero_())
-            if self.lstm:
-                hs = (hs, hs)
 
         func = rnn_F.AutogradSkipConnectStep(num_layers=self.num_layers, lstm=self.lstm)
 

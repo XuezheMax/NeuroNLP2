@@ -268,7 +268,6 @@ def StackedStep(layer, num_layers, lstm=False):
 
         if lstm:
             hidden = list(zip(*hidden))
-            hidden_skip = list(zip(*hidden_skip))
 
         for l in range(num_layers):
             hy, output = layer(input, hidden[l], hidden_skip[l], cells[l], mask)
