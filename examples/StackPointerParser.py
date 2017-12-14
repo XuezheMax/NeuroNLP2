@@ -18,7 +18,7 @@ import uuid
 import numpy as np
 import torch
 from torch.nn.utils import clip_grad_norm
-from torch.optim import Adam, SGD, Adadelta
+from torch.optim import Adam, SGD, Adamax
 from neuronlp2.io import get_logger, conllx_stacked_data
 from neuronlp2.models import StackPtrNet
 from neuronlp2 import utils
@@ -40,7 +40,7 @@ def main():
     args_parser.add_argument('--num_filters', type=int, default=50, help='Number of filters in CNN')
     args_parser.add_argument('--pos_dim', type=int, default=50, help='Dimension of POS embeddings')
     args_parser.add_argument('--char_dim', type=int, default=50, help='Dimension of Character embeddings')
-    args_parser.add_argument('--opt', choices=['adam', 'sgd', 'adadelta'], help='optimization algorithm')
+    args_parser.add_argument('--opt', choices=['adam', 'sgd', 'adamax'], help='optimization algorithm')
     args_parser.add_argument('--learning_rate', type=float, default=0.001, help='Learning rate')
     args_parser.add_argument('--decay_rate', type=float, default=0.5, help='Decay rate of learning rate')
     args_parser.add_argument('--clip', type=float, default=5.0, help='gradient clipping')
@@ -86,7 +86,6 @@ def main():
     opt = args.opt
     momentum = 0.9
     betas = (0.9, 0.9)
-    rho = 0.9
     eps = 1e-6
     decay_rate = args.decay_rate
     clip = args.clip
@@ -197,8 +196,8 @@ def main():
             return Adam(params, lr=lr, betas=betas, weight_decay=gamma, eps=eps)
         elif opt == 'sgd':
             return SGD(params, lr=lr, momentum=momentum, weight_decay=gamma, nesterov=True)
-        elif opt == 'adadelta':
-            return Adadelta(params, lr=lr, rho=rho, weight_decay=gamma, eps=eps)
+        elif opt == 'adamax':
+            return Adamax(params, lr=lr, betas=betas, weight_decay=gamma, eps=eps)
         else:
             raise ValueError('Unknown optimization algorithm: %s' % opt)
 
@@ -209,8 +208,8 @@ def main():
         opt_info += 'betas=%s, eps=%.1e' % (betas, eps)
     elif opt == 'sgd':
         opt_info += 'momentum=%.2f' % momentum
-    elif opt == 'adadelta':
-        opt_info += 'rho=%.2f, eps=%.1e' % (rho, eps)
+    elif opt == 'adamax':
+        opt_info += 'betas=%s, eps=%.1e' % (betas, eps)
 
     logger.info("Embedding dim: word=%d, char=%d, pos=%d" % (word_dim, char_dim, pos_dim))
     logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, arc_space=%d, type_space=%d" % (mode, num_layers, hidden_size, num_filters, arc_space, type_space))
