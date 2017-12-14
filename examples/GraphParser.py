@@ -16,7 +16,7 @@ import uuid
 
 import numpy as np
 import torch
-from torch.optim import Adam, SGD
+from torch.optim import Adam, SGD, Adamax
 from neuronlp2.io import get_logger, conllx_data
 from neuronlp2.models import BiRecurrentConvBiAffine
 from neuronlp2 import utils
@@ -197,11 +197,11 @@ def main():
     gold_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
 
     adam_epochs = 50
-    adam_rate = 0.001
+    adam_rate = 0.002
     if adam_epochs > 0:
         lr = adam_rate
-        opt = 'adam'
-        optim = Adam(network.parameters(), lr=adam_rate, betas=betas, weight_decay=gamma)
+        opt = 'adamax'
+        optim = Adamax(network.parameters(), lr=adam_rate, betas=betas, weight_decay=gamma)
     else:
         opt = 'sgd'
         lr = learning_rate
@@ -465,9 +465,9 @@ def main():
         if epoch % schedule == 0:
             # lr = lr * decay_rate
             if epoch < adam_epochs:
-                opt = 'adam'
+                opt = 'adamax'
                 lr = adam_rate / (1.0 + epoch * decay_rate)
-                optim = Adam(network.parameters(), lr=lr, betas=(0.9, 0.9), weight_decay=gamma)
+                optim = Adamax(network.parameters(), lr=lr, betas=betas, weight_decay=gamma)
             else:
                 opt = 'sgd'
                 lr = learning_rate / (1.0 + (epoch - adam_epochs) * decay_rate)
