@@ -65,11 +65,16 @@ def _generate_stack_inputs(heads, types, prior_order):
     stacked_heads = []
     children = []
     stacked_types = []
+    skip_connect = []
+    prev = [0 for _ in range(len(heads))]
     stack = [0]
+    position = 1
     while len(stack) > 0:
         head = stack[-1]
         stacked_heads.append(head)
         child_id = child_ids[head]
+        skip_connect.append(prev[head])
+        prev[head] = position
         if len(child_id) == 0:
             children.append(head)
             stacked_types.append(PAD_ID_TAG)
@@ -79,8 +84,9 @@ def _generate_stack_inputs(heads, types, prior_order):
             children.append(child)
             stack.append(child)
             stacked_types.append(types[child])
+        position += 1
 
-    return stacked_heads, children, stacked_types
+    return stacked_heads, children, stacked_types, skip_connect
 
 
 def read_stacked_data(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, max_size=None, normalize_digits=True, prior_order='deep_first'):
@@ -99,8 +105,8 @@ def read_stacked_data(source_path, word_alphabet, char_alphabet, pos_alphabet, t
         sent = inst.sentence
         for bucket_id, bucket_size in enumerate(_buckets):
             if inst_size < bucket_size:
-                stacked_heads, children, stacked_types = _generate_stack_inputs(inst.heads, inst.type_ids, prior_order)
-                data[bucket_id].append([sent.word_ids, sent.char_id_seqs, inst.pos_ids, inst.heads, inst.type_ids, stacked_heads, children, stacked_types])
+                stacked_heads, children, stacked_types, skip_connect = _generate_stack_inputs(inst.heads, inst.type_ids, prior_order)
+                data[bucket_id].append([sent.word_ids, sent.char_id_seqs, inst.pos_ids, inst.heads, inst.type_ids, stacked_heads, children, stacked_types, skip_connect])
                 max_len = max([len(char_seq) for char_seq in sent.char_seqs])
                 if max_char_length[bucket_id] < max_len:
                     max_char_length[bucket_id] = max_len
@@ -140,12 +146,13 @@ def read_stacked_data_to_variable(source_path, word_alphabet, char_alphabet, pos
         stack_hid_inputs = np.empty([bucket_size, 2 * bucket_length - 1], dtype=np.int64)
         chid_inputs = np.empty([bucket_size, 2 * bucket_length - 1], dtype=np.int64)
         stack_tid_inputs = np.empty([bucket_size, 2 * bucket_length - 1], dtype=np.int64)
+        skip_connect_inputs = np.empty([bucket_size, 2 * bucket_length - 1], dtype=np.int64)
 
         masks_d = np.zeros([bucket_size, 2 * bucket_length - 1], dtype=np.float32)
         lengths_d = np.empty(bucket_size, dtype=np.int64)
 
         for i, inst in enumerate(data[bucket_id]):
-            wids, cid_seqs, pids, hids, tids, stack_hids, chids, stack_tids = inst
+            wids, cid_seqs, pids, hids, tids, stack_hids, chids, stack_tids, skip_ids = inst
             inst_size = len(wids)
             lengths_e[i] = inst_size
             # word ids
@@ -181,6 +188,9 @@ def read_stacked_data_to_variable(source_path, word_alphabet, char_alphabet, pos
             # stacked types
             stack_tid_inputs[i, :inst_size_decoder] = stack_tids
             stack_tid_inputs[i, inst_size_decoder:] = PAD_ID_TAG
+            # skip connects
+            skip_connect_inputs[i, :inst_size_decoder] = skip_ids
+            skip_connect_inputs[i, inst_size_decoder:] = PAD_ID_TAG
             # masks_d
             masks_d[i, :inst_size_decoder] = 1.0
 
@@ -196,6 +206,7 @@ def read_stacked_data_to_variable(source_path, word_alphabet, char_alphabet, pos
         stacked_heads = Variable(torch.from_numpy(stack_hid_inputs), volatile=volatile)
         children = Variable(torch.from_numpy(chid_inputs), volatile=volatile)
         stacked_types = Variable(torch.from_numpy(stack_tid_inputs), volatile=volatile)
+        skip_connect = torch.from_numpy(skip_connect_inputs)
         masks_d = Variable(torch.from_numpy(masks_d), volatile=volatile)
         lengths_d = torch.from_numpy(lengths_d)
 
@@ -211,11 +222,12 @@ def read_stacked_data_to_variable(source_path, word_alphabet, char_alphabet, pos
             stacked_heads = stacked_heads.cuda()
             children = children.cuda()
             stacked_types = stacked_types.cuda()
+            skip_connect = skip_connect.cuda()
             masks_d = masks_d.cuda()
             lengths_d = lengths_d.cuda()
 
         data_variable.append(((words, chars, pos, heads, types, masks_e, single, lengths_e),
-                              (stacked_heads, children, stacked_types, masks_d, lengths_d)))
+                              (stacked_heads, children, stacked_types, skip_connect, masks_d, lengths_d)))
 
     return data_variable, bucket_sizes
 
@@ -236,7 +248,7 @@ def get_batch_stacked_variable(data, batch_size, unk_replace=0.):
 
     data_encoder, data_decoder = data_variable[bucket_id]
     words, chars, pos, heads, types, masks_e, single, lengths_e = data_encoder
-    stacked_heads, children, stacked_types, masks_d, lengths_d = data_decoder
+    stacked_heads, children, stacked_types, skip_connect, masks_d, lengths_d = data_decoder
     bucket_size = bucket_sizes[bucket_id]
     batch_size = min(bucket_size, batch_size)
     index = torch.randperm(bucket_size).long()[:batch_size]
@@ -250,7 +262,7 @@ def get_batch_stacked_variable(data, batch_size, unk_replace=0.):
         words = words * (ones - single[index] * noise)
 
     return (words, chars[index], pos[index], heads[index], types[index], masks_e[index], lengths_e[index]), \
-           (stacked_heads[index], children[index], stacked_types[index], masks_d[index], lengths_d[index])
+           (stacked_heads[index], children[index], stacked_types[index], skip_connect[index], masks_d[index], lengths_d[index])
 
 
 def iterate_batch_stacked_variable(data, batch_size, unk_replace=0., shuffle=False):
@@ -267,7 +279,7 @@ def iterate_batch_stacked_variable(data, batch_size, unk_replace=0., shuffle=Fal
             continue
         data_encoder, data_decoder = data_variable[bucket_id]
         words, chars, pos, heads, types, masks_e, single, lengths_e = data_encoder
-        stacked_heads, children, stacked_types, masks_d, lengths_d = data_decoder
+        stacked_heads, children, stacked_types, skip_connect, masks_d, lengths_d = data_decoder
         if unk_replace:
             ones = Variable(single.data.new(bucket_size, bucket_length).fill_(1))
             noise = Variable(masks_e.data.new(bucket_size, bucket_length).bernoulli_(unk_replace).long())
@@ -283,7 +295,7 @@ def iterate_batch_stacked_variable(data, batch_size, unk_replace=0., shuffle=Fal
                 excerpt = indices[start_idx:start_idx + batch_size]
             else:
                 excerpt = slice(start_idx, start_idx + batch_size)
-            yield (words[excerpt], chars[excerpt], pos[excerpt], heads[excerpt], types[excerpt], \
+            yield (words[excerpt], chars[excerpt], pos[excerpt], heads[excerpt], types[excerpt],
                    masks_e[excerpt], lengths_e[excerpt]), \
-                  (stacked_heads[excerpt], children[excerpt], stacked_types[excerpt],
+                  (stacked_heads[excerpt], children[excerpt], stacked_types[excerpt], skip_connect[excerpt],
                    masks_d[excerpt], lengths_d[excerpt])

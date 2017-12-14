@@ -1,11 +1,13 @@
 __author__ = 'max'
 
+import copy
 import numpy as np
 from enum import Enum
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from ..nn import TreeCRF, VarMaskedGRU, VarMaskedRNN, VarMaskedLSTM, VarMaskedFastLSTM
+from ..nn import SkipConnectFastLSTM, SkipConnectGRU, SkipConnectLSTM, SkipConnectRNN
 from ..nn import Embedding
 from ..nn import BiAAttention, BiLinear
 from neuronlp2.tasks import parser
@@ -273,9 +275,8 @@ class BiRecurrentConvBiAffine(nn.Module):
 
 
 class StackPtrNet(nn.Module):
-
     def __init__(self, word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, num_filters, kernel_size, rnn_mode, hidden_size, num_layers, num_labels, arc_space, type_space,
-                 embedd_word=None, embedd_char=None, embedd_pos=None, p_in=0.2, p_out=0.5, p_rnn=(0.5, 0.5), biaffine=True, prior_order='deep_first'):
+                 embedd_word=None, embedd_char=None, embedd_pos=None, p_in=0.2, p_out=0.5, p_rnn=(0.5, 0.5), biaffine=True, prior_order='deep_first', skipConnect=False):
 
         super(StackPtrNet, self).__init__()
         self.word_embedd = Embedding(num_words, word_dim, init_embedding=embedd_word)
@@ -293,23 +294,28 @@ class StackPtrNet(nn.Module):
             self.prior_order = PriorOrder.LEFT2RIGTH
         else:
             raise ValueError('Unknown prior order: %s' % prior_order)
+        self.skipConnect = skipConnect
 
         if rnn_mode == 'RNN':
-            RNN = VarMaskedRNN
+            RNN_ENCODER = VarMaskedRNN
+            RNN_DECODER = SkipConnectRNN if skipConnect else VarMaskedRNN
         elif rnn_mode == 'LSTM':
-            RNN = VarMaskedLSTM
+            RNN_ENCODER = VarMaskedLSTM
+            RNN_DECODER = SkipConnectLSTM if skipConnect else VarMaskedLSTM
         elif rnn_mode == 'FastLSTM':
-            RNN = VarMaskedFastLSTM
+            RNN_ENCODER = VarMaskedFastLSTM
+            RNN_DECODER = SkipConnectFastLSTM if skipConnect else VarMaskedFastLSTM
         elif rnn_mode == 'GRU':
-            RNN = VarMaskedGRU
+            RNN_ENCODER = VarMaskedGRU
+            RNN_DECODER = SkipConnectGRU if skipConnect else VarMaskedGRU
         else:
             raise ValueError('Unknown RNN mode: %s' % rnn_mode)
 
-        self.encoder = RNN(word_dim + num_filters + pos_dim, hidden_size, num_layers=num_layers,
-                           batch_first=True, bidirectional=True, dropout=p_rnn)
+        self.encoder = RNN_ENCODER(word_dim + num_filters + pos_dim, hidden_size, num_layers=num_layers,
+                                   batch_first=True, bidirectional=True, dropout=p_rnn)
 
-        self.decoder = RNN(word_dim + num_filters + pos_dim, hidden_size, num_layers=num_layers,
-                           batch_first=True, bidirectional=False, dropout=p_rnn)
+        self.decoder = RNN_DECODER(word_dim + num_filters + pos_dim, hidden_size, num_layers=num_layers,
+                                   batch_first=True, bidirectional=False, dropout=p_rnn)
 
         self.hx_dense = nn.Linear(2 * hidden_size, hidden_size)
         self.arc_h = nn.Linear(hidden_size, arc_space)  # arc dense for decoder
@@ -380,6 +386,26 @@ class StackPtrNet(nn.Module):
 
         return arc_h, type_h, hn, mask_d, length_d
 
+    def _get_decoder_output_with_skip_connect(self, src_encoding, heads_stack, skip_connect, hx, mask_d=None, length_d=None):
+        batch, _, _ = src_encoding.size()
+        # create batch index [batch]
+        batch_index = torch.arange(0, batch).type_as(src_encoding.data).long()
+        # get vector for heads [batch, length_decoder, input_dim],
+        src_encoding = src_encoding[batch_index, heads_stack.data.t()].transpose(0, 1)
+        # output from rnn [batch, length, hidden_size]
+        output, hn = self.decoder(src_encoding, skip_connect, mask_d, hx=hx)
+
+        # apply dropout
+        # [batch, length, hidden_size] --> [batch, hidden_size, length] --> [batch, length, hidden_size]
+        output = self.dropout_out(output.transpose(1, 2)).transpose(1, 2)
+
+        # output size [batch, length_decoder, arc_space]
+        arc_h = F.elu(self.arc_h(output))
+        # output size [batch, length_decoder, type_space]
+        type_h = F.elu(self.type_h(output))
+
+        return arc_h, type_h, hn, mask_d, length_d
+
     def forward(self, input_word, input_char, input_pos, mask=None, length=None, hx=None):
         raise RuntimeError('Stack Pointer Network does not implement forward')
 
@@ -408,7 +434,7 @@ class StackPtrNet(nn.Module):
             hn = F.tanh(self.hx_dense(hn))
         return hn
 
-    def loss(self, input_word, input_char, input_pos, stacked_heads, children, stacked_types, mask_e=None, length_e=None, mask_d=None, length_d=None, hx=None):
+    def loss(self, input_word, input_char, input_pos, stacked_heads, children, stacked_types, skip_connect=None, mask_e=None, length_e=None, mask_d=None, length_d=None, hx=None):
         # output from encoder [batch, length_encoder, tag_space]
         src_encoding, arc_c, type_c, hn, mask_e, _ = self._get_encoder_output(input_word, input_char, input_pos, mask_e=mask_e, length_e=length_e, hx=hx)
 
@@ -416,7 +442,10 @@ class StackPtrNet(nn.Module):
         # transform hn to [num_layers, batch, hidden_size]
         hn = self._transform_decoder_init_state(hn)
         # output from decoder [batch, length_decoder, tag_space]
-        arc_h, type_h, _, mask_d, _ = self._get_decoder_output(src_encoding, stacked_heads, hn, mask_d=mask_d, length_d=length_d)
+        if self.skipConnect:
+            arc_h, type_h, _, mask_d, _ = self._get_decoder_output_with_skip_connect(src_encoding, stacked_heads, skip_connect, hn, mask_d=mask_d, length_d=length_d)
+        else:
+            arc_h, type_h, _, mask_d, _ = self._get_decoder_output(src_encoding, stacked_heads, hn, mask_d=mask_d, length_d=length_d)
         _, max_len_d, _ = arc_h.size()
         # apply dropout
         # [batch, length_decoder, dim] + [batch, length_encoder, dim] --> [batch, length_decoder + length_encoder, dim]
@@ -536,17 +565,20 @@ class StackPtrNet(nn.Module):
         arc_c = arc_c.unsqueeze(0)
         # [1, length, type_space]
         type_c = type_c.unsqueeze(0)
-        # [num_direction, 1, hidden_size]
+        # [num_layers, 1, hidden_size]
         # hack to handle LSTM
         if isinstance(hx, tuple):
             hx, cx = hx
             hx = hx.unsqueeze(1)
             cx = cx.unsqueeze(1)
+            h0 = hx
             hx = (hx, cx)
         else:
             hx = hx.unsqueeze(1)
+            h0 = hx
 
         stacked_heads = [[0] for _ in range(beam)]
+        skip_connects = [[h0] for _ in range(beam)] if self.skipConnect else None
         children = torch.zeros(beam, 2 * length - 1).type_as(src_encoding.data).long()
         stacked_types = children.new(children.size()).zero_()
         hypothesis_scores = src_encoding.data.new(beam).zero_()
@@ -556,6 +588,7 @@ class StackPtrNet(nn.Module):
 
         # temporal tensors for each step.
         new_stacked_heads = [[] for _ in range(beam)]
+        new_skip_connects = [[] for _ in range(beam)] if self.skipConnect else None
         new_children = children.new(children.size()).zero_()
         new_stacked_types = stacked_types.new(stacked_types.size()).zero_()
         num_hyp = 1
@@ -565,11 +598,18 @@ class StackPtrNet(nn.Module):
             beam_index = src_encoding.data.new(num_hyp).zero_().long()
             # [num_hyp]
             heads = torch.LongTensor([stacked_heads[i][-1] for i in range(num_hyp)]).type_as(children)
-            # [num_hyp, 1, input_size]
-            input = src_encoding[beam_index, heads].unsqueeze(1)
-            # output [num_hyp, 1, hidden_size]
-            # hx [num_direction, num_hyp, hidden_size]
-            output, hx = self.decoder(input, hx=hx)
+
+            # [num_layers, num_hyp, hidden_size]
+            hs = torch.cat([skip_connects[i].pop() for i in range(num_hyp)], dim=1) if self.skipConnect else None
+
+            # [num_hyp, input_size]
+            input = src_encoding[beam_index, heads]
+
+            # output [num_hyp, hidden_size]
+            # hx [num_layer, num_hyp, hidden_size]
+            output, hx = self.decoder.step(input, hx=hx, hs=hs) if self.skipConnect else self.decoder.step(input, hx=hx)
+            # output [num_hyp, hidden_size] --> [num_hyp, 1, hidden_size]
+            output = output.unsqueeze(1)
 
             # arc_h size [num_hyp, 1, arc_space]
             arc_h = F.elu(self.arc_h(output))
@@ -593,7 +633,7 @@ class StackPtrNet(nn.Module):
             if leading_symbolic > 0:
                 # create a leaf_mask tensor to set type score of non-leaf with "PAD" to -inf
                 # [num_hyp, length_encoder, leading_symbolic]
-                leaf_mask = type_hyp_scores.new(arc_hyp_scores.size() + (leading_symbolic, )).fill_(-1e8)
+                leaf_mask = type_hyp_scores.new(arc_hyp_scores.size() + (leading_symbolic,)).fill_(-1e8)
                 batch_index = torch.arange(0, beam_index.size(0)).type_as(beam_index)
                 leaf_mask[batch_index, heads, beam_index] = 0
                 type_hyp_scores[:, :, 0:leading_symbolic].add_(leaf_mask)
@@ -626,6 +666,9 @@ class StackPtrNet(nn.Module):
                         new_stacked_heads[cc] = [stacked_heads[base_id][i] for i in range(len(stacked_heads[base_id]))]
                         new_stacked_heads[cc].pop()
 
+                        if self.skipConnect:
+                            new_skip_connects[cc] = [skip_connects[base_id][i] for i in range(len(skip_connects[base_id]))]
+
                         new_children[cc] = children[base_id]
                         new_children[cc, t] = child_id
 
@@ -644,6 +687,15 @@ class StackPtrNet(nn.Module):
 
                     new_stacked_heads[cc] = [stacked_heads[base_id][i] for i in range(len(stacked_heads[base_id]))]
                     new_stacked_heads[cc].append(child_id)
+
+                    if self.skipConnect:
+                        new_skip_connects[cc] = [skip_connects[base_id][i] for i in range(len(skip_connects[base_id]))]
+                        # hack to handle LSTM
+                        if isinstance(hx, tuple):
+                            new_skip_connects[cc].append(hx[0][:, base_id, :].unsqueeze(1))
+                        else:
+                            new_skip_connects[cc].append(hx[:, base_id, :].unsqueeze(1))
+                        new_skip_connects[cc].append(h0)
 
                     new_children[cc] = children[base_id]
                     new_children[cc, t] = child_id
@@ -669,6 +721,8 @@ class StackPtrNet(nn.Module):
             base_index = base_index[index]
 
             stacked_heads = [[new_stacked_heads[i][j] for j in range(len(new_stacked_heads[i]))] for i in range(num_hyp)]
+            if self.skipConnect:
+                skip_connects = [[new_skip_connects[i][j] for j in range(len(new_skip_connects[i]))] for i in range(num_hyp)]
             constraints = new_constraints
             child_orders = new_child_orders
             children.copy_(new_children)
@@ -702,6 +756,9 @@ class StackPtrNet(nn.Module):
         return heads, types, length, children, stacked_types
 
     def decode(self, input_word, input_char, input_pos, mask=None, length=None, hx=None, beam=1, leading_symbolic=0):
+        # reset noise for decoder
+        self.decoder.reset_noise(0)
+
         # output from encoder [batch, length_encoder, tag_space]
         # src_encoding [batch, length, input_size]
         # arc_c [batch, length, arc_space]
