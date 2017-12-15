@@ -247,8 +247,9 @@ def main():
     test_total_root = 0
 
     patient = 0
+    decay = 0
     for epoch in range(1, num_epochs + 1):
-        print('Epoch %d (%s, optim: %s, learning rate=%.6f, decay rate=%.2f (schedule=%d, patient=%d)): ' % (epoch, mode, opt, lr, decay_rate, schedule, patient))
+        print('Epoch %d (%s, optim: %s, learning rate=%.6f, decay rate=%.2f (schedule=%d, patient=%d, decay=%d)): ' % (epoch, mode, opt, lr, decay_rate, schedule, patient, decay))
         train_err_arc_leaf = 0.
         train_err_arc_non_leaf = 0.
         train_err_type_leaf = 0.
@@ -480,6 +481,10 @@ def main():
                 lr = lr * decay_rate
                 optim = generate_optimizer(opt, lr, network.parameters())
                 patient = 0
+                decay += 1
+                if decay % 5 == 0:
+                    schedule *= 2
+
 
         print('----------------------------------------------------------------------------------------------------------------------------')
         print('best dev  W. Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%, ucm: %.2f%%, lcm: %.2f%% (epoch: %d)' % (
