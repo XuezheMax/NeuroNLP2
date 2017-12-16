@@ -60,7 +60,7 @@ class BiLinear(nn.Module):
         left_size = input_left.size()
         right_size = input_right.size()
         assert left_size[:-1] == right_size[:-1], \
-            "batch size of left and right inputs mis-match: (%d, %d)" % (left_size[:-1], right_size[:-1])
+            "batch size of left and right inputs mis-match: (%s, %s)" % (left_size[:-1], right_size[:-1])
         batch = int(np.prod(left_size[:-1]))
 
         # convert left and right input to matrices [batch, left_features], [batch, right_features]

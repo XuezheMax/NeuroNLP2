@@ -688,6 +688,7 @@ class StackPtrNet(nn.Module):
             else:
                 index = torch.from_numpy(np.array(ids)).type_as(base_index)
             base_index = base_index[index]
+            child_index = child_index[index]
 
             # predict types for new hypotheses
             # type_h size [num_hyp, type_space]
