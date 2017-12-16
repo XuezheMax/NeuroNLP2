@@ -482,7 +482,7 @@ def main():
                 optim = generate_optimizer(opt, lr, network.parameters())
                 patient = 0
                 decay += 1
-                if decay % 5 == 0:
+                if decay % 3 == 0:
                     schedule *= 2
 
 
