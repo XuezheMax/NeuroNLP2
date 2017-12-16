@@ -558,11 +558,6 @@ class StackPtrNet(nn.Module):
         else:
             length = src_encoding.size(0)
 
-        # expand each tensor for beam search
-        # [1, length, input_size]
-        # src_encoding = src_encoding.unsqueeze(0)
-        # [1, length, arc_space]
-        # arc_c = arc_c.unsqueeze(0)
         # [num_layers, 1, hidden_size]
         # hack to handle LSTM
         if isinstance(hx, tuple):
@@ -592,8 +587,6 @@ class StackPtrNet(nn.Module):
         num_hyp = 1
         num_step = 2 * length - 1
         for t in range(num_step):
-            # beam_index = torch.arange(0, num_hyp).type_as(src_encoding.data).long()
-            # beam_index = src_encoding.data.new(num_hyp).zero_().long()
             # [num_hyp]
             heads = torch.LongTensor([stacked_heads[i][-1] for i in range(num_hyp)]).type_as(children)
 
@@ -601,7 +594,6 @@ class StackPtrNet(nn.Module):
             hs = torch.cat([skip_connects[i].pop() for i in range(num_hyp)], dim=1) if self.skipConnect else None
 
             # [num_hyp, input_size]
-            # input = src_encoding[beam_index, heads]
             input = src_encoding[heads]
 
             # output [num_hyp, hidden_size]
