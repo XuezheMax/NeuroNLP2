@@ -397,7 +397,6 @@ class StackPtrNet(nn.Module):
         # output size [batch, length_decoder, type_space]
         dec_type_h = F.elu(self.dec_type_h(output))
 
-        # return arc_h, dec_type_h, hn, mask_d, length_d
         return arc_h, dec_type_h, hn, mask_d, length_d
 
     def _get_decoder_output_with_skip_connect(self, src_encoding, heads_stack, skip_connect, hx, mask_d=None, length_d=None):
@@ -419,7 +418,6 @@ class StackPtrNet(nn.Module):
         # output size [batch, length_decoder, type_space]
         dec_type_h = F.elu(self.dec_type_h(output))
 
-        # return arc_h, dec_type_h, hn, mask_d, length_d
         return arc_h, dec_type_h, hn, mask_d, length_d
 
     def forward(self, input_word, input_char, input_pos, mask=None, length=None, hx=None):
