@@ -248,6 +248,7 @@ def main():
 
     patient = 0
     decay = 0
+    max_decay = 10
     for epoch in range(1, num_epochs + 1):
         print('Epoch %d (%s, optim: %s, learning rate=%.6f, decay rate=%.2f (schedule=%d, patient=%d, decay=%d)): ' % (epoch, mode, opt, lr, decay_rate, schedule, patient, decay))
         train_err_arc_leaf = 0.
@@ -509,6 +510,9 @@ def main():
             best_epoch))
         print('best test Root: corr: %d, total: %d, acc: %.2f%% (epoch: %d)' % (test_root_correct, test_total_root, test_root_correct * 100 / test_total_root, best_epoch))
         print('============================================================================================================================')
+
+        if decay == max_decay:
+            break
 
 
 if __name__ == '__main__':

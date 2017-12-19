@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-CUDA_VISIBLE_DEVICES=2 python examples/StackPointerParser.py --mode FastLSTM --num_epochs 200 --batch_size 32 --hidden_size 512 --num_layers 3 \
+CUDA_VISIBLE_DEVICES=2 python examples/StackPointerParser.py --mode FastLSTM --num_epochs 500 --batch_size 32 --hidden_size 512 --num_layers 3 \
  --pos_dim 100 --char_dim 100 --num_filters 100 --arc_space 512 --type_space 128 \
  --opt adam --learning_rate 0.001 --decay_rate 0.75 --schedule 5 --coverage 0.0 --gamma 0.0 --clip 5.0 \
  --p_in 0.33 --p_out 0.33 --p_rnn 0.33 0.33 --unk_replace 0.5 --beam 5 --skipConnect --prior_order inside_out \
