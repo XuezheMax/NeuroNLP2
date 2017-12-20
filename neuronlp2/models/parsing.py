@@ -276,7 +276,7 @@ class BiRecurrentConvBiAffine(nn.Module):
 
 class StackPtrNet(nn.Module):
     def __init__(self, word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, num_filters, kernel_size, rnn_mode, hidden_size, num_layers, num_labels, arc_space, type_space,
-                 embedd_word=None, embedd_char=None, embedd_pos=None, p_in=0.2, p_out=0.5, p_rnn=(0.5, 0.5), biaffine=True, prior_order='deep_first', skipConnect=False):
+                 embedd_word=None, embedd_char=None, embedd_pos=None, p_in=0.2, p_out=0.5, p_rnn=(0.5, 0.5), biaffine=True, prior_order='deep_first', skipConnect=False, biasArc=False):
 
         super(StackPtrNet, self).__init__()
         self.word_embedd = Embedding(num_words, word_dim, init_embedding=embedd_word)
@@ -295,6 +295,7 @@ class StackPtrNet(nn.Module):
         else:
             raise ValueError('Unknown prior order: %s' % prior_order)
         self.skipConnect = skipConnect
+        self.biasArc = biasArc
 
         if rnn_mode == 'RNN':
             RNN_ENCODER = VarMaskedRNN
@@ -321,6 +322,12 @@ class StackPtrNet(nn.Module):
         self.arc_h = nn.Linear(hidden_size, arc_space)  # arc dense for decoder
         self.arc_c = nn.Linear(hidden_size * 2, arc_space)  # arc dense for encoder
         self.attention = BiAAttention(arc_space, arc_space, 1, biaffine=biaffine)
+
+        # bias layers
+        if self.biasArc:
+            self.bias_arc_h = nn.Linear(hidden_size * 2, arc_space)
+            self.bias_arc_c = nn.Linear(hidden_size * 2, arc_space)
+            self.bias_attention = BiAAttention(arc_space, arc_space, 1, biaffine=biaffine)
 
         self.enc_type_h = nn.Linear(hidden_size * 2, type_space)
         self.enc_type_c = nn.Linear(hidden_size * 2, type_space)
@@ -367,6 +374,19 @@ class StackPtrNet(nn.Module):
         # output size [batch, length, arc_space]
         arc_c = F.elu(self.arc_c(output))
 
+        # bias
+        if self.biasArc:
+            # output size [batch, length, arc_space]
+            bias_arc_h = F.elu(self.bias_arc_h(output))
+            bias_arc_c = F.elu(self.bias_arc_c(output))
+
+            # apply dropout
+            bias_arc_h, bias_arc_c = self.dropout_out(torch.cat([bias_arc_h, bias_arc_c], dim=1).transpose(1, 2)).transpose(1, 2).chunk(2, 1)
+            # [batch, length, length]
+            out_bias_arc = self.bias_attention(bias_arc_h, bias_arc_c, mask_d=mask_e, mask_e=mask_e).squeeze(dim=1)
+        else:
+            out_bias_arc = None
+
         # output size [batch, length, type_space]
         enc_type_h = F.elu(self.enc_type_h(output))
         enc_type_c = F.elu(self.enc_type_c(output))
@@ -376,7 +396,7 @@ class StackPtrNet(nn.Module):
         # output size [batch, length, type_space]
         dec_type_c = F.elu(self.dec_type_c(output))
 
-        return src_encoding, arc_c, (enc_type_h, enc_type_c), dec_type_c, hn, mask_e, length_e
+        return src_encoding, arc_c, out_bias_arc, (enc_type_h, enc_type_c), dec_type_c, hn, mask_e, length_e
 
     def _get_decoder_output(self, src_encoding, heads_stack, hx, mask_d=None, length_d=None):
         batch, _, _ = src_encoding.size()
@@ -450,7 +470,7 @@ class StackPtrNet(nn.Module):
 
     def loss(self, input_word, input_char, input_pos, stacked_heads, children, stacked_types, skip_connect=None, mask_e=None, length_e=None, mask_d=None, length_d=None, hx=None):
         # output from encoder [batch, length_encoder, tag_space]
-        src_encoding, arc_c, enc_type, dec_type_c, hn, mask_e, _ = self._get_encoder_output(input_word, input_char, input_pos, mask_e=mask_e, length_e=length_e, hx=hx)
+        src_encoding, arc_c, out_bias_arc, enc_type, dec_type_c, hn, mask_e, _ = self._get_encoder_output(input_word, input_char, input_pos, mask_e=mask_e, length_e=length_e, hx=hx)
 
         batch, max_len_e, _ = arc_c.size()
         # create batch index [batch]
@@ -476,6 +496,14 @@ class StackPtrNet(nn.Module):
         arc_h = arc[:, :max_len_d]
         arc_c = arc[:, max_len_d:]
 
+        # [batch, length_decoder, length_encoder]
+        out_arc = self.attention(arc_h, arc_c, mask_d=mask_d, mask_e=mask_e).squeeze(dim=1)
+
+        if self.biasArc:
+            # get bias arc [batch, length_decoder, length_encoder]
+            out_bias_arc = out_bias_arc[batch_index, stacked_heads.data.t()].transpose(0, 1)
+            out_arc = out_arc + out_bias_arc
+
         dec_type = self.dropout_out(torch.cat([dec_type_h, dec_type_c], dim=1).transpose(1, 2)).transpose(1, 2)
         dec_type_h = dec_type[:, :max_len_d].contiguous()
         dec_type_c = dec_type[:, max_len_d:]
@@ -486,9 +514,6 @@ class StackPtrNet(nn.Module):
         # get vector for encoder type [batch, length_decoder, type_space]
         enc_type_h = enc_type_h[batch_index, stacked_heads.data.t()].transpose(0, 1).contiguous()
         enc_type_c = enc_type_c[batch_index, children.data.t()].transpose(0, 1).contiguous()
-
-        # [batch, length_decoder, length_encoder]
-        out_arc = self.attention(arc_h, arc_c, mask_d=mask_d, mask_e=mask_e).squeeze(dim=1)
 
         # compute output for type [batch, length_decoder, num_labels]
         out_type = self.enc_bilinear(enc_type_h, enc_type_c) + self.dec_bilinear(dec_type_h, dec_type_c)
@@ -551,7 +576,7 @@ class StackPtrNet(nn.Module):
                -loss_type_leaf.sum() / num_leaf, -loss_type_non_leaf.sum() / num_non_leaf, \
                loss_cov.sum() / (num_leaf + num_non_leaf), num_leaf, num_non_leaf
 
-    def _decode_per_sentence(self, src_encoding, arc_c, enc_type, dec_type_c, hx, length, beam, ordered, leading_symbolic):
+    def _decode_per_sentence(self, src_encoding, arc_c, out_bias_arc, enc_type, dec_type_c, hx, length, beam, ordered, leading_symbolic):
         def valid_hyp(base_id, child_id, head):
             if constraints[base_id, child_id]:
                 return False
@@ -567,6 +592,7 @@ class StackPtrNet(nn.Module):
 
         # src_encoding [length, input_size]
         # arc_c [length, arc_space]
+        # out_bias_arc [length, length]
         # enc_type [length, type_space]
         # dec_type_c [length, type_space]
         # hx [num_direction, hidden_size]
@@ -574,6 +600,8 @@ class StackPtrNet(nn.Module):
         if length is not None:
             src_encoding = src_encoding[:length]
             arc_c = arc_c[:length]
+            if self.biasArc:
+                out_bias_arc = out_bias_arc[:length, :length]
             enc_type_h = enc_type_h[:length]
             enc_type_c = enc_type_c[:length]
             dec_type_c = dec_type_c[:length]
@@ -629,6 +657,9 @@ class StackPtrNet(nn.Module):
 
             # [num_hyp, length_encoder]
             out_arc = self.attention(arc_h, arc_c.expand(num_hyp, *arc_c.size())).squeeze(dim=1).squeeze(dim=1)
+            if self.biasArc:
+                out_arc = out_arc + + out_bias_arc[heads]
+
             # [num_hyp, length_encoder]
             hyp_scores = self.logsoftmax(out_arc).data
 
@@ -773,7 +804,7 @@ class StackPtrNet(nn.Module):
         # arc_c [batch, length, arc_space]
         # type_c [batch, length, type_space]
         # hn [num_direction, batch, hidden_size]
-        src_encoding, arc_c, enc_type, dec_type_c, hn, mask, length = self._get_encoder_output(input_word, input_char, input_pos, mask_e=mask, length_e=length, hx=hx)
+        src_encoding, arc_c, out_bias_arc, enc_type, dec_type_c, hn, mask, length = self._get_encoder_output(input_word, input_char, input_pos, mask_e=mask, length_e=length, hx=hx)
         hn = self._transform_decoder_init_state(hn)
         batch, max_len_e, _ = src_encoding.size()
 
@@ -796,9 +827,10 @@ class StackPtrNet(nn.Module):
             else:
                 hx = hn[:, b, :].contiguous()
 
-            preds = self._decode_per_sentence(src_encoding[b], arc_c[b], (enc_type_h[b], enc_type_c[b]), dec_type_c[b], hx, sent_len, beam, True, leading_symbolic)
+            bias_arc = out_bias_arc[b] if self.biasArc else None
+            preds = self._decode_per_sentence(src_encoding[b], arc_c[b], bias_arc, (enc_type_h[b], enc_type_c[b]), dec_type_c[b], hx, sent_len, beam, True, leading_symbolic)
             if preds is None:
-                preds = self._decode_per_sentence(src_encoding[b], arc_c[b], (enc_type_h[b], enc_type_c[b]), dec_type_c[b], hx, sent_len, beam, False, leading_symbolic)
+                preds = self._decode_per_sentence(src_encoding[b], arc_c[b], bias_arc, (enc_type_h[b], enc_type_c[b]), dec_type_c[b], hx, sent_len, beam, False, leading_symbolic)
             hids, tids, sent_len, chids, stids = preds
             heads[b, :sent_len] = hids
             types[b, :sent_len] = tids

@@ -50,6 +50,7 @@ def main():
     args_parser.add_argument('--p_in', type=float, default=0.33, help='dropout rate for input embeddings')
     args_parser.add_argument('--p_out', type=float, default=0.33, help='dropout rate for output layer')
     args_parser.add_argument('--skipConnect', action='store_true', help='use skip connection for decoder RNN.')
+    args_parser.add_argument('--biasArc', action='store_true', help='use biased arc.')
     args_parser.add_argument('--prior_order', choices=['inside_out', 'left2right', 'deep_first', 'shallow_first'], help='prior order of children.', required=True)
     args_parser.add_argument('--schedule', type=int, help='schedule for learning rate decay')
     args_parser.add_argument('--unk_replace', type=float, default=0., help='The rate to replace a singleton word with UNK')
@@ -98,6 +99,7 @@ def main():
     unk_replace = args.unk_replace
     prior_order = args.prior_order
     skipConnect = args.skipConnect
+    biasArc = args.biasArc
     beam = args.beam
     punctuation = args.punctuation
 
@@ -183,7 +185,7 @@ def main():
 
     window = 3
     network = StackPtrNet(word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, num_filters, window, mode, hidden_size, num_layers, num_types, arc_space, type_space,
-                          embedd_word=word_table, embedd_char=char_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn, biaffine=True, prior_order=prior_order, skipConnect=skipConnect)
+                          embedd_word=word_table, embedd_char=char_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn, biaffine=True, prior_order=prior_order, skipConnect=skipConnect, biasArc=biasArc)
 
     if use_gpu:
         network.cuda()
