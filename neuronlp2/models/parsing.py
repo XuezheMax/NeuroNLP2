@@ -658,7 +658,7 @@ class StackPtrNet(nn.Module):
             # [num_hyp, length_encoder]
             out_arc = self.attention(arc_h, arc_c.expand(num_hyp, *arc_c.size())).squeeze(dim=1).squeeze(dim=1)
             if self.biasArc:
-                out_arc = out_arc + + out_bias_arc[heads]
+                out_arc = out_arc + out_bias_arc[heads]
 
             # [num_hyp, length_encoder]
             hyp_scores = self.logsoftmax(out_arc).data
