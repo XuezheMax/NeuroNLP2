@@ -276,7 +276,8 @@ class BiRecurrentConvBiAffine(nn.Module):
 
 class StackPtrNet(nn.Module):
     def __init__(self, word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, num_filters, kernel_size, rnn_mode, hidden_size, num_layers, num_labels, arc_space, type_space,
-                 embedd_word=None, embedd_char=None, embedd_pos=None, p_in=0.2, p_out=0.5, p_rnn=(0.5, 0.5), biaffine=True, prior_order='deep_first', skipConnect=False, biasArc=False):
+                 embedd_word=None, embedd_char=None, embedd_pos=None, p_in=0.2, p_out=0.5, p_rnn=(0.5, 0.5), biaffine=True, prior_order='deep_first', skipConnect=False,
+                 biasArc=False, biasType=False):
 
         super(StackPtrNet, self).__init__()
         self.word_embedd = Embedding(num_words, word_dim, init_embedding=embedd_word)
@@ -296,6 +297,7 @@ class StackPtrNet(nn.Module):
             raise ValueError('Unknown prior order: %s' % prior_order)
         self.skipConnect = skipConnect
         self.biasArc = biasArc
+        self.biasType = biasType
 
         if rnn_mode == 'RNN':
             RNN_ENCODER = VarMaskedRNN
@@ -319,23 +321,13 @@ class StackPtrNet(nn.Module):
                                    batch_first=True, bidirectional=False, dropout=p_rnn)
 
         self.hx_dense = nn.Linear(2 * hidden_size, hidden_size)
-        self.arc_h = nn.Linear(hidden_size, arc_space)  # arc dense for decoder
+        self.arc_h = nn.Linear(hidden_size * 3, arc_space) if self.biasArc else nn.Linear(hidden_size, arc_space)  # arc dense for decoder
         self.arc_c = nn.Linear(hidden_size * 2, arc_space)  # arc dense for encoder
         self.attention = BiAAttention(arc_space, arc_space, 1, biaffine=biaffine)
 
-        # bias layers
-        if self.biasArc:
-            self.bias_arc_h = nn.Linear(hidden_size * 2, arc_space)
-            self.bias_arc_c = nn.Linear(hidden_size * 2, arc_space)
-            self.bias_attention = BiAAttention(arc_space, arc_space, 1, biaffine=biaffine)
-
-        self.enc_type_h = nn.Linear(hidden_size * 2, type_space)
-        self.enc_type_c = nn.Linear(hidden_size * 2, type_space)
-        self.enc_bilinear = BiLinear(type_space, type_space, self.num_labels)
-
-        self.dec_type_h = nn.Linear(hidden_size, type_space)  # type dense for decoder
-        self.dec_type_c = nn.Linear(hidden_size * 2, type_space)  # type dense for encoder
-        self.dec_bilinear = BiLinear(type_space, type_space, self.num_labels)
+        self.type_h = nn.Linear(hidden_size * 3, type_space) if self.biasType else nn.Linear(hidden_size, type_space)  # type dense for decoder
+        self.type_c = nn.Linear(hidden_size * 2, type_space)  # type dense for encoder
+        self.bilinear = BiLinear(type_space, type_space, self.num_labels)
 
         self.logsoftmax = nn.LogSoftmax()
 
@@ -371,32 +363,7 @@ class StackPtrNet(nn.Module):
         # [batch, length, hidden_size] --> [batch, hidden_size, length] --> [batch, length, hidden_size]
         output = self.dropout_out(output.transpose(1, 2)).transpose(1, 2)
 
-        # output size [batch, length, arc_space]
-        arc_c = F.elu(self.arc_c(output))
-
-        # bias
-        if self.biasArc:
-            # output size [batch, length, arc_space]
-            bias_arc_h = F.elu(self.bias_arc_h(output))
-            bias_arc_c = F.elu(self.bias_arc_c(output))
-
-            # apply dropout
-            bias_arc_h, bias_arc_c = self.dropout_out(torch.cat([bias_arc_h, bias_arc_c], dim=1).transpose(1, 2)).transpose(1, 2).chunk(2, 1)
-            # [batch, length, length]
-            out_bias_arc = self.bias_attention(bias_arc_h, bias_arc_c, mask_d=mask_e, mask_e=mask_e).squeeze(dim=1)
-        else:
-            out_bias_arc = None
-
-        # output size [batch, length, type_space]
-        enc_type_h = F.elu(self.enc_type_h(output))
-        enc_type_c = F.elu(self.enc_type_c(output))
-        # apply dropout
-        enc_type_h, enc_type_c = self.dropout_out(torch.cat([enc_type_h, enc_type_c], dim=1).transpose(1, 2)).transpose(1, 2).chunk(2, 1)
-
-        # output size [batch, length, type_space]
-        dec_type_c = F.elu(self.dec_type_c(output))
-
-        return src_encoding, arc_c, out_bias_arc, (enc_type_h, enc_type_c), dec_type_c, hn, mask_e, length_e
+        return src_encoding, output, hn, mask_e, length_e
 
     def _get_decoder_output(self, src_encoding, heads_stack, hx, mask_d=None, length_d=None):
         batch, _, _ = src_encoding.size()
@@ -411,13 +378,7 @@ class StackPtrNet(nn.Module):
         # [batch, length, hidden_size] --> [batch, hidden_size, length] --> [batch, length, hidden_size]
         output = self.dropout_out(output.transpose(1, 2)).transpose(1, 2)
 
-        # output size [batch, length_decoder, arc_space]
-        arc_h = F.elu(self.arc_h(output))
-
-        # output size [batch, length_decoder, type_space]
-        dec_type_h = F.elu(self.dec_type_h(output))
-
-        return arc_h, dec_type_h, hn, mask_d, length_d
+        return output, hn, mask_d, length_d
 
     def _get_decoder_output_with_skip_connect(self, src_encoding, heads_stack, skip_connect, hx, mask_d=None, length_d=None):
         batch, _, _ = src_encoding.size()
@@ -432,13 +393,7 @@ class StackPtrNet(nn.Module):
         # [batch, length, hidden_size] --> [batch, hidden_size, length] --> [batch, length, hidden_size]
         output = self.dropout_out(output.transpose(1, 2)).transpose(1, 2)
 
-        # output size [batch, length_decoder, arc_space]
-        arc_h = F.elu(self.arc_h(output))
-
-        # output size [batch, length_decoder, type_space]
-        dec_type_h = F.elu(self.dec_type_h(output))
-
-        return arc_h, dec_type_h, hn, mask_d, length_d
+        return output, hn, mask_d, length_d
 
     def forward(self, input_word, input_char, input_pos, mask=None, length=None, hx=None):
         raise RuntimeError('Stack Pointer Network does not implement forward')
@@ -470,21 +425,36 @@ class StackPtrNet(nn.Module):
 
     def loss(self, input_word, input_char, input_pos, stacked_heads, children, stacked_types, skip_connect=None, mask_e=None, length_e=None, mask_d=None, length_d=None, hx=None):
         # output from encoder [batch, length_encoder, tag_space]
-        src_encoding, arc_c, out_bias_arc, enc_type, dec_type_c, hn, mask_e, _ = self._get_encoder_output(input_word, input_char, input_pos, mask_e=mask_e, length_e=length_e, hx=hx)
+        src_encoding, output_enc, hn, mask_e, _ = self._get_encoder_output(input_word, input_char, input_pos, mask_e=mask_e, length_e=length_e, hx=hx)
+
+        # output size [batch, length_encoder, arc_space]
+        arc_c = F.elu(self.arc_c(output_enc))
+        # output size [batch, length_encoder, type_space]
+        type_c = F.elu(self.type_c(output_enc))
 
         batch, max_len_e, _ = arc_c.size()
         # create batch index [batch]
         batch_index = torch.arange(0, batch).type_as(arc_c.data).long()
 
-        # transform hn to [num_layers, batch, hidden_size]
         hn = self._transform_decoder_init_state(hn)
         # output from decoder [batch, length_decoder, tag_space]
+        # transform hn to [num_layers, batch, hidden_size]
         if self.skipConnect:
-            arc_h, dec_type_h, _, mask_d, _ = self._get_decoder_output_with_skip_connect(src_encoding, stacked_heads, skip_connect, hn, mask_d=mask_d, length_d=length_d)
-        else:
-            arc_h, dec_type_h, _, mask_d, _ = self._get_decoder_output(src_encoding, stacked_heads, hn, mask_d=mask_d, length_d=length_d)
-        _, max_len_d, _ = arc_h.size()
 
+            output_dec, _, mask_d, _ = self._get_decoder_output_with_skip_connect(src_encoding, stacked_heads, skip_connect, hn, mask_d=mask_d, length_d=length_d)
+        else:
+            output_dec, _, mask_d, _ = self._get_decoder_output(src_encoding, stacked_heads, hn, mask_d=mask_d, length_d=length_d)
+
+        if self.biasArc or self.biasType:
+            # [batch, length_decoder, hidden_size * 2]
+            output_enc = output_enc[batch_index, stacked_heads.data.t()].transpose(0, 1)
+
+        # output size [batch, length_decoder, arc_space]
+        arc_h = F.elu(self.arc_h(torch.cat([output_dec, output_enc], dim=2))) if self.biasArc else F.elu(self.arc_h(output_dec))
+        # output size [batch, length_decoder, type_space]
+        type_h = F.elu(self.type_h(torch.cat([output_dec, output_enc], dim=2))) if self.biasType else F.elu(self.type_h(output_dec))
+
+        _, max_len_d, _ = arc_h.size()
         if mask_d is not None and children.size(1) != mask_d.size(1):
             stacked_heads = stacked_heads[:, :max_len_d]
             children = children[:, :max_len_d]
@@ -496,27 +466,17 @@ class StackPtrNet(nn.Module):
         arc_h = arc[:, :max_len_d]
         arc_c = arc[:, max_len_d:]
 
+        type = self.dropout_out(torch.cat([type_h, type_c], dim=1).transpose(1, 2)).transpose(1, 2)
+        type_h = type[:, :max_len_d].contiguous()
+        type_c = type[:, max_len_d:]
+
         # [batch, length_decoder, length_encoder]
         out_arc = self.attention(arc_h, arc_c, mask_d=mask_d, mask_e=mask_e).squeeze(dim=1)
 
-        if self.biasArc:
-            # get bias arc [batch, length_decoder, length_encoder]
-            out_bias_arc = out_bias_arc[batch_index, stacked_heads.data.t()].transpose(0, 1)
-            out_arc = out_arc + out_bias_arc
-
-        dec_type = self.dropout_out(torch.cat([dec_type_h, dec_type_c], dim=1).transpose(1, 2)).transpose(1, 2)
-        dec_type_h = dec_type[:, :max_len_d].contiguous()
-        dec_type_c = dec_type[:, max_len_d:]
-        # get vector for decoder type [batch, length_decoder, type_space],
-        dec_type_c = dec_type_c[batch_index, children.data.t()].transpose(0, 1).contiguous()
-
-        enc_type_h, enc_type_c = enc_type
-        # get vector for encoder type [batch, length_decoder, type_space]
-        enc_type_h = enc_type_h[batch_index, stacked_heads.data.t()].transpose(0, 1).contiguous()
-        enc_type_c = enc_type_c[batch_index, children.data.t()].transpose(0, 1).contiguous()
-
+        # get vector for heads [batch, length_decoder, type_space],
+        type_c = type_c[batch_index, children.data.t()].transpose(0, 1).contiguous()
         # compute output for type [batch, length_decoder, num_labels]
-        out_type = self.enc_bilinear(enc_type_h, enc_type_c) + self.dec_bilinear(dec_type_h, dec_type_c)
+        out_type = self.bilinear(type_h, type_c)
 
         # mask invalid position to -inf for log_softmax
         if mask_e is not None:
@@ -576,7 +536,7 @@ class StackPtrNet(nn.Module):
                -loss_type_leaf.sum() / num_leaf, -loss_type_non_leaf.sum() / num_non_leaf, \
                loss_cov.sum() / (num_leaf + num_non_leaf), num_leaf, num_non_leaf
 
-    def _decode_per_sentence(self, src_encoding, arc_c, out_bias_arc, enc_type, dec_type_c, hx, length, beam, ordered, leading_symbolic):
+    def _decode_per_sentence(self, src_encoding, output_enc, arc_c, type_c, hx, length, beam, ordered, leading_symbolic, label_score):
         def valid_hyp(base_id, child_id, head):
             if constraints[base_id, child_id]:
                 return False
@@ -591,20 +551,15 @@ class StackPtrNet(nn.Module):
                     return child_id > child_orders[base_id, head]
 
         # src_encoding [length, input_size]
+        # output_enc [length, hidden_size * 2]
         # arc_c [length, arc_space]
-        # out_bias_arc [length, length]
-        # enc_type [length, type_space]
-        # dec_type_c [length, type_space]
+        # type_c [length, type_space]
         # hx [num_direction, hidden_size]
-        enc_type_h, enc_type_c = enc_type
         if length is not None:
             src_encoding = src_encoding[:length]
+            output_enc = output_enc[:length]
             arc_c = arc_c[:length]
-            if self.biasArc:
-                out_bias_arc = out_bias_arc[:length, :length]
-            enc_type_h = enc_type_h[:length]
-            enc_type_c = enc_type_c[:length]
-            dec_type_c = dec_type_c[:length]
+            type_c = type_c[:length]
         else:
             length = src_encoding.size(0)
 
@@ -649,16 +604,13 @@ class StackPtrNet(nn.Module):
             # output [num_hyp, hidden_size]
             # hx [num_layer, num_hyp, hidden_size]
             output, hx = self.decoder.step(input, hx=hx, hs=hs) if self.skipConnect else self.decoder.step(input, hx=hx)
-            # output [num_hyp, hidden_size] --> [num_hyp, 1, hidden_size]
-            output = output.unsqueeze(1)
 
+            # output [num_hyp, hidden_size] + [num_hyp, hidden_size *2] = [num_hyp, hidden_size * 3] --> [num_hyp, 1, hidden_size * 3]
             # arc_h size [num_hyp, 1, arc_space]
-            arc_h = F.elu(self.arc_h(output))
+            arc_h = F.elu(self.arc_h(torch.cat([output, output_enc[heads]], dim=1).unsqueeze(1))) if self.biasArc else F.elu(self.arc_h(output.unsqueeze(1)))
 
             # [num_hyp, length_encoder]
             out_arc = self.attention(arc_h, arc_c.expand(num_hyp, *arc_c.size())).squeeze(dim=1).squeeze(dim=1)
-            if self.biasArc:
-                out_arc = out_arc + out_bias_arc[heads]
 
             # [num_hyp, length_encoder]
             hyp_scores = self.logsoftmax(out_arc).data
@@ -735,30 +687,30 @@ class StackPtrNet(nn.Module):
                 index = torch.from_numpy(np.array(ids)).type_as(base_index)
             base_index = base_index[index]
             child_index = child_index[index]
-            heads = heads[base_index]
 
             # predict types for new hypotheses
+            type_h = F.elu(self.type_h(torch.cat([output, output_enc[heads]], dim=1))) if self.biasType else F.elu(self.type_h(output))
             # [num_hyp, type_space]
-            enc_hyp_type_h = enc_type_h[heads]
-            enc_hyp_type_c = enc_type_c[child_index]
-
-            dec_type_h = F.elu(self.dec_type_h(output)).squeeze(dim=1)
-            # [num_hyp, type_space]
-            dec_hyp_type_h = dec_type_h[base_index]
-            dec_hyp_type_c = dec_type_c[child_index]
+            type_h = type_h[base_index]
 
             # compute output for type [num_hyp, num_labels]
-            out_type = self.enc_bilinear(enc_hyp_type_h, enc_hyp_type_c) + self.dec_bilinear(dec_hyp_type_h, dec_hyp_type_c)
+            out_type = self.bilinear(type_h, type_c[child_index])
+            hyp_type_scores = self.logsoftmax(out_type).data
             # remove the first #leading_symbolic types.
-            out_type = out_type.data[:, leading_symbolic:]
+            hyp_type_scores = hyp_type_scores[:, leading_symbolic:]
             # compute the prediction of types [num_hyp]
-            _, hyp_types = out_type.max(dim=1)
+            hyp_type_scores, hyp_types = hyp_type_scores.max(dim=1)
             hyp_types = hyp_types + leading_symbolic
+
+            if label_score:
+                hypothesis_scores[:num_hyp] = hyp_type_scores[:num_hyp] + hyp_type_scores
+
             for i in range(num_hyp):
                 base_id = base_index[i]
                 new_stacked_types[i] = stacked_types[base_id]
                 new_stacked_types[i, t] = hyp_types[i]
 
+            # TODO add type score to hyp scores.
             stacked_heads = [[new_stacked_heads[i][j] for j in range(len(new_stacked_heads[i]))] for i in range(num_hyp)]
             if self.skipConnect:
                 skip_connects = [[new_skip_connects[i][j] for j in range(len(new_skip_connects[i]))] for i in range(num_hyp)]
@@ -790,12 +742,12 @@ class StackPtrNet(nn.Module):
                 types[child] = type
                 stack.append(child)
             else:
-                # stacked_types[i] = 0
+                stacked_types[i] = 0
                 stack.pop()
 
         return heads, types, length, children, stacked_types
 
-    def decode(self, input_word, input_char, input_pos, mask=None, length=None, hx=None, beam=1, leading_symbolic=0):
+    def decode(self, input_word, input_char, input_pos, mask=None, length=None, hx=None, beam=1, leading_symbolic=0, label_score=False):
         # reset noise for decoder
         self.decoder.reset_noise(0)
 
@@ -804,7 +756,11 @@ class StackPtrNet(nn.Module):
         # arc_c [batch, length, arc_space]
         # type_c [batch, length, type_space]
         # hn [num_direction, batch, hidden_size]
-        src_encoding, arc_c, out_bias_arc, enc_type, dec_type_c, hn, mask, length = self._get_encoder_output(input_word, input_char, input_pos, mask_e=mask, length_e=length, hx=hx)
+        src_encoding, output_enc, hn, mask, length = self._get_encoder_output(input_word, input_char, input_pos, mask_e=mask, length_e=length, hx=hx)
+        # output size [batch, length_encoder, arc_space]
+        arc_c = F.elu(self.arc_c(output_enc))
+        # output size [batch, length_encoder, type_space]
+        type_c = F.elu(self.type_c(output_enc))
         hn = self._transform_decoder_init_state(hn)
         batch, max_len_e, _ = src_encoding.size()
 
@@ -813,8 +769,6 @@ class StackPtrNet(nn.Module):
 
         children = np.zeros([batch, 2 * max_len_e - 1], dtype=np.int32)
         stack_types = np.zeros([batch, 2 * max_len_e - 1], dtype=np.int32)
-
-        enc_type_h, enc_type_c = enc_type
 
         for b in range(batch):
             sent_len = None if length is None else length[b]
@@ -827,10 +781,9 @@ class StackPtrNet(nn.Module):
             else:
                 hx = hn[:, b, :].contiguous()
 
-            bias_arc = out_bias_arc[b] if self.biasArc else None
-            preds = self._decode_per_sentence(src_encoding[b], arc_c[b], bias_arc, (enc_type_h[b], enc_type_c[b]), dec_type_c[b], hx, sent_len, beam, True, leading_symbolic)
+            preds = self._decode_per_sentence(src_encoding[b], output_enc[b], arc_c[b], type_c[b], hx, sent_len, beam, True, leading_symbolic, label_score)
             if preds is None:
-                preds = self._decode_per_sentence(src_encoding[b], arc_c[b], bias_arc, (enc_type_h[b], enc_type_c[b]), dec_type_c[b], hx, sent_len, beam, False, leading_symbolic)
+                preds = self._decode_per_sentence(src_encoding[b], output_enc[b], arc_c[b], type_c[b], hx, sent_len, beam, False, leading_symbolic, label_score)
             hids, tids, sent_len, chids, stids = preds
             heads[b, :sent_len] = hids
             types[b, :sent_len] = tids
