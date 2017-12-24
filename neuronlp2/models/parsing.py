@@ -703,7 +703,7 @@ class StackPtrNet(nn.Module):
             hyp_types = hyp_types + leading_symbolic
 
             if label_score:
-                hypothesis_scores[:num_hyp] = hyp_type_scores[:num_hyp] + hyp_type_scores
+                hypothesis_scores[:num_hyp] = hypothesis_scores[:num_hyp] + hyp_type_scores
 
             for i in range(num_hyp):
                 base_id = base_index[i]
