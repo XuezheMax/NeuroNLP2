@@ -35,6 +35,7 @@ def main():
     args_parser.add_argument('--model_name', help='name for saving model file.', required=True)
     args_parser.add_argument('--punctuation', nargs='+', type=str, help='List of punctuations')
     args_parser.add_argument('--beam', type=int, default=1, help='Beam size for decoding')
+    args_parser.add_argument('--ordered', action='store_true', help='Using order constraints in decoding')
     args_parser.add_argument('--gpu', action='store_true', help='Using GPU')
     args_parser.add_argument('--prior_order', choices=['inside_out', 'left2right', 'deep_first', 'shallow_first'], help='prior order of children.', required=True)
 
@@ -64,11 +65,12 @@ def main():
     use_gpu = args.gpu
     prior_order = args.prior_order
     beam = args.beam
+    ordered = args.ordered
 
     data_test = conllx_stacked_data.read_stacked_data_to_variable(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
                                                                   use_gpu=use_gpu, volatile=True, prior_order=prior_order)
 
-    logger.info('use gpu: %s, beam: %d' % (use_gpu, beam))
+    logger.info('use gpu: %s, beam: %d, ordered: %s' % (use_gpu, beam, ordered))
     punct_set = None
     punctuation = args.punctuation
     if punctuation is not None:
@@ -124,7 +126,8 @@ def main():
         input_encoder, input_decoder = batch
         word, char, pos, heads, types, masks, lengths = input_encoder
         stacked_heads, children, stacked_types, skip_connect, mask_d, lengths_d = input_decoder
-        heads_pred, types_pred, children_pred, stacked_types_pred = network.decode(word, char, pos, mask=masks, length=lengths, beam=beam, leading_symbolic=conllx_stacked_data.NUM_SYMBOLIC_TAGS)
+        heads_pred, types_pred, children_pred, stacked_types_pred = network.decode(word, char, pos, mask=masks, length=lengths, beam=beam, ordered=ordered,
+                                                                                   leading_symbolic=conllx_stacked_data.NUM_SYMBOLIC_TAGS)
 
         stacked_heads = stacked_heads.data
         children = children.data

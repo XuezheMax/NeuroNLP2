@@ -741,7 +741,7 @@ class StackPtrNet(nn.Module):
 
         return heads, types, length, children, stacked_types
 
-    def decode(self, input_word, input_char, input_pos, mask=None, length=None, hx=None, beam=1, leading_symbolic=0):
+    def decode(self, input_word, input_char, input_pos, mask=None, length=None, hx=None, beam=1, leading_symbolic=0, ordered=True):
         # reset noise for decoder
         self.decoder.reset_noise(0)
 
@@ -775,7 +775,7 @@ class StackPtrNet(nn.Module):
             else:
                 hx = hn[:, b, :].contiguous()
 
-            preds = self._decode_per_sentence(src_encoding[b], output_enc[b], arc_c[b], type_c[b], hx, sent_len, beam, True, leading_symbolic)
+            preds = self._decode_per_sentence(src_encoding[b], output_enc[b], arc_c[b], type_c[b], hx, sent_len, beam, ordered, leading_symbolic)
             if preds is None:
                 preds = self._decode_per_sentence(src_encoding[b], output_enc[b], arc_c[b], type_c[b], hx, sent_len, beam, False, leading_symbolic)
             hids, tids, sent_len, chids, stids = preds
