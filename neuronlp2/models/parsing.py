@@ -696,11 +696,8 @@ class StackPtrNet(nn.Module):
             # compute output for type [num_hyp, num_labels]
             out_type = self.bilinear(type_h, type_c[child_index])
             hyp_type_scores = self.logsoftmax(out_type).data
-            # remove the first #leading_symbolic types.
-            hyp_type_scores = hyp_type_scores[:, leading_symbolic:]
             # compute the prediction of types [num_hyp]
             hyp_type_scores, hyp_types = hyp_type_scores.max(dim=1)
-            hyp_types = hyp_types + leading_symbolic
 
             if label_score:
                 hypothesis_scores[:num_hyp] = hypothesis_scores[:num_hyp] + hyp_type_scores
@@ -710,7 +707,6 @@ class StackPtrNet(nn.Module):
                 new_stacked_types[i] = stacked_types[base_id]
                 new_stacked_types[i, t] = hyp_types[i]
 
-            # TODO add type score to hyp scores.
             stacked_heads = [[new_stacked_heads[i][j] for j in range(len(new_stacked_heads[i]))] for i in range(num_hyp)]
             if self.skipConnect:
                 skip_connects = [[new_skip_connects[i][j] for j in range(len(new_skip_connects[i]))] for i in range(num_hyp)]
