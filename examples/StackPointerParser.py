@@ -362,7 +362,7 @@ def main():
         for batch in conllx_stacked_data.iterate_batch_stacked_variable(data_dev, batch_size):
             input_encoder, _ = batch
             word, char, pos, heads, types, masks, lengths = input_encoder
-            heads_pred, types_pred, _, _ = network.decode(word, char, pos, mask=masks, length=lengths, beam=beam, leading_symbolic=conllx_stacked_data.NUM_SYMBOLIC_TAGS, label_score=False)
+            heads_pred, types_pred, _, _ = network.decode(word, char, pos, mask=masks, length=lengths, beam=beam, leading_symbolic=conllx_stacked_data.NUM_SYMBOLIC_TAGS)
 
             word = word.data.cpu().numpy()
             pos = pos.data.cpu().numpy()
@@ -403,74 +403,6 @@ def main():
             dev_ucorr_nopunc, dev_lcorr_nopunc, dev_total_nopunc, dev_ucorr_nopunc * 100 / dev_total_nopunc,
             dev_lcorr_nopunc * 100 / dev_total_nopunc, dev_ucomlpete_nopunc * 100 / dev_total_inst, dev_lcomplete_nopunc * 100 / dev_total_inst))
         print('Root: corr: %d, total: %d, acc: %.2f%%' % (dev_root_corr, dev_total_root, dev_root_corr * 100 / dev_total_root))
-
-        ##################################################
-        # evaluate performance on dev data
-        network.eval()
-        pred_filename = 'tmp/%spred_dev%d' % (str(uid), epoch)
-        pred_writer.start(pred_filename)
-        gold_filename = 'tmp/%sgold_dev%d' % (str(uid), epoch)
-        gold_writer.start(gold_filename)
-
-        dev_ucorr = 0.0
-        dev_lcorr = 0.0
-        dev_total = 0
-        dev_ucomlpete = 0.0
-        dev_lcomplete = 0.0
-        dev_ucorr_nopunc = 0.0
-        dev_lcorr_nopunc = 0.0
-        dev_total_nopunc = 0
-        dev_ucomlpete_nopunc = 0.0
-        dev_lcomplete_nopunc = 0.0
-        dev_root_corr = 0.0
-        dev_total_root = 0.0
-        dev_total_inst = 0.0
-        for batch in conllx_stacked_data.iterate_batch_stacked_variable(data_dev, batch_size):
-            input_encoder, _ = batch
-            word, char, pos, heads, types, masks, lengths = input_encoder
-            heads_pred, types_pred, _, _ = network.decode(word, char, pos, mask=masks, length=lengths, beam=beam, leading_symbolic=conllx_stacked_data.NUM_SYMBOLIC_TAGS, label_score=True)
-
-            word = word.data.cpu().numpy()
-            pos = pos.data.cpu().numpy()
-            lengths = lengths.cpu().numpy()
-            heads = heads.data.cpu().numpy()
-            types = types.data.cpu().numpy()
-
-            pred_writer.write(word, pos, heads_pred, types_pred, lengths, symbolic_root=True)
-            gold_writer.write(word, pos, heads, types, lengths, symbolic_root=True)
-
-            stats, stats_nopunc, stats_root, num_inst = parser.eval(word, pos, heads_pred, types_pred, heads, types, word_alphabet, pos_alphabet, lengths, punct_set=punct_set, symbolic_root=True)
-            ucorr, lcorr, total, ucm, lcm = stats
-            ucorr_nopunc, lcorr_nopunc, total_nopunc, ucm_nopunc, lcm_nopunc = stats_nopunc
-            corr_root, total_root = stats_root
-
-            dev_ucorr += ucorr
-            dev_lcorr += lcorr
-            dev_total += total
-            dev_ucomlpete += ucm
-            dev_lcomplete += lcm
-
-            dev_ucorr_nopunc += ucorr_nopunc
-            dev_lcorr_nopunc += lcorr_nopunc
-            dev_total_nopunc += total_nopunc
-            dev_ucomlpete_nopunc += ucm_nopunc
-            dev_lcomplete_nopunc += lcm_nopunc
-
-            dev_root_corr += corr_root
-            dev_total_root += total_root
-
-            dev_total_inst += num_inst
-
-        pred_writer.close()
-        gold_writer.close()
-        print('W. Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%, ucm: %.2f%%, lcm: %.2f%%' % (
-            dev_ucorr, dev_lcorr, dev_total, dev_ucorr * 100 / dev_total, dev_lcorr * 100 / dev_total, dev_ucomlpete * 100 / dev_total_inst, dev_lcomplete * 100 / dev_total_inst))
-        print('Wo Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%, ucm: %.2f%%, lcm: %.2f%%' % (
-            dev_ucorr_nopunc, dev_lcorr_nopunc, dev_total_nopunc, dev_ucorr_nopunc * 100 / dev_total_nopunc,
-            dev_lcorr_nopunc * 100 / dev_total_nopunc, dev_ucomlpete_nopunc * 100 / dev_total_inst, dev_lcomplete_nopunc * 100 / dev_total_inst))
-        print('Root: corr: %d, total: %d, acc: %.2f%%' % (dev_root_corr, dev_total_root, dev_root_corr * 100 / dev_total_root))
-
-        #######################################################
 
         if dev_ucorrect_nopunc <= dev_ucorr_nopunc:
             dev_ucorrect_nopunc = dev_ucorr_nopunc

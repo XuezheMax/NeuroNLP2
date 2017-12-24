@@ -536,7 +536,7 @@ class StackPtrNet(nn.Module):
                -loss_type_leaf.sum() / num_leaf, -loss_type_non_leaf.sum() / num_non_leaf, \
                loss_cov.sum() / (num_leaf + num_non_leaf), num_leaf, num_non_leaf
 
-    def _decode_per_sentence(self, src_encoding, output_enc, arc_c, type_c, hx, length, beam, ordered, leading_symbolic, label_score):
+    def _decode_per_sentence(self, src_encoding, output_enc, arc_c, type_c, hx, length, beam, ordered, leading_symbolic):
         def valid_hyp(base_id, child_id, head):
             if constraints[base_id, child_id]:
                 return False
@@ -698,9 +698,7 @@ class StackPtrNet(nn.Module):
             hyp_type_scores = self.logsoftmax(out_type).data
             # compute the prediction of types [num_hyp]
             hyp_type_scores, hyp_types = hyp_type_scores.max(dim=1)
-
-            if label_score:
-                hypothesis_scores[:num_hyp] = hypothesis_scores[:num_hyp] + hyp_type_scores
+            hypothesis_scores[:num_hyp] = hypothesis_scores[:num_hyp] + hyp_type_scores
 
             for i in range(num_hyp):
                 base_id = base_index[i]
@@ -743,7 +741,7 @@ class StackPtrNet(nn.Module):
 
         return heads, types, length, children, stacked_types
 
-    def decode(self, input_word, input_char, input_pos, mask=None, length=None, hx=None, beam=1, leading_symbolic=0, label_score=False):
+    def decode(self, input_word, input_char, input_pos, mask=None, length=None, hx=None, beam=1, leading_symbolic=0):
         # reset noise for decoder
         self.decoder.reset_noise(0)
 
@@ -777,9 +775,9 @@ class StackPtrNet(nn.Module):
             else:
                 hx = hn[:, b, :].contiguous()
 
-            preds = self._decode_per_sentence(src_encoding[b], output_enc[b], arc_c[b], type_c[b], hx, sent_len, beam, True, leading_symbolic, label_score)
+            preds = self._decode_per_sentence(src_encoding[b], output_enc[b], arc_c[b], type_c[b], hx, sent_len, beam, True, leading_symbolic)
             if preds is None:
-                preds = self._decode_per_sentence(src_encoding[b], output_enc[b], arc_c[b], type_c[b], hx, sent_len, beam, False, leading_symbolic, label_score)
+                preds = self._decode_per_sentence(src_encoding[b], output_enc[b], arc_c[b], type_c[b], hx, sent_len, beam, False, leading_symbolic)
             hids, tids, sent_len, chids, stids = preds
             heads[b, :sent_len] = hids
             types[b, :sent_len] = tids
