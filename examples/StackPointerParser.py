@@ -45,6 +45,7 @@ def main():
     args_parser.add_argument('--decay_rate', type=float, default=0.5, help='Decay rate of learning rate')
     args_parser.add_argument('--clip', type=float, default=5.0, help='gradient clipping')
     args_parser.add_argument('--gamma', type=float, default=0.0, help='weight for regularization')
+    args_parser.add_argument('--epsilon', type=float, default=1e-8, help='epsilon for adam or adamax')
     args_parser.add_argument('--coverage', type=float, default=0.0, help='weight for coverage loss')
     args_parser.add_argument('--p_rnn', nargs=2, type=float, required=True, help='dropout rate for RNN')
     args_parser.add_argument('--p_in', type=float, default=0.33, help='dropout rate for input embeddings')
@@ -88,7 +89,7 @@ def main():
     opt = args.opt
     momentum = 0.9
     betas = (0.9, 0.9)
-    eps = 1e-6
+    eps = args.epsilon
     decay_rate = args.decay_rate
     clip = args.clip
     gamma = args.gamma
