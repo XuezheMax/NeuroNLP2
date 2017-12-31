@@ -53,6 +53,7 @@ def main():
     args_parser.add_argument('--skipConnect', action='store_true', help='use skip connection for decoder RNN.')
     args_parser.add_argument('--biasArc', action='store_true', help='use biased arc.')
     args_parser.add_argument('--biasType', action='store_true', help='use biased type.')
+    args_parser.add_argument('--grandPar', action='store_true', help='use grand parent.')
     args_parser.add_argument('--prior_order', choices=['inside_out', 'left2right', 'deep_first', 'shallow_first'], help='prior order of children.', required=True)
     args_parser.add_argument('--schedule', type=int, help='schedule for learning rate decay')
     args_parser.add_argument('--unk_replace', type=float, default=0., help='The rate to replace a singleton word with UNK')
@@ -103,6 +104,7 @@ def main():
     skipConnect = args.skipConnect
     biasArc = args.biasArc
     biasType = args.biasType
+    grandPar = args.grandPar
     beam = args.beam
     punctuation = args.punctuation
 
@@ -189,7 +191,7 @@ def main():
     window = 3
     network = StackPtrNet(word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, num_filters, window, mode, hidden_size, num_layers, num_types, arc_space, type_space,
                           embedd_word=word_table, embedd_char=char_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn, biaffine=True, prior_order=prior_order, skipConnect=skipConnect,
-                          biasArc=biasArc, biasType=biasType)
+                          biasArc=biasArc, biasType=biasType, grandPar=grandPar)
 
     if use_gpu:
         network.cuda()
@@ -220,7 +222,7 @@ def main():
     logger.info("Embedding dim: word=%d, char=%d, pos=%d" % (word_dim, char_dim, pos_dim))
     logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, arc_space=%d, type_space=%d" % (mode, num_layers, hidden_size, num_filters, arc_space, type_space))
     logger.info("train: cov: %.1f, (#data: %d, batch: %d, clip: %.2f, dropout(in, out, rnn): (%.2f, %.2f, %s), unk_repl: %.2f)" % (cov, num_data, batch_size, clip, p_in, p_out, p_rnn, unk_replace))
-    logger.info('prior order: %s, bias arc: %s, bias type: %s, skip connect: %s, beam: %d' % (prior_order, biasArc, biasType, skipConnect, beam))
+    logger.info('prior order: %s, bias arc: %s, grand parent: %s, bias type: %s, skip connect: %s, beam: %d' % (prior_order, biasArc, grandPar, biasType, skipConnect, beam))
     logger.info(opt_info)
 
     num_batches = num_data / batch_size + 1
@@ -275,7 +277,7 @@ def main():
             optim.zero_grad()
             loss_arc_leaf, loss_arc_non_leaf, \
             loss_type_leaf, loss_type_non_leaf, \
-            loss_cov, num_leaf, num_non_leaf = network.loss(word, char, pos, stacked_heads, children, stacked_types, skip_connect=skip_connect,
+            loss_cov, num_leaf, num_non_leaf = network.loss(word, char, pos, heads, stacked_heads, children, stacked_types, skip_connect=skip_connect,
                                                             mask_e=masks_e, length_e=lengths_e, mask_d=masks_d, length_d=lengths_d)
             loss_arc = loss_arc_leaf + loss_arc_non_leaf
             loss_type = loss_type_leaf + loss_type_non_leaf
