@@ -125,7 +125,7 @@ def main():
 
         input_encoder, input_decoder = batch
         word, char, pos, heads, types, masks, lengths = input_encoder
-        stacked_heads, children, stacked_types, skip_connect, mask_d, lengths_d = input_decoder
+        stacked_heads, children, siblings, stacked_types, skip_connect, mask_d, lengths_d = input_decoder
         heads_pred, types_pred, children_pred, stacked_types_pred = network.decode(word, char, pos, mask=masks, length=lengths, beam=beam, ordered=ordered,
                                                                                    leading_symbolic=conllx_stacked_data.NUM_SYMBOLIC_TAGS)
 
