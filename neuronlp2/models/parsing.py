@@ -655,7 +655,7 @@ class StackPtrNet(nn.Module):
                 output_arc = torch.cat([output_arc, output_enc[gpars]], dim=1)
             if self.sibling:
                 mask_sibs = Variable(sibs.ne(0).float().unsqueeze(1))
-                output_arc = torch.cat([output_arc, output_enc[sibs]] * mask_sibs, dim=1)
+                output_arc = torch.cat([output_arc, output_enc[sibs] * mask_sibs], dim=1)
 
             # output [num_hyp, hidden_size] + [num_hyp, hidden_size *2] = [num_hyp, hidden_size * 3] --> [num_hyp, 1, hidden_size * 3]
             # arc_h size [num_hyp, 1, arc_space]
