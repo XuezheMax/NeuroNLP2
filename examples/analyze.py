@@ -36,6 +36,7 @@ def main():
     args_parser.add_argument('--punctuation', nargs='+', type=str, help='List of punctuations')
     args_parser.add_argument('--beam', type=int, default=1, help='Beam size for decoding')
     args_parser.add_argument('--ordered', action='store_true', help='Using order constraints in decoding')
+    args_parser.add_argument('--display', action='store_true', help='Display wrong examples')
     args_parser.add_argument('--gpu', action='store_true', help='Using GPU')
     args_parser.add_argument('--prior_order', choices=['inside_out', 'left2right', 'deep_first', 'shallow_first'], help='prior order of children.', required=True)
 
@@ -66,6 +67,7 @@ def main():
     prior_order = args.prior_order
     beam = args.beam
     ordered = args.ordered
+    display_inst = args.display
 
     data_test = conllx_stacked_data.read_stacked_data_to_variable(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
                                                                   use_gpu=use_gpu, volatile=True, prior_order=prior_order)
@@ -220,8 +222,6 @@ def main():
         test_ucorrect_stack_non_leaf * 100 / test_non_leaf, test_lcorrect_stack_non_leaf * 100 / test_non_leaf))
     print('============================================================================================================================')
 
-    raw_input()
-
     def analyze():
         np.set_printoptions(linewidth=100000)
         pred_path = 'tmp/analyze_pred'
@@ -259,28 +259,31 @@ def main():
 
                 loss_gold, loss_gold_arc, loss_gold_type = calc_loss(network, word, char, pos, gold_heads, gold_stacked_heads, gold_children, gold_stacked_types,
                                                                      gold_skip_connect, masks, lengths, gold_mask_d, gold_lengths_d)
-                print('pred(arc, type): %.4f (%.4f, %.4f), gold(arc, type): %.4f (%.4f, %.4f)' % (loss_pred, loss_pred_arc, loss_pred_type, loss_gold, loss_gold_arc, loss_gold_type))
-                word = word[0].data.cpu().numpy()
-                pos = pos[0].data.cpu().numpy()
-                head_gold = gold_heads[0].data.cpu().numpy()
-                type_gold = gold_types[0].data.cpu().numpy()
-                head_pred = pred_heads[0].data.cpu().numpy()
-                type_pred = pred_types[0].data.cpu().numpy()
-                display(word, pos, head_gold, type_gold, head_pred, type_pred, lengths[0], word_alphabet, pos_alphabet, type_alphabet)
 
-                length_dec = gold_lengths_d[0]
-                gold_display = np.empty([3, length_dec])
-                gold_display[0] = gold_stacked_types.data[0].cpu().numpy()[:length_dec]
-                gold_display[1] = gold_children.data[0].cpu().numpy()[:length_dec]
-                gold_display[2] = gold_stacked_heads.data[0].cpu().numpy()[:length_dec]
-                print(gold_display)
-                print('--------------------------------------------------------')
-                pred_display = np.empty([3, pred_lengths_d[0]])[:length_dec]
-                pred_display[0] = pred_stacked_types.data[0].cpu().numpy()[:length_dec]
-                pred_display[1] = pred_children.data[0].cpu().numpy()[:length_dec]
-                pred_display[2] = pred_stacked_heads.data[0].cpu().numpy()[:length_dec]
-                print(pred_display)
-                print('========================================================')
+                if display_inst:
+                    print('pred(arc, type): %.4f (%.4f, %.4f), gold(arc, type): %.4f (%.4f, %.4f)' % (loss_pred, loss_pred_arc, loss_pred_type, loss_gold, loss_gold_arc, loss_gold_type))
+                    word = word[0].data.cpu().numpy()
+                    pos = pos[0].data.cpu().numpy()
+                    head_gold = gold_heads[0].data.cpu().numpy()
+                    type_gold = gold_types[0].data.cpu().numpy()
+                    head_pred = pred_heads[0].data.cpu().numpy()
+                    type_pred = pred_types[0].data.cpu().numpy()
+                    display(word, pos, head_gold, type_gold, head_pred, type_pred, lengths[0], word_alphabet, pos_alphabet, type_alphabet)
+
+                    length_dec = gold_lengths_d[0]
+                    gold_display = np.empty([3, length_dec])
+                    gold_display[0] = gold_stacked_types.data[0].cpu().numpy()[:length_dec]
+                    gold_display[1] = gold_children.data[0].cpu().numpy()[:length_dec]
+                    gold_display[2] = gold_stacked_heads.data[0].cpu().numpy()[:length_dec]
+                    print(gold_display)
+                    print('--------------------------------------------------------')
+                    pred_display = np.empty([3, pred_lengths_d[0]])[:length_dec]
+                    pred_display[0] = pred_stacked_types.data[0].cpu().numpy()[:length_dec]
+                    pred_display[1] = pred_children.data[0].cpu().numpy()[:length_dec]
+                    pred_display[2] = pred_stacked_heads.data[0].cpu().numpy()[:length_dec]
+                    print(pred_display)
+                    print('========================================================')
+                    raw_input()
 
                 if ucorr_stack == num_stack:
                     type_err += 1
