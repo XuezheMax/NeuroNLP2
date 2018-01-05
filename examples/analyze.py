@@ -127,7 +127,7 @@ def main():
 
         input_encoder, input_decoder = batch
         word, char, pos, heads, types, masks, lengths = input_encoder
-        stacked_heads, children, stacked_types, skip_connect, mask_d, lengths_d = input_decoder
+        stacked_heads, children, siblings, stacked_types, skip_connect, mask_d, lengths_d = input_decoder
         heads_pred, types_pred, children_pred, stacked_types_pred = network.decode(word, char, pos, mask=masks, length=lengths, beam=beam, ordered=ordered,
                                                                                    leading_symbolic=conllx_stacked_data.NUM_SYMBOLIC_TAGS)
 
@@ -238,11 +238,11 @@ def main():
         for gold, pred in zip(gold_iter, test_iter):
             gold_encoder, gold_decoder = gold
             word, char, pos, gold_heads, gold_types, masks, lengths = gold_encoder
-            gold_stacked_heads, gold_children, gold_stacked_types, gold_skip_connect, gold_mask_d, gold_lengths_d = gold_decoder
+            gold_stacked_heads, gold_children, gold_siblings, gold_stacked_types, gold_skip_connect, gold_mask_d, gold_lengths_d = gold_decoder
 
             pred_encoder, pred_decoder = pred
             _, _, _, pred_heads, pred_types, _, _ = pred_encoder
-            pred_stacked_heads, pred_children, pred_stacked_types, pred_skip_connect, pred_mask_d, pred_lengths_d = pred_decoder
+            pred_stacked_heads, pred_children, pred_siblings, pred_stacked_types, pred_skip_connect, pred_mask_d, pred_lengths_d = pred_decoder
 
             assert gold_heads.size() == pred_heads.size(), 'sentence dis-match.'
 
@@ -253,10 +253,10 @@ def main():
             num_stack = gold_mask_d.data.sum()
 
             if lcorr_stack < num_stack:
-                loss_pred, loss_pred_arc, loss_pred_type = calc_loss(network, word, char, pos, pred_heads, pred_stacked_heads, pred_children, pred_stacked_types,
+                loss_pred, loss_pred_arc, loss_pred_type = calc_loss(network, word, char, pos, pred_heads, pred_stacked_heads, pred_children, pred_siblings, pred_stacked_types,
                                                                      pred_skip_connect, masks, lengths, pred_mask_d, pred_lengths_d)
 
-                loss_gold, loss_gold_arc, loss_gold_type = calc_loss(network, word, char, pos, gold_heads, gold_stacked_heads, gold_children, gold_stacked_types,
+                loss_gold, loss_gold_arc, loss_gold_type = calc_loss(network, word, char, pos, gold_heads, gold_stacked_heads, gold_children, gold_siblings, gold_stacked_types,
                                                                      gold_skip_connect, masks, lengths, gold_mask_d, gold_lengths_d)
 
                 if display_inst:
@@ -298,10 +298,10 @@ def main():
     analyze()
 
 
-def calc_loss(network, word, char, pos, heads, stacked_heads, children, stacked_types, skip_connect, mask_e, length_e, mask_d, length_d):
+def calc_loss(network, word, char, pos, heads, stacked_heads, children, sibling, stacked_types, skip_connect, mask_e, length_e, mask_d, length_d):
     loss_arc_leaf, loss_arc_non_leaf, \
     loss_type_leaf, loss_type_non_leaf, \
-    loss_cov, num_leaf, num_non_leaf = network.loss(word, char, pos, stacked_heads, children, stacked_types, skip_connect=skip_connect,
+    loss_cov, num_leaf, num_non_leaf = network.loss(word, char, pos, heads, stacked_heads, children, sibling, stacked_types, skip_connect=skip_connect,
                                                     mask_e=mask_e, length_e=length_e, mask_d=mask_d, length_d=length_d)
 
     num_leaf = num_leaf.data[0]
