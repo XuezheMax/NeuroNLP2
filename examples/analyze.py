@@ -114,111 +114,111 @@ def main():
     test_leaf = 0
     test_non_leaf = 0
 
-    pred_writer.start('tmp/analyze_pred')
-    gold_writer.start('tmp/analyze_gold')
-    sent = 0
-    start_time = time.time()
-    for batch in conllx_stacked_data.iterate_batch_stacked_variable(data_test, 1):
-        sys.stdout.write('%d, ' % sent)
-        sys.stdout.flush()
-        sent += 1
-
-        input_encoder, input_decoder = batch
-        word, char, pos, heads, types, masks, lengths = input_encoder
-        stacked_heads, children, stacked_types, skip_connect, mask_d, lengths_d = input_decoder
-        heads_pred, types_pred, children_pred, stacked_types_pred = network.decode(word, char, pos, mask=masks, length=lengths, beam=beam, ordered=ordered,
-                                                                                   leading_symbolic=conllx_stacked_data.NUM_SYMBOLIC_TAGS)
-
-        stacked_heads = stacked_heads.data
-        children = children.data
-        stacked_types = stacked_types.data
-        children_pred = torch.from_numpy(children_pred).long()
-        stacked_types_pred = torch.from_numpy(stacked_types_pred).long()
-        if use_gpu:
-            children_pred = children_pred.cuda()
-            stacked_types_pred = stacked_types_pred.cuda()
-        mask_d = mask_d.data
-        mask_leaf = torch.eq(children, stacked_heads).float()
-        mask_non_leaf = (1.0 - mask_leaf)
-        mask_leaf = mask_leaf * mask_d
-        mask_non_leaf = mask_non_leaf * mask_d
-        num_leaf = mask_leaf.sum()
-        num_non_leaf = mask_non_leaf.sum()
-
-        ucorr_stack = torch.eq(children_pred, children).float()
-        lcorr_stack = ucorr_stack * torch.eq(stacked_types_pred, stacked_types).float()
-        ucorr_stack_leaf = (ucorr_stack * mask_leaf).sum()
-        ucorr_stack_non_leaf = (ucorr_stack * mask_non_leaf).sum()
-
-        lcorr_stack_leaf = (lcorr_stack * mask_leaf).sum()
-        lcorr_stack_non_leaf = (lcorr_stack * mask_non_leaf).sum()
-
-        test_ucorrect_stack_leaf += ucorr_stack_leaf
-        test_ucorrect_stack_non_leaf += ucorr_stack_non_leaf
-        test_lcorrect_stack_leaf += lcorr_stack_leaf
-        test_lcorrect_stack_non_leaf += lcorr_stack_non_leaf
-
-        test_leaf += num_leaf
-        test_non_leaf += num_non_leaf
-
-        # ------------------------------------------------------------------------------------------------
-
-        word = word.data.cpu().numpy()
-        pos = pos.data.cpu().numpy()
-        lengths = lengths.cpu().numpy()
-        heads = heads.data.cpu().numpy()
-        types = types.data.cpu().numpy()
-
-        pred_writer.write(word, pos, heads_pred, types_pred, lengths, symbolic_root=True)
-        gold_writer.write(word, pos, heads, types, lengths, symbolic_root=True)
-
-        stats, stats_nopunc, stats_root, num_inst = parser.eval(word, pos, heads_pred, types_pred, heads, types,
-                                                                word_alphabet, pos_alphabet, lengths,
-                                                                punct_set=punct_set, symbolic_root=True)
-        ucorr, lcorr, total, ucm, lcm = stats
-        ucorr_nopunc, lcorr_nopunc, total_nopunc, ucm_nopunc, lcm_nopunc = stats_nopunc
-        corr_root, total_root = stats_root
-
-        test_ucorrect += ucorr
-        test_lcorrect += lcorr
-        test_total += total
-        test_ucomlpete_match += ucm
-        test_lcomplete_match += lcm
-
-        test_ucorrect_nopunc += ucorr_nopunc
-        test_lcorrect_nopunc += lcorr_nopunc
-        test_total_nopunc += total_nopunc
-        test_ucomlpete_match_nopunc += ucm_nopunc
-        test_lcomplete_match_nopunc += lcm_nopunc
-
-        test_root_correct += corr_root
-        test_total_root += total_root
-
-        test_total_inst += num_inst
-
-    pred_writer.close()
-    gold_writer.close()
-
-    print('\ntime: %.2fs' % (time.time() - start_time))
-
-    print('test W. Punct:  ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%, ucm: %.2f%%, lcm: %.2f%%' % (
-        test_ucorrect, test_lcorrect, test_total, test_ucorrect * 100 / test_total, test_lcorrect * 100 / test_total,
-        test_ucomlpete_match * 100 / test_total_inst, test_lcomplete_match * 100 / test_total_inst))
-    print('test Wo Punct:  ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%, ucm: %.2f%%, lcm: %.2f%%' % (
-        test_ucorrect_nopunc, test_lcorrect_nopunc, test_total_nopunc,
-        test_ucorrect_nopunc * 100 / test_total_nopunc, test_lcorrect_nopunc * 100 / test_total_nopunc,
-        test_ucomlpete_match_nopunc * 100 / test_total_inst, test_lcomplete_match_nopunc * 100 / test_total_inst))
-    print('test Root: corr: %d, total: %d, acc: %.2f%%' % (
-        test_root_correct, test_total_root, test_root_correct * 100 / test_total_root))
-    print('============================================================================================================================')
-
-    print('Stack leaf:     ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%' % (
-        test_ucorrect_stack_leaf, test_lcorrect_stack_leaf, test_leaf,
-        test_ucorrect_stack_leaf * 100 / test_leaf, test_lcorrect_stack_leaf * 100 / test_leaf))
-    print('Stack non_leaf: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%' % (
-        test_ucorrect_stack_non_leaf, test_lcorrect_stack_non_leaf, test_non_leaf,
-        test_ucorrect_stack_non_leaf * 100 / test_non_leaf, test_lcorrect_stack_non_leaf * 100 / test_non_leaf))
-    print('============================================================================================================================')
+    # pred_writer.start('tmp/analyze_pred')
+    # gold_writer.start('tmp/analyze_gold')
+    # sent = 0
+    # start_time = time.time()
+    # for batch in conllx_stacked_data.iterate_batch_stacked_variable(data_test, 1):
+    #     sys.stdout.write('%d, ' % sent)
+    #     sys.stdout.flush()
+    #     sent += 1
+    #
+    #     input_encoder, input_decoder = batch
+    #     word, char, pos, heads, types, masks, lengths = input_encoder
+    #     stacked_heads, children, stacked_types, skip_connect, mask_d, lengths_d = input_decoder
+    #     heads_pred, types_pred, children_pred, stacked_types_pred = network.decode(word, char, pos, mask=masks, length=lengths, beam=beam, ordered=ordered,
+    #                                                                                leading_symbolic=conllx_stacked_data.NUM_SYMBOLIC_TAGS)
+    #
+    #     stacked_heads = stacked_heads.data
+    #     children = children.data
+    #     stacked_types = stacked_types.data
+    #     children_pred = torch.from_numpy(children_pred).long()
+    #     stacked_types_pred = torch.from_numpy(stacked_types_pred).long()
+    #     if use_gpu:
+    #         children_pred = children_pred.cuda()
+    #         stacked_types_pred = stacked_types_pred.cuda()
+    #     mask_d = mask_d.data
+    #     mask_leaf = torch.eq(children, stacked_heads).float()
+    #     mask_non_leaf = (1.0 - mask_leaf)
+    #     mask_leaf = mask_leaf * mask_d
+    #     mask_non_leaf = mask_non_leaf * mask_d
+    #     num_leaf = mask_leaf.sum()
+    #     num_non_leaf = mask_non_leaf.sum()
+    #
+    #     ucorr_stack = torch.eq(children_pred, children).float()
+    #     lcorr_stack = ucorr_stack * torch.eq(stacked_types_pred, stacked_types).float()
+    #     ucorr_stack_leaf = (ucorr_stack * mask_leaf).sum()
+    #     ucorr_stack_non_leaf = (ucorr_stack * mask_non_leaf).sum()
+    #
+    #     lcorr_stack_leaf = (lcorr_stack * mask_leaf).sum()
+    #     lcorr_stack_non_leaf = (lcorr_stack * mask_non_leaf).sum()
+    #
+    #     test_ucorrect_stack_leaf += ucorr_stack_leaf
+    #     test_ucorrect_stack_non_leaf += ucorr_stack_non_leaf
+    #     test_lcorrect_stack_leaf += lcorr_stack_leaf
+    #     test_lcorrect_stack_non_leaf += lcorr_stack_non_leaf
+    #
+    #     test_leaf += num_leaf
+    #     test_non_leaf += num_non_leaf
+    #
+    #     # ------------------------------------------------------------------------------------------------
+    #
+    #     word = word.data.cpu().numpy()
+    #     pos = pos.data.cpu().numpy()
+    #     lengths = lengths.cpu().numpy()
+    #     heads = heads.data.cpu().numpy()
+    #     types = types.data.cpu().numpy()
+    #
+    #     pred_writer.write(word, pos, heads_pred, types_pred, lengths, symbolic_root=True)
+    #     gold_writer.write(word, pos, heads, types, lengths, symbolic_root=True)
+    #
+    #     stats, stats_nopunc, stats_root, num_inst = parser.eval(word, pos, heads_pred, types_pred, heads, types,
+    #                                                             word_alphabet, pos_alphabet, lengths,
+    #                                                             punct_set=punct_set, symbolic_root=True)
+    #     ucorr, lcorr, total, ucm, lcm = stats
+    #     ucorr_nopunc, lcorr_nopunc, total_nopunc, ucm_nopunc, lcm_nopunc = stats_nopunc
+    #     corr_root, total_root = stats_root
+    #
+    #     test_ucorrect += ucorr
+    #     test_lcorrect += lcorr
+    #     test_total += total
+    #     test_ucomlpete_match += ucm
+    #     test_lcomplete_match += lcm
+    #
+    #     test_ucorrect_nopunc += ucorr_nopunc
+    #     test_lcorrect_nopunc += lcorr_nopunc
+    #     test_total_nopunc += total_nopunc
+    #     test_ucomlpete_match_nopunc += ucm_nopunc
+    #     test_lcomplete_match_nopunc += lcm_nopunc
+    #
+    #     test_root_correct += corr_root
+    #     test_total_root += total_root
+    #
+    #     test_total_inst += num_inst
+    #
+    # pred_writer.close()
+    # gold_writer.close()
+    #
+    # print('\ntime: %.2fs' % (time.time() - start_time))
+    #
+    # print('test W. Punct:  ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%, ucm: %.2f%%, lcm: %.2f%%' % (
+    #     test_ucorrect, test_lcorrect, test_total, test_ucorrect * 100 / test_total, test_lcorrect * 100 / test_total,
+    #     test_ucomlpete_match * 100 / test_total_inst, test_lcomplete_match * 100 / test_total_inst))
+    # print('test Wo Punct:  ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%, ucm: %.2f%%, lcm: %.2f%%' % (
+    #     test_ucorrect_nopunc, test_lcorrect_nopunc, test_total_nopunc,
+    #     test_ucorrect_nopunc * 100 / test_total_nopunc, test_lcorrect_nopunc * 100 / test_total_nopunc,
+    #     test_ucomlpete_match_nopunc * 100 / test_total_inst, test_lcomplete_match_nopunc * 100 / test_total_inst))
+    # print('test Root: corr: %d, total: %d, acc: %.2f%%' % (
+    #     test_root_correct, test_total_root, test_root_correct * 100 / test_total_root))
+    # print('============================================================================================================================')
+    #
+    # print('Stack leaf:     ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%' % (
+    #     test_ucorrect_stack_leaf, test_lcorrect_stack_leaf, test_leaf,
+    #     test_ucorrect_stack_leaf * 100 / test_leaf, test_lcorrect_stack_leaf * 100 / test_leaf))
+    # print('Stack non_leaf: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%' % (
+    #     test_ucorrect_stack_non_leaf, test_lcorrect_stack_non_leaf, test_non_leaf,
+    #     test_ucorrect_stack_non_leaf * 100 / test_non_leaf, test_lcorrect_stack_non_leaf * 100 / test_non_leaf))
+    # print('============================================================================================================================')
 
     def analyze():
         pred_path = 'tmp/analyze_pred'
@@ -290,7 +290,7 @@ def main():
 def calc_loss(network, word, char, pos, heads, stacked_heads, children, stacked_types, skip_connect, mask_e, length_e, mask_d, length_d):
     loss_arc_leaf, loss_arc_non_leaf, \
     loss_type_leaf, loss_type_non_leaf, \
-    loss_cov, num_leaf, num_non_leaf = network.loss(word, char, pos, heads, stacked_heads, children, stacked_types, skip_connect=skip_connect,
+    loss_cov, num_leaf, num_non_leaf = network.loss(word, char, pos, stacked_heads, children, stacked_types, skip_connect=skip_connect,
                                                     mask_e=mask_e, length_e=length_e, mask_d=mask_d, length_d=length_d)
 
     num_leaf = num_leaf.data[0]
