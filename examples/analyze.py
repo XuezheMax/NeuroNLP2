@@ -221,7 +221,7 @@ def main():
     # print('============================================================================================================================')
 
     def analyze():
-        np.set_printoptions(linewidth=0)
+        np.set_printoptions(linewidth=100000)
         pred_path = 'tmp/analyze_pred'
         data_gold = conllx_stacked_data.read_stacked_data_to_variable(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
                                                                       use_gpu=use_gpu, volatile=True, prior_order=prior_order)
