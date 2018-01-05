@@ -80,15 +80,14 @@ def main():
     pred_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
     gold_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
 
-    pred_writer.start('tmp/analyze_pred')
-    gold_writer.start('tmp/analyze_gold')
-
     network = torch.load(model_name)
 
     if use_gpu:
         network.cuda()
     else:
         network.cpu()
+
+    network.eval()
 
     test_ucorrect = 0.0
     test_lcorrect = 0.0
@@ -115,8 +114,9 @@ def main():
     test_leaf = 0
     test_non_leaf = 0
 
+    pred_writer.start('tmp/analyze_pred')
+    gold_writer.start('tmp/analyze_gold')
     sent = 0
-    network.eval()
     start_time = time.time()
     for batch in conllx_stacked_data.iterate_batch_stacked_variable(data_test, 1):
         sys.stdout.write('%d, ' % sent)
@@ -219,6 +219,109 @@ def main():
         test_ucorrect_stack_non_leaf, test_lcorrect_stack_non_leaf, test_non_leaf,
         test_ucorrect_stack_non_leaf * 100 / test_non_leaf, test_lcorrect_stack_non_leaf * 100 / test_non_leaf))
     print('============================================================================================================================')
+
+    def analyze():
+        pred_path = 'tmp/analyze_pred'
+        data_gold = conllx_stacked_data.read_stacked_data_to_variable(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
+                                                                      use_gpu=use_gpu, volatile=True, prior_order=prior_order)
+        data_pred = conllx_stacked_data.read_stacked_data_to_variable(pred_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
+                                                                      use_gpu=use_gpu, volatile=True, prior_order=prior_order)
+
+        gold_iter = conllx_stacked_data.iterate_batch_stacked_variable(data_gold, 1)
+        test_iter = conllx_stacked_data.iterate_batch_stacked_variable(data_pred, 1)
+        model_err = 0
+        search_err = 0
+        for gold, pred in zip(gold_iter, test_iter):
+            gold_encoder, gold_decoder = gold
+            word, char, pos, gold_heads, gold_types, masks, lengths = gold_encoder
+            gold_stacked_heads, gold_children, gold_siblings, gold_stacked_types, gold_skip_connect, gold_mask_d, gold_lengths_d = gold_decoder
+
+            pred_encoder, pred_decoder = pred
+            _, _, _, pred_heads, pred_types, _, _ = pred_encoder
+            pred_stacked_heads, pred_children, pred_siblings, pred_stacked_types, pred_skip_connect, pred_mask_d, pred_lengths_d = pred_decoder
+
+            assert gold_heads.size() == pred_heads.size(), 'sentence dis-match.'
+
+            ucorr_stack = torch.eq(pred_children, gold_children).float()
+            lcorr_stack = ucorr_stack * torch.eq(pred_stacked_types, gold_stacked_types).float()
+            ucorr_stack = (ucorr_stack * gold_mask_d).data.sum()
+            lcorr_stack = (lcorr_stack * gold_mask_d).data.sum()
+            num_stack = gold_mask_d.data.sum()
+
+            if lcorr_stack < num_stack:
+                print('%d, %d, %d' % (ucorr_stack, lcorr_stack, num_stack))
+                loss_pred, loss_pred_arc, loss_pred_type = calc_loss(network, word, char, pos, pred_heads, pred_stacked_heads, pred_children, pred_siblings, pred_stacked_types,
+                                                                     pred_skip_connect, masks, lengths, pred_mask_d, pred_lengths_d)
+
+                loss_gold, loss_gold_arc, loss_gold_type = calc_loss(network, word, char, pos, gold_heads, gold_stacked_heads, gold_children, gold_siblings, gold_stacked_types,
+                                                                     gold_skip_connect, masks, lengths, gold_mask_d, gold_lengths_d)
+                print('pred(arc, type): %.4f (%.4f, %.4f), gold(arc, type): %.4f (%.4f, %.4f)' % (loss_pred, loss_pred_arc, loss_pred_type, loss_gold, loss_gold_arc, loss_gold_type))
+                word = word[0].data.cpu().numpy()
+                pos = pos[0].data.cpu().numpy()
+                head_gold = gold_heads[0].data.cpu().numpy()
+                type_gold = gold_types[0].data.cpu().numpy()
+                head_pred = pred_heads[0].data.cpu().numpy()
+                type_pred = pred_types[0].data.cpu().numpy()
+                display(word, pos, head_gold, type_gold, head_pred, type_pred, lengths[0], word_alphabet, pos_alphabet, type_alphabet)
+
+                gold_display = np.empty([3, gold_lengths_d[0]])
+                gold_display[0] = gold_stacked_types.data[0].cpu().numpy()
+                gold_display[1] = gold_children.data[0].cpu().numpy()
+                gold_display[2] = gold_stacked_heads.data[0].cpu().numpy()
+                print(gold_display)
+                print('--------------------------------------------------------')
+                pred_display = np.empty([3, pred_lengths_d[0]])
+                pred_display[0] = pred_stacked_types.data[0].cpu().numpy()
+                pred_display[1] = pred_children.data[0].cpu().numpy()
+                pred_display[2] = pred_stacked_heads.data[0].cpu().numpy()
+                print(pred_display)
+                print('========================================================')
+
+                if loss_pred < loss_gold:
+                    model_err += 1
+                else:
+                    search_err += 1
+        print('model  errors: %d' % model_err)
+        print('search errors: %d' % search_err)
+
+    analyze()
+
+
+def calc_loss(network, word, char, pos, heads, stacked_heads, children, sibling, stacked_types, skip_connect, mask_e, length_e, mask_d, length_d):
+    loss_arc_leaf, loss_arc_non_leaf, \
+    loss_type_leaf, loss_type_non_leaf, \
+    loss_cov, num_leaf, num_non_leaf = network.loss(word, char, pos, heads, stacked_heads, children, sibling, stacked_types, skip_connect=skip_connect,
+                                                    mask_e=mask_e, length_e=length_e, mask_d=mask_d, length_d=length_d)
+
+    num_leaf = num_leaf.data[0]
+    num_non_leaf = num_non_leaf.data[0]
+
+    err_arc_leaf = loss_arc_leaf.data[0] * num_leaf
+    err_arc_non_leaf = loss_arc_non_leaf.data[0] * num_non_leaf
+
+    err_type_leaf = loss_type_leaf.data[0] * num_leaf
+    err_type_non_leaf = loss_type_non_leaf.data[0] * num_non_leaf
+
+    err_cov = loss_cov.data[0] * (num_leaf + num_non_leaf)
+
+    err_arc = err_arc_leaf + err_arc_non_leaf
+    err_type = err_type_leaf + err_type_non_leaf
+
+    err = err_arc + err_type
+
+    return err, err_arc, err_type
+
+
+def display(word, pos, head_gold, type_gold, head_pred, type_pred, length, word_alphabet, pos_alphabet, type_alphabet):
+    for j in range(0, length):
+        w = word_alphabet.get_instance(word[j]).encode('utf-8')
+        p = pos_alphabet.get_instance(pos[j]).encode('utf-8')
+        t_g = type_alphabet.get_instance(type_gold[j]).encode('utf-8')
+        h_g = head_gold[j]
+        t_p = type_alphabet.get_instance(type_pred[j]).encode('utf-8')
+        h_p = head_pred[j]
+        print('%d\t%s\t%s\t%d\t%s\t%d\t%s\n' % (j, w, p, h_g, t_g, h_p, t_p))
+    print('-----------------------------------------------------------------------------')
 
 
 if __name__ == '__main__':

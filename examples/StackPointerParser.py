@@ -272,8 +272,7 @@ def main():
         num_back = 0
         network.train()
         for batch in range(1, num_batches + 1):
-            input_encoder, input_decoder = conllx_stacked_data.get_batch_stacked_variable(data_train, batch_size,
-                                                                                          unk_replace=unk_replace)
+            input_encoder, input_decoder = conllx_stacked_data.get_batch_stacked_variable(data_train, batch_size, unk_replace=unk_replace)
             word, char, pos, heads, types, masks_e, lengths_e = input_encoder
             stacked_heads, children, sibling, stacked_types, skip_connect, masks_d, lengths_d = input_decoder
             optim.zero_grad()
@@ -322,7 +321,7 @@ def main():
 
                 err = err_arc + err_type + cov * err_cov
                 log_info = 'train: %d/%d loss (leaf, non_leaf): %.4f, arc: %.4f (%.4f, %.4f), type: %.4f (%.4f, %.4f), coverage: %.4f, time left (estimated): %.2fs' % (
-                               batch, num_batches, err, err_arc, err_arc_leaf, err_arc_non_leaf, err_type, err_type_leaf, err_type_non_leaf, err_cov, time_left)
+                    batch, num_batches, err, err_arc, err_arc_leaf, err_arc_non_leaf, err_type, err_type_leaf, err_type_non_leaf, err_cov, time_left)
                 sys.stdout.write(log_info)
                 sys.stdout.flush()
                 num_back = len(log_info)
@@ -342,7 +341,7 @@ def main():
 
         err = err_arc + err_type + cov * err_cov
         print('train: %d loss (leaf, non_leaf): %.4f, arc: %.4f (%.4f, %.4f), type: %.4f (%.4f, %.4f), coverage: %.4f, time: %.2fs' % (
-                  num_batches, err, err_arc, err_arc_leaf, err_arc_non_leaf, err_type, err_type_leaf, err_type_non_leaf, err_cov, time.time() - start_time))
+            num_batches, err, err_arc, err_arc_leaf, err_arc_non_leaf, err_type, err_type_leaf, err_type_non_leaf, err_cov, time.time() - start_time))
 
         # evaluate performance on dev data
         network.eval()
@@ -495,7 +494,6 @@ def main():
                 decay += 1
                 if decay % 3 == 0:
                     schedule *= 2
-
 
         print('----------------------------------------------------------------------------------------------------------------------------')
         print('best dev  W. Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%, ucm: %.2f%%, lcm: %.2f%% (epoch: %d)' % (
