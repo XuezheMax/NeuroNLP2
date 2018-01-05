@@ -220,6 +220,8 @@ def main():
         test_ucorrect_stack_non_leaf * 100 / test_non_leaf, test_lcorrect_stack_non_leaf * 100 / test_non_leaf))
     print('============================================================================================================================')
 
+    raw_input()
+
     def analyze():
         np.set_printoptions(linewidth=100000)
         pred_path = 'tmp/analyze_pred'
