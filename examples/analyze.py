@@ -253,7 +253,6 @@ def main():
             num_stack = gold_mask_d.data.sum()
 
             if lcorr_stack < num_stack:
-                print('%d, %d, %d' % (ucorr_stack, lcorr_stack, num_stack))
                 loss_pred, loss_pred_arc, loss_pred_type = calc_loss(network, word, char, pos, pred_heads, pred_stacked_heads, pred_children, pred_siblings, pred_stacked_types,
                                                                      pred_skip_connect, masks, lengths, pred_mask_d, pred_lengths_d)
 
@@ -261,6 +260,7 @@ def main():
                                                                      gold_skip_connect, masks, lengths, gold_mask_d, gold_lengths_d)
 
                 if display_inst:
+                    print('%d, %d, %d' % (ucorr_stack, lcorr_stack, num_stack))
                     print('pred(arc, type): %.4f (%.4f, %.4f), gold(arc, type): %.4f (%.4f, %.4f)' % (loss_pred, loss_pred_arc, loss_pred_type, loss_gold, loss_gold_arc, loss_gold_type))
                     word = word[0].data.cpu().numpy()
                     pos = pos[0].data.cpu().numpy()
