@@ -264,16 +264,17 @@ def main():
                 type_pred = pred_types[0].data.cpu().numpy()
                 display(word, pos, head_gold, type_gold, head_pred, type_pred, lengths[0], word_alphabet, pos_alphabet, type_alphabet)
 
-                gold_display = np.empty([3, gold_lengths_d[0]])
-                gold_display[0] = gold_stacked_types.data[0].cpu().numpy()
-                gold_display[1] = gold_children.data[0].cpu().numpy()
-                gold_display[2] = gold_stacked_heads.data[0].cpu().numpy()
+                length_dec = gold_lengths_d[0]
+                gold_display = np.empty([3, length_dec])
+                gold_display[0] = gold_stacked_types.data[0].cpu().numpy()[:length_dec]
+                gold_display[1] = gold_children.data[0].cpu().numpy()[:length_dec]
+                gold_display[2] = gold_stacked_heads.data[0].cpu().numpy()[:length_dec]
                 print(gold_display)
                 print('--------------------------------------------------------')
-                pred_display = np.empty([3, pred_lengths_d[0]])
-                pred_display[0] = pred_stacked_types.data[0].cpu().numpy()
-                pred_display[1] = pred_children.data[0].cpu().numpy()
-                pred_display[2] = pred_stacked_heads.data[0].cpu().numpy()
+                pred_display = np.empty([3, pred_lengths_d[0]])[:length_dec]
+                pred_display[0] = pred_stacked_types.data[0].cpu().numpy()[:length_dec]
+                pred_display[1] = pred_children.data[0].cpu().numpy()[:length_dec]
+                pred_display[2] = pred_stacked_heads.data[0].cpu().numpy()[:length_dec]
                 print(pred_display)
                 print('========================================================')
 
