@@ -221,6 +221,7 @@ def main():
     # print('============================================================================================================================')
 
     def analyze():
+        np.set_printoptions(linewidth=-1)
         pred_path = 'tmp/analyze_pred'
         data_gold = conllx_stacked_data.read_stacked_data_to_variable(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
                                                                       use_gpu=use_gpu, volatile=True, prior_order=prior_order)
@@ -231,6 +232,7 @@ def main():
         test_iter = conllx_stacked_data.iterate_batch_stacked_variable(data_pred, 1)
         model_err = 0
         search_err = 0
+        type_err = 0
         for gold, pred in zip(gold_iter, test_iter):
             gold_encoder, gold_decoder = gold
             word, char, pos, gold_heads, gold_types, masks, lengths = gold_encoder
@@ -278,10 +280,13 @@ def main():
                 print(pred_display)
                 print('========================================================')
 
-                if loss_pred < loss_gold:
+                if ucorr_stack == num_stack:
+                    type_err += 1
+                elif loss_pred < loss_gold:
                     model_err += 1
                 else:
                     search_err += 1
+        print('type   errors: %d' % type_err)
         print('model  errors: %d' % model_err)
         print('search errors: %d' % search_err)
 
