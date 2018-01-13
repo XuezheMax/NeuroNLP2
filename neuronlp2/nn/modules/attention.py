@@ -37,7 +37,6 @@ class BiAAttention(nn.Module):
         if self.biaffine:
             self.U = Parameter(torch.Tensor(self.num_labels, self.input_size_decoder, self.input_size_encoder))
         else:
-            # self.U = None
             self.register_parameter('U', None)
 
         self.reset_parameters()
