@@ -260,7 +260,7 @@ class BiRecurrentConvBiAffine(nn.Module):
         # loss_arc shape [batch, length, length]
         loss_arc = F.log_softmax(out_arc, dim=1)
         # loss_type shape [batch, length, length, num_labels]
-        loss_type = F.log_softmax(out_type, dim=3)
+        loss_type = F.log_softmax(out_type, dim=3).permute(0, 3, 1, 2)
         # [batch, num_labels, length, length]
         energy = torch.exp(loss_arc.unsqueeze(1) + loss_type)
 
