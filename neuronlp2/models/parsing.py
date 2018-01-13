@@ -329,8 +329,6 @@ class StackPtrNet(nn.Module):
         self.type_c = nn.Linear(hidden_size * 2, type_space)  # type dense for encoder
         self.bilinear = BiLinear(type_space, type_space, self.num_labels)
 
-        self.logsoftmax = nn.LogSoftmax()
-
     def _get_encoder_output(self, input_word, input_char, input_pos, mask_e=None, length_e=None, hx=None):
         # [batch, length, word_dim]
         word = self.word_embedd(input_word)
@@ -510,13 +508,10 @@ class StackPtrNet(nn.Module):
             minus_mask_e = (1 - mask_e) * minus_inf
             out_arc = out_arc + minus_mask_d.unsqueeze(2) + minus_mask_e.unsqueeze(1)
 
-        # TODO for Pytorch 2.0.4, need to set dim=1 for log_softmax or use softmax then take log
-        # first convert out_arc to [length_encoder, length_decoder, batch] for log_softmax computation.
-        # then convert back to [batch, length_decoder, length_encoder]
-        loss_arc = self.logsoftmax(out_arc.transpose(0, 2)).transpose(0, 2)
-        # convert out_type to [num_labels, length_decoder, batch] for log_softmax computation.
-        # then convert back to [batch, length_decoder, num_labels]
-        loss_type = self.logsoftmax(out_type.transpose(0, 2)).transpose(0, 2)
+        # [batch, length_decoder, length_encoder]
+        loss_arc = F.log_softmax(out_arc, dim=2)
+        # [batch, length_decoder, num_labels]
+        loss_type = F.log_softmax(out_type, dim=2)
 
         # compute coverage loss
         # [batch, length_decoder, length_encoder]
@@ -671,7 +666,7 @@ class StackPtrNet(nn.Module):
             out_arc = self.attention(arc_h, arc_c.expand(num_hyp, *arc_c.size())).squeeze(dim=1).squeeze(dim=1)
 
             # [num_hyp, length_encoder]
-            hyp_scores = self.logsoftmax(out_arc).data
+            hyp_scores = F.log_softmax(out_arc, dim=1).data
 
             new_hypothesis_scores = hypothesis_scores[:num_hyp].unsqueeze(1) + hyp_scores
             # [num_hyp * length_encoder]
@@ -765,7 +760,7 @@ class StackPtrNet(nn.Module):
             # predict types for new hypotheses
             # compute output for type [num_hyp, num_labels]
             out_type = self.bilinear(type_h[base_index], type_c[child_index])
-            hyp_type_scores = self.logsoftmax(out_type).data
+            hyp_type_scores = F.log_softmax(out_type, dim=1).data
             # compute the prediction of types [num_hyp]
             hyp_type_scores, hyp_types = hyp_type_scores.max(dim=1)
             hypothesis_scores[:num_hyp] = hypothesis_scores[:num_hyp] + hyp_type_scores
