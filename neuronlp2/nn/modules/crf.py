@@ -33,7 +33,7 @@ class ChainCRF(nn.Module):
 
         # state weight tensor
         self.state_nn = nn.Linear(input_size, self.num_labels)
-        self.trans_matrix = None
+        # self.trans_matrix = None
         self.trans_nn = None
         if bigram:
             # transition weight tensor
