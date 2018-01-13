@@ -57,7 +57,6 @@ class BiRecurrentConvBiAffine(nn.Module):
         self.type_h = nn.Linear(out_dim, type_space)
         self.type_c = nn.Linear(out_dim, type_space)
         self.bilinear = BiLinear(type_space, type_space, self.num_labels)
-        self.logsoftmax = nn.LogSoftmax()
 
     def _get_rnn_output(self, input_word, input_char, input_pos, mask=None, length=None, hx=None):
         # [batch, length, word_dim]
@@ -148,13 +147,10 @@ class BiRecurrentConvBiAffine(nn.Module):
             minus_mask = (1 - mask) * minus_inf
             out_arc = out_arc + minus_mask.unsqueeze(2) + minus_mask.unsqueeze(1)
 
-        # TODO for Pytorch 2.0.4, need to set dim=1 for log_softmax or use softmax then take log
-        # first convert out_arc to [max_len, batch, max_len] for log_softmax computation.
-        # then convert back to [batch, max_len, max_len]
-        loss_arc = self.logsoftmax(out_arc.transpose(0, 1)).transpose(0, 1)
-        # convert out_type to [num_labels, length, batch] for log_softmax computation.
-        # then convert back to [batch, length, num_labels]
-        loss_type = self.logsoftmax(out_type.transpose(0, 2)).transpose(0, 2)
+        # loss_arc shape [batch, length, length]
+        loss_arc = F.log_softmax(out_arc, dim=1)
+        # loss_type shape [batch, length, num_labels]
+        loss_type = F.log_softmax(out_type, dim=2)
 
         # mask invalid position to 0 for sum loss
         if mask is not None:
@@ -261,18 +257,14 @@ class BiRecurrentConvBiAffine(nn.Module):
             minus_mask = (1 - mask) * minus_inf
             out_arc = out_arc + minus_mask.unsqueeze(2) + minus_mask.unsqueeze(1)
 
-        # TODO for Pytorch 2.0.4, need to set dim=1 for log_softmax or use softmax then take log
-        # first convert out_arc to [max_len, batch, max_len] for log_softmax computation.
-        # then convert back to [batch, max_len, max_len]
-        loss_arc = self.logsoftmax(out_arc.transpose(0, 1)).transpose(0, 1)
-        # convert out_type to [batch, num_labels, length_c, length_h] for log_softmax computation.
-        # then switch (2, 3) to [batch, num_labels, length_h, length_c]
-        loss_type = self.logsoftmax(out_type.transpose(1, 3)).transpose(2, 3)
+        # loss_arc shape [batch, length, length]
+        loss_arc = F.log_softmax(out_arc, dim=1)
+        # loss_type shape [batch, length, length, num_labels]
+        loss_type = F.log_softmax(out_type, dim=3)
         # [batch, num_labels, length, length]
         energy = torch.exp(loss_arc.unsqueeze(1) + loss_type)
 
-        return parser.decode_MST(energy.data.cpu().numpy(), length,
-                                 leading_symbolic=leading_symbolic, labeled=True)
+        return parser.decode_MST(energy.data.cpu().numpy(), length, leading_symbolic=leading_symbolic, labeled=True)
 
 
 class StackPtrNet(nn.Module):

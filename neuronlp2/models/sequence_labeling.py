@@ -108,7 +108,6 @@ class BiRecurrentConv(nn.Module):
             target = target[:, :max_len].contiguous()
 
         if mask is not None:
-            # TODO for Pytorch 2.0.4, first take nllloss then mask (no need of broadcast for mask)
             return (self.nll_loss(self.logsoftmax(output), target.view(-1)) * mask.contiguous().view(-1)).sum() / mask.sum(), \
                    (torch.eq(preds, target).type_as(mask) * mask).sum(), preds
         else:
