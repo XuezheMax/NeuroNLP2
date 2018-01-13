@@ -116,8 +116,8 @@ def main():
     test_leaf = 0
     test_non_leaf = 0
 
-    pred_writer.start('tmp/analyze_pred')
-    gold_writer.start('tmp/analyze_gold')
+    pred_writer.start('tmp/analyze_pred_%s' % str(uid))
+    gold_writer.start('tmp/analyze_gold_%s' % str(uid))
     sent = 0
     start_time = time.time()
     for batch in conllx_stacked_data.iterate_batch_stacked_variable(data_test, 1):
@@ -224,7 +224,7 @@ def main():
 
     def analyze():
         np.set_printoptions(linewidth=100000)
-        pred_path = 'tmp/analyze_pred'
+        pred_path = 'tmp/analyze_pred_%s' % str(uid)
         data_gold = conllx_stacked_data.read_stacked_data_to_variable(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
                                                                       use_gpu=use_gpu, volatile=True, prior_order=prior_order)
         data_pred = conllx_stacked_data.read_stacked_data_to_variable(pred_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,

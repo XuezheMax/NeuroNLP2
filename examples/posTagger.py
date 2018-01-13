@@ -36,6 +36,8 @@ def main():
     parser.add_argument('--p', type=float, default=0.5, help='dropout rate')
     parser.add_argument('--schedule', type=int, help='schedule for learning rate decay')
     parser.add_argument('--unk_replace', type=float, default=0., help='The rate to replace a singleton word with UNK')
+    parser.add_argument('--embedding', choices=['glove', 'senna', 'sskip', 'polyglot'], help='Embedding for words', required=True)
+    parser.add_argument('--embedding_dict', help='path for embedding dict')
     parser.add_argument('--train')  # "data/POS-penn/wsj/split1/wsj1.train.original"
     parser.add_argument('--dev')  # "data/POS-penn/wsj/split1/wsj1.dev.original"
     parser.add_argument('--test')  # "data/POS-penn/wsj/split1/wsj1.test.original"
@@ -60,7 +62,11 @@ def main():
     p = args.p
     unk_replace = args.unk_replace
 
-    embedd_dict, embedd_dim = utils.load_embedding_dict('glove', "data/glove/glove.6B/glove.6B.100d.gz")
+    embedding = args.embedding
+    embedding_path = args.embedding_dict
+
+    embedd_dict, embedd_dim = utils.load_embedding_dict(embedding, embedding_path)
+
     logger.info("Creating Alphabets")
     word_alphabet, char_alphabet, pos_alphabet, \
     type_alphabet = conllx_data.create_alphabets("data/alphabets/pos/", train_path, data_paths=[dev_path,test_path],
