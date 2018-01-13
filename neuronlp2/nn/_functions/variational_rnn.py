@@ -51,7 +51,7 @@ def VarFastLSTMCell(input, hidden, w_ih, w_hh, b_ih=None, b_hh=None, noise_in=No
     if input.is_cuda:
         igates = F.linear(input, w_ih)
         hgates = F.linear(hidden[0], w_hh) if noise_hidden is None else F.linear(hidden[0] * noise_hidden, w_hh)
-        state = fusedBackend.LSTMFused()
+        state = fusedBackend.LSTMFused.apply
         return state(igates, hgates, hidden[1]) if b_ih is None else state(igates, hgates, hidden[1], b_ih, b_hh)
 
     hx, cx = hidden
@@ -97,7 +97,7 @@ def VarFastGRUCell(input, hidden, w_ih, w_hh, b_ih=None, b_hh=None, noise_in=Non
     if input.is_cuda:
         gi = F.linear(input, w_ih)
         gh = F.linear(hx, w_hh)
-        state = fusedBackend.GRUFused()
+        state = fusedBackend.GRUFused.apply
         return state(gi, gh, hidden) if b_ih is None else state(gi, gh, hidden, b_ih, b_hh)
 
     gi = F.linear(input, w_ih, b_ih)

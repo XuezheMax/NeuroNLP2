@@ -38,10 +38,8 @@ class BiRecurrentConv(nn.Module):
             self.dense = nn.Linear(out_dim, tag_space)
             out_dim = tag_space
         self.dense_softmax = nn.Linear(out_dim, num_labels)
-
-        # TODO set dim for log_softmax and set reduce=False to NLLLoss
-        self.logsoftmax = nn.LogSoftmax()
-        self.nll_loss = nn.NLLLoss(size_average=False)
+        self.logsoftmax = nn.LogSoftmax(dim=1)
+        self.nll_loss = nn.NLLLoss(size_average=False, reduce=False)
 
     def _get_rnn_output(self, input_word, input_char, mask=None, length=None, hx=None):
         # hack length from mask
@@ -92,7 +90,7 @@ class BiRecurrentConv(nn.Module):
         return output, mask, length
 
     def loss(self, input_word, input_char, target, mask=None, length=None, hx=None, leading_symbolic=0):
-        # [batch, length, num_labels]
+        # [batch, length, tag_space]
         output, mask, length = self.forward(input_word, input_char, mask=mask, length=length, hx=hx)
         # [batch, length, num_labels]
         output = self.dense_softmax(output)
@@ -111,12 +109,11 @@ class BiRecurrentConv(nn.Module):
 
         if mask is not None:
             # TODO for Pytorch 2.0.4, first take nllloss then mask (no need of broadcast for mask)
-            return self.nll_loss(self.logsoftmax(output) * mask.contiguous().view(output_size[0], 1),
-                                 target.view(-1)) / mask.sum(), \
+            return (self.nll_loss(self.logsoftmax(output), target.view(-1)) * mask.contiguous().view(-1)).sum() / mask.sum(), \
                    (torch.eq(preds, target).type_as(mask) * mask).sum(), preds
         else:
             num = output_size[0] * output_size[1]
-            return self.nll_loss(self.logsoftmax(output), target.view(-1)) / num, \
+            return self.nll_loss(self.logsoftmax(output), target.view(-1)).sum() / num, \
                    (torch.eq(preds, target).type_as(output)).sum(), preds
 
 
@@ -195,7 +192,7 @@ class BiRecurrentConvCRF(BiRecurrentConv):
         # [batch, length, num_label,  num_label]
         return self.crf(output, mask=mask), mask
 
-    def loss(self, input_word, input_char, target, mask=None, length=None, hx=None):
+    def loss(self, input_word, input_char, target, mask=None, length=None, hx=None, leading_symbolic=0):
         # output from rnn [batch, length, tag_space]
         output, _, mask, length = self._get_rnn_output(input_word, input_char, mask=mask, length=length, hx=hx)
 
