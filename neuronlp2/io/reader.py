@@ -2,8 +2,8 @@ __author__ = 'max'
 
 from .instance import DependencyInstance, NERInstance
 from .instance import Sentence
-import conllx_data
-import utils
+from .conllx_data import ROOT, ROOT_POS, ROOT_CHAR, ROOT_TYPE, END, END_POS, END_CHAR, END_TYPE
+from . import utils as utils
 
 
 class CoNLLXReader(object):
@@ -41,14 +41,14 @@ class CoNLLXReader(object):
         heads = []
 
         if symbolic_root:
-            words.append(conllx_data.ROOT)
-            word_ids.append(self.__word_alphabet.get_index(conllx_data.ROOT))
-            char_seqs.append([conllx_data.ROOT_CHAR, ])
-            char_id_seqs.append([self.__char_alphabet.get_index(conllx_data.ROOT_CHAR), ])
-            postags.append(conllx_data.ROOT_POS)
-            pos_ids.append(self.__pos_alphabet.get_index(conllx_data.ROOT_POS))
-            types.append(conllx_data.ROOT_TYPE)
-            type_ids.append(self.__type_alphabet.get_index(conllx_data.ROOT_TYPE))
+            words.append(ROOT)
+            word_ids.append(self.__word_alphabet.get_index(ROOT))
+            char_seqs.append([ROOT_CHAR, ])
+            char_id_seqs.append([self.__char_alphabet.get_index(ROOT_CHAR), ])
+            postags.append(ROOT_POS)
+            pos_ids.append(self.__pos_alphabet.get_index(ROOT_POS))
+            types.append(ROOT_TYPE)
+            type_ids.append(self.__type_alphabet.get_index(ROOT_TYPE))
             heads.append(0)
 
         for tokens in lines:
@@ -80,14 +80,14 @@ class CoNLLXReader(object):
             heads.append(head)
 
         if symbolic_end:
-            words.append(conllx_data.END)
-            word_ids.append(self.__word_alphabet.get_index(conllx_data.END))
-            char_seqs.append([conllx_data.END_CHAR, ])
-            char_id_seqs.append([self.__char_alphabet.get_index(conllx_data.END_CHAR), ])
-            postags.append(conllx_data.END_POS)
-            pos_ids.append(self.__pos_alphabet.get_index(conllx_data.END_POS))
-            types.append(conllx_data.END_TYPE)
-            type_ids.append(self.__type_alphabet.get_index(conllx_data.END_TYPE))
+            words.append(END)
+            word_ids.append(self.__word_alphabet.get_index(END))
+            char_seqs.append([END_CHAR, ])
+            char_id_seqs.append([self.__char_alphabet.get_index(END_CHAR), ])
+            postags.append(END_POS)
+            pos_ids.append(self.__pos_alphabet.get_index(END_POS))
+            types.append(END_TYPE)
+            type_ids.append(self.__type_alphabet.get_index(END_TYPE))
             heads.append(0)
 
         return DependencyInstance(Sentence(words, word_ids, char_seqs, char_id_seqs), postags, pos_ids, heads, types,
