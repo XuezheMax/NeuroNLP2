@@ -1,5 +1,5 @@
 __author__ = 'max'
 
-import masked_rnn
-import variational_rnn
-import skipconnect_rnn
+from . import masked_rnn
+from . import variational_rnn
+from . import skipconnect_rnn
