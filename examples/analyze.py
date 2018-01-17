@@ -25,7 +25,7 @@ from neuronlp2 import utils
 from neuronlp2.io import CoNLLXWriter
 from neuronlp2.tasks import parser
 
-uid = uuid.uuid4().get_hex()[:6]
+uid = uuid.uuid4().hex[:6]
 
 
 def main():

@@ -22,7 +22,7 @@ from neuronlp2.io import get_logger, conll03_data, CoNLL03Writer
 from neuronlp2.models import BiRecurrentConv, BiVarRecurrentConv
 from neuronlp2 import utils
 
-uid = uuid.uuid4().get_hex()[:6]
+uid = uuid.uuid4().hex[:6]
 
 
 def evaluate(output_file):
