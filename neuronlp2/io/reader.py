@@ -1,7 +1,7 @@
 __author__ = 'max'
 
-from instance import DependencyInstance, NERInstance
-from instance import Sentence
+from .instance import DependencyInstance, NERInstance
+from .instance import Sentence
 import conllx_data
 import utils
 
