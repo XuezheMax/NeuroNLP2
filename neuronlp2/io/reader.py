@@ -3,7 +3,7 @@ __author__ = 'max'
 from .instance import DependencyInstance, NERInstance
 from .instance import Sentence
 from .conllx_data import ROOT, ROOT_POS, ROOT_CHAR, ROOT_TYPE, END, END_POS, END_CHAR, END_TYPE
-from . import utils as utils
+from . import utils
 
 
 class CoNLLXReader(object):
@@ -90,8 +90,7 @@ class CoNLLXReader(object):
             type_ids.append(self.__type_alphabet.get_index(END_TYPE))
             heads.append(0)
 
-        return DependencyInstance(Sentence(words, word_ids, char_seqs, char_id_seqs), postags, pos_ids, heads, types,
-                                  type_ids)
+        return DependencyInstance(Sentence(words, word_ids, char_seqs, char_id_seqs), postags, pos_ids, heads, types, type_ids)
 
 
 class CoNLL03Reader(object):

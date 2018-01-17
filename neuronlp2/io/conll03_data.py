@@ -6,7 +6,7 @@ import numpy as np
 from .reader import CoNLL03Reader
 from .alphabet import Alphabet
 from .logger import get_logger
-from . import utils as utils
+from . import utils
 import torch
 from torch.autograd import Variable
 
