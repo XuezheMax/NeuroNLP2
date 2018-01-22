@@ -227,7 +227,7 @@ def main():
     logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, arc_space=%d, type_space=%d" % (mode, num_layers, hidden_size, num_filters, arc_space, type_space))
     logger.info("train: cov: %.1f, (#data: %d, batch: %d, clip: %.2f, dropout(in, out, rnn): (%.2f, %.2f, %s), unk_repl: %.2f)" % (cov, num_data, batch_size, clip, p_in, p_out, p_rnn, unk_replace))
     logger.info('prior order: %s, bias arc: %s, grand parent: %s, sibling: %s, ' % (prior_order, biasArc, grandPar, sibling))
-    logger.info('srcEncode: %s, skip connect: %s, beam: %d' % (skipConnect, srcEncode, beam))
+    logger.info('srcEncode: %s, skip connect: %s, beam: %d' % (srcEncode, skipConnect, beam))
     logger.info(opt_info)
 
     num_batches = num_data / batch_size + 1
