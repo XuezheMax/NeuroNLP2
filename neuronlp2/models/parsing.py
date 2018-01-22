@@ -269,13 +269,13 @@ class BiRecurrentConvBiAffine(nn.Module):
 
 class StackPtrNet(nn.Module):
     def __init__(self, word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, num_filters, kernel_size, rnn_mode, hidden_size, num_layers, num_labels, arc_space, type_space,
-                 embedd_word=None, embedd_char=None, embedd_pos=None, p_in=0.2, p_out=0.5, p_rnn=(0.5, 0.5), biaffine=True, prior_order='deep_first', skipConnect=False,
+                 embedd_word=None, embedd_char=None, embedd_pos=None, p_in=0.2, p_out=0.5, p_rnn=(0.5, 0.5), biaffine=True, pos=True, prior_order='deep_first', skipConnect=False, srcEncode=False,
                  biasArc=False, grandPar=False, sibling=False):
 
         super(StackPtrNet, self).__init__()
         self.word_embedd = Embedding(num_words, word_dim, init_embedding=embedd_word)
         self.char_embedd = Embedding(num_chars, char_dim, init_embedding=embedd_char)
-        self.pos_embedd = Embedding(num_pos, pos_dim, init_embedding=embedd_pos)
+        self.pos_embedd = Embedding(num_pos, pos_dim, init_embedding=embedd_pos) if pos else None
         self.conv1d = nn.Conv1d(char_dim, num_filters, kernel_size, padding=kernel_size - 1)
         self.dropout_in = nn.Dropout2d(p=p_in)
         self.dropout_out = nn.Dropout2d(p=p_out)
@@ -288,7 +288,9 @@ class StackPtrNet(nn.Module):
             self.prior_order = PriorOrder.LEFT2RIGTH
         else:
             raise ValueError('Unknown prior order: %s' % prior_order)
+        self.pos = pos
         self.skipConnect = skipConnect
+        self.srcEncode = srcEncode
         self.biasArc = biasArc
         self.grandPar = grandPar
         self.sibling = sibling
@@ -308,11 +310,17 @@ class StackPtrNet(nn.Module):
         else:
             raise ValueError('Unknown RNN mode: %s' % rnn_mode)
 
-        self.encoder = RNN_ENCODER(word_dim + num_filters + pos_dim, hidden_size, num_layers=num_layers,
-                                   batch_first=True, bidirectional=True, dropout=p_rnn)
+        dim_enc = word_dim + num_filters
+        if self.pos:
+            dim_enc += pos_dim
 
-        self.decoder = RNN_DECODER(word_dim + num_filters + pos_dim, hidden_size, num_layers=num_layers,
-                                   batch_first=True, bidirectional=False, dropout=p_rnn)
+        dim_dec = dim_enc
+        if self.srcEncode:
+            dim_dec += hidden_size * 2
+
+        self.encoder = RNN_ENCODER(dim_enc, hidden_size, num_layers=num_layers, batch_first=True, bidirectional=True, dropout=p_rnn)
+
+        self.decoder = RNN_DECODER(dim_dec, hidden_size, num_layers=num_layers, batch_first=True, bidirectional=False, dropout=p_rnn)
 
         self.hx_dense = nn.Linear(2 * hidden_size, hidden_size)
 
@@ -332,8 +340,6 @@ class StackPtrNet(nn.Module):
     def _get_encoder_output(self, input_word, input_char, input_pos, mask_e=None, length_e=None, hx=None):
         # [batch, length, word_dim]
         word = self.word_embedd(input_word)
-        # [batch, length, pos_dim]
-        pos = self.pos_embedd(input_pos)
 
         # [batch, length, char_length, char_dim]
         char = self.char_embedd(input_char)
@@ -347,19 +353,30 @@ class StackPtrNet(nn.Module):
         # reshape to [batch, length, char_filters]
         char = torch.tanh(char).view(char_size[0], char_size[1], -1)
 
+
         # apply dropout on input
         word = self.dropout_in(word)
-        pos = self.dropout_in(pos)
         char = self.dropout_in(char)
 
         # concatenate word and char [batch, length, word_dim+char_filter]
-        src_encoding = torch.cat([word, char, pos], dim=2)
+        src_encoding = torch.cat([word, char], dim=2)
+
+        if self.pos:
+            # [batch, length, pos_dim]
+            pos = self.pos_embedd(input_pos)
+            pos = self.dropout_in(pos)
+            src_encoding = torch.cat([src_encoding, pos], dim=2)
+
         # output from rnn [batch, length, hidden_size]
         output, hn = self.encoder(src_encoding, mask_e, hx=hx)
 
         # apply dropout
         # [batch, length, hidden_size] --> [batch, hidden_size, length] --> [batch, length, hidden_size]
         output = self.dropout_out(output.transpose(1, 2)).transpose(1, 2)
+
+        # use src encodding
+        if self.srcEncode:
+            src_encoding = torch.cat([src_encoding, output], dim=2)
 
         return src_encoding, output, hn, mask_e, length_e
 

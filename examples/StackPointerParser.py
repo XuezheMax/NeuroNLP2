@@ -38,6 +38,7 @@ def main():
     args_parser.add_argument('--type_space', type=int, default=128, help='Dimension of tag space')
     args_parser.add_argument('--num_layers', type=int, default=1, help='Number of layers of RNN')
     args_parser.add_argument('--num_filters', type=int, default=50, help='Number of filters in CNN')
+    args_parser.add_argument('--pos', action='store_true', help='use part-of-speech embedding.')
     args_parser.add_argument('--pos_dim', type=int, default=50, help='Dimension of POS embeddings')
     args_parser.add_argument('--char_dim', type=int, default=50, help='Dimension of Character embeddings')
     args_parser.add_argument('--opt', choices=['adam', 'sgd', 'adamax'], help='optimization algorithm')
@@ -50,6 +51,7 @@ def main():
     args_parser.add_argument('--p_rnn', nargs=2, type=float, required=True, help='dropout rate for RNN')
     args_parser.add_argument('--p_in', type=float, default=0.33, help='dropout rate for input embeddings')
     args_parser.add_argument('--p_out', type=float, default=0.33, help='dropout rate for output layer')
+    args_parser.add_argument('--srcEncode', action='store_true', help='use source encoded vectors for decoder RNN.')
     args_parser.add_argument('--skipConnect', action='store_true', help='use skip connection for decoder RNN.')
     args_parser.add_argument('--biasArc', action='store_true', help='use biased arc.')
     args_parser.add_argument('--grandPar', action='store_true', help='use grand parent.')
@@ -101,6 +103,7 @@ def main():
     p_out = args.p_out
     unk_replace = args.unk_replace
     prior_order = args.prior_order
+    srcEncode = args.srcEncode
     skipConnect = args.skipConnect
     biasArc = args.biasArc
     grandPar = args.grandPar
@@ -113,6 +116,7 @@ def main():
     char_embedding = args.char_embedding
     char_path = args.char_path
 
+    use_pos = args.pos
     pos_dim = args.pos_dim
     word_dict, word_dim = utils.load_embedding_dict(word_embedding, word_path)
     char_dict = None
@@ -123,8 +127,8 @@ def main():
 
     alphabet_path = os.path.join(model_path, 'alphabets/')
     model_name = os.path.join(model_path, model_name)
-    word_alphabet, char_alphabet, pos_alphabet, type_alphabet = conllx_stacked_data.create_alphabets(alphabet_path, train_path,
-                                                                                                     data_paths=[dev_path, test_path], max_vocabulary_size=50000, embedd_dict=word_dict)
+    word_alphabet, char_alphabet, pos_alphabet, type_alphabet = conllx_stacked_data.create_alphabets(alphabet_path, train_path, data_paths=[dev_path, test_path],
+                                                                                                     max_vocabulary_size=50000, embedd_dict=word_dict)
 
     num_words = word_alphabet.size()
     num_chars = char_alphabet.size()
@@ -190,8 +194,8 @@ def main():
 
     window = 3
     network = StackPtrNet(word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, num_filters, window, mode, hidden_size, num_layers, num_types, arc_space, type_space,
-                          embedd_word=word_table, embedd_char=char_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn, biaffine=True, prior_order=prior_order, skipConnect=skipConnect,
-                          biasArc=biasArc, grandPar=grandPar, sibling=sibling)
+                          embedd_word=word_table, embedd_char=char_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn, biaffine=True, pos=use_pos, prior_order=prior_order,
+                          skipConnect=skipConnect, srcEncode=srcEncode, biasArc=biasArc, grandPar=grandPar, sibling=sibling)
 
     if use_gpu:
         network.cuda()
@@ -219,10 +223,11 @@ def main():
     elif opt == 'adamax':
         opt_info += 'betas=%s, eps=%.1e' % (betas, eps)
 
-    logger.info("Embedding dim: word=%d, char=%d, pos=%d" % (word_dim, char_dim, pos_dim))
+    logger.info("Embedding dim: word=%d, char=%d, pos=%d (%s)" % (word_dim, char_dim, pos_dim, use_pos))
     logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, arc_space=%d, type_space=%d" % (mode, num_layers, hidden_size, num_filters, arc_space, type_space))
     logger.info("train: cov: %.1f, (#data: %d, batch: %d, clip: %.2f, dropout(in, out, rnn): (%.2f, %.2f, %s), unk_repl: %.2f)" % (cov, num_data, batch_size, clip, p_in, p_out, p_rnn, unk_replace))
-    logger.info('prior order: %s, bias arc: %s, grand parent: %s, sibling: %s, skip connect: %s, beam: %d' % (prior_order, biasArc, grandPar, sibling, skipConnect, beam))
+    logger.info('prior order: %s, bias arc: %s, grand parent: %s, sibling: %s, ' % (prior_order, biasArc, grandPar, sibling))
+    logger.info('srcEncode: %s, skip connect: %s, beam: %d' % (skipConnect, srcEncode, beam))
     logger.info(opt_info)
 
     num_batches = num_data / batch_size + 1
