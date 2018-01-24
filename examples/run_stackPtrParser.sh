@@ -3,8 +3,7 @@ CUDA_VISIBLE_DEVICES=2 python examples/StackPointerParser.py --mode FastLSTM --n
  --pos_dim 100 --char_dim 100 --num_filters 100 --arc_space 512 --type_space 128 \
  --opt adam --learning_rate 0.001 --decay_rate 0.75 --epsilon 1e-4 --schedule 10 --coverage 0.0 --gamma 0.0 --clip 5.0 \
  --p_in 0.33 --p_out 0.33 --p_rnn 0.33 0.33 --unk_replace 0.5 --pos --beam 1 --prior_order inside_out \
- --skipConnect --srcEncode \
- --biasArc --grandPar --sibling \
+ --skipConnect --grandPar --sibling \
  --word_embedding sskip --word_path "data/sskip/sskip.eng.100.gz" --char_embedding random \
  --punctuation '.' '``' "''" ':' ',' \
  --train "data/PTB3.0/PTB3.0-Stanford_dep/ptb3.0-stanford.auto.cpos.train.conll" \
