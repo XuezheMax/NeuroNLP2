@@ -269,8 +269,8 @@ class BiRecurrentConvBiAffine(nn.Module):
 
 class StackPtrNet(nn.Module):
     def __init__(self, word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, num_filters, kernel_size, rnn_mode, hidden_size, num_layers, num_labels, arc_space, type_space,
-                 embedd_word=None, embedd_char=None, embedd_pos=None, p_in=0.2, p_out=0.5, p_rnn=(0.5, 0.5), biaffine=True, pos=True, prior_order='deep_first', skipConnect=False, srcEncode=False,
-                 biasArc=False, grandPar=False, sibling=False):
+                 embedd_word=None, embedd_char=None, embedd_pos=None, p_in=0.2, p_out=0.5, p_rnn=(0.5, 0.5), biaffine=True, pos=True, prior_order='deep_first', skipConnect=False,
+                 grandPar=False, sibling=False):
 
         super(StackPtrNet, self).__init__()
         self.word_embedd = Embedding(num_words, word_dim, init_embedding=embedd_word)
@@ -290,8 +290,6 @@ class StackPtrNet(nn.Module):
             raise ValueError('Unknown prior order: %s' % prior_order)
         self.pos = pos
         self.skipConnect = skipConnect
-        self.srcEncode = srcEncode
-        self.biasArc = biasArc
         self.grandPar = grandPar
         self.sibling = sibling
 
@@ -314,9 +312,7 @@ class StackPtrNet(nn.Module):
         if self.pos:
             dim_enc += pos_dim
 
-        dim_dec = dim_enc
-        if self.srcEncode:
-            dim_dec += hidden_size * 2
+        dim_dec = hidden_size * 2
 
         self.encoder = RNN_ENCODER(dim_enc, hidden_size, num_layers=num_layers, batch_first=True, bidirectional=True, dropout=p_rnn)
 
@@ -324,16 +320,11 @@ class StackPtrNet(nn.Module):
 
         self.hx_dense = nn.Linear(2 * hidden_size, hidden_size)
 
-        ord = 1
-        if self.biasArc or self.grandPar or self.sibling:
-            ord = 3
-
-        self.arc_h = nn.Linear(hidden_size * ord, arc_space) # arc dense for decoder
+        self.arc_h = nn.Linear(hidden_size, arc_space) # arc dense for decoder
         self.arc_c = nn.Linear(hidden_size * 2, arc_space)  # arc dense for encoder
         self.attention = BiAAttention(arc_space, arc_space, 1, biaffine=biaffine)
 
-        ord = 1
-        self.type_h = nn.Linear(hidden_size * ord, type_space) # type dense for decoder
+        self.type_h = nn.Linear(hidden_size, type_space) # type dense for decoder
         self.type_c = nn.Linear(hidden_size * 2, type_space)  # type dense for encoder
         self.bilinear = BiLinear(type_space, type_space, self.num_labels)
 
@@ -374,13 +365,9 @@ class StackPtrNet(nn.Module):
         # [batch, length, hidden_size] --> [batch, hidden_size, length] --> [batch, length, hidden_size]
         output = self.dropout_out(output.transpose(1, 2)).transpose(1, 2)
 
-        # use src encodding
-        if self.srcEncode:
-            src_encoding = torch.cat([src_encoding, output], dim=2)
+        return output, hn, mask_e, length_e
 
-        return src_encoding, output, hn, mask_e, length_e
-
-    def _get_decoder_output(self, src_encoding, heads_stack, hx, mask_d=None, length_d=None):
+    def _get_decoder_output(self, src_encoding, heads, heads_stack, siblings, hx, mask_d=None, length_d=None):
         batch, _, _ = src_encoding.size()
         # create batch index [batch]
         batch_index = torch.arange(0, batch).type_as(src_encoding.data).long()
@@ -395,7 +382,7 @@ class StackPtrNet(nn.Module):
 
         return output, hn, mask_d, length_d
 
-    def _get_decoder_output_with_skip_connect(self, src_encoding, heads_stack, skip_connect, hx, mask_d=None, length_d=None):
+    def _get_decoder_output_with_skip_connect(self, src_encoding, heads, heads_stack, siblings, skip_connect, hx, mask_d=None, length_d=None):
         batch, _, _ = src_encoding.size()
         # create batch index [batch]
         batch_index = torch.arange(0, batch).type_as(src_encoding.data).long()
@@ -440,12 +427,12 @@ class StackPtrNet(nn.Module):
 
     def loss(self, input_word, input_char, input_pos, heads, stacked_heads, children, siblings, stacked_types, skip_connect=None, mask_e=None, length_e=None, mask_d=None, length_d=None, hx=None):
         # output from encoder [batch, length_encoder, tag_space]
-        src_encoding, output_enc, hn, mask_e, _ = self._get_encoder_output(input_word, input_char, input_pos, mask_e=mask_e, length_e=length_e, hx=hx)
+        src_encoding, hn, mask_e, _ = self._get_encoder_output(input_word, input_char, input_pos, mask_e=mask_e, length_e=length_e, hx=hx)
 
         # output size [batch, length_encoder, arc_space]
-        arc_c = F.elu(self.arc_c(output_enc))
+        arc_c = F.elu(self.arc_c(src_encoding))
         # output size [batch, length_encoder, type_space]
-        type_c = F.elu(self.type_c(output_enc))
+        type_c = F.elu(self.type_c(src_encoding))
 
         batch, max_len_e, _ = arc_c.size()
         # create batch index [batch]
@@ -464,10 +451,6 @@ class StackPtrNet(nn.Module):
         output_dec_type = output_dec
         output_enc_arc = None
         output_enc_type = None
-        if self.biasArc:
-            # [batch, length_decoder, hidden_size * 2]
-            output_enc_arc = output_enc[batch_index, stacked_heads.data.t()].transpose(0, 1)
-            # output_enc_type = output_enc_arc
 
         if self.sibling:
             # [batch, length_decoder, hidden_size * 2]
