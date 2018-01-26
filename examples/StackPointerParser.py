@@ -33,6 +33,7 @@ def main():
     args_parser.add_argument('--mode', choices=['RNN', 'LSTM', 'GRU', 'FastLSTM'], help='architecture of rnn', required=True)
     args_parser.add_argument('--num_epochs', type=int, default=200, help='Number of training epochs')
     args_parser.add_argument('--batch_size', type=int, default=64, help='Number of sentences in each batch')
+    args_parser.add_argument('--decoder_input_size', type=int, default=256, help='Number of input units in decoder RNN.')
     args_parser.add_argument('--hidden_size', type=int, default=256, help='Number of hidden units in RNN')
     args_parser.add_argument('--arc_space', type=int, default=128, help='Dimension of tag space')
     args_parser.add_argument('--type_space', type=int, default=128, help='Dimension of tag space')
@@ -81,6 +82,7 @@ def main():
     model_name = args.model_name
     num_epochs = args.num_epochs
     batch_size = args.batch_size
+    input_size_decoder = args.decoder_input_size
     hidden_size = args.hidden_size
     arc_space = args.arc_space
     type_space = args.type_space
@@ -189,7 +191,7 @@ def main():
     char_table = construct_char_embedding_table()
 
     window = 3
-    network = StackPtrNet(word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, num_filters, window, mode, hidden_size, num_layers, num_types, arc_space, type_space,
+    network = StackPtrNet(word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, num_filters, window, mode, input_size_decoder, hidden_size, num_layers, num_types, arc_space, type_space,
                           embedd_word=word_table, embedd_char=char_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn, biaffine=True, pos=use_pos, prior_order=prior_order,
                           skipConnect=skipConnect, grandPar=grandPar, sibling=sibling)
 
@@ -220,7 +222,7 @@ def main():
         opt_info += 'betas=%s, eps=%.1e' % (betas, eps)
 
     logger.info("Embedding dim: word=%d, char=%d, pos=%d (%s)" % (word_dim, char_dim, pos_dim, use_pos))
-    logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, arc_space=%d, type_space=%d" % (mode, num_layers, hidden_size, num_filters, arc_space, type_space))
+    logger.info("Network: %s, num_layer=%d, input_dec=%d, hidden=%d, filter=%d, arc_space=%d, type_space=%d" % (mode, num_layers, input_size_decoder, hidden_size, num_filters, arc_space, type_space))
     logger.info("train: cov: %.1f, (#data: %d, batch: %d, clip: %.2f, dropout(in, out, rnn): (%.2f, %.2f, %s), unk_repl: %.2f)" % (cov, num_data, batch_size, clip, p_in, p_out, p_rnn, unk_replace))
     logger.info('prior order: %s, grand parent: %s, sibling: %s, ' % (prior_order, grandPar, sibling))
     logger.info('skip connect: %s, beam: %d' % (skipConnect, beam))
