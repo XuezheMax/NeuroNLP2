@@ -316,7 +316,7 @@ class StackPtrNet(nn.Module):
 
         self.encoder = RNN_ENCODER(dim_enc, hidden_size, num_layers=num_layers, batch_first=True, bidirectional=True, dropout=p_rnn)
 
-        self.decoder = RNN_DECODER(dim_dec, hidden_size, num_layers=num_layers, batch_first=True, bidirectional=False, dropout=p_rnn)
+        self.decoder = RNN_DECODER(dim_dec, hidden_size, num_layers=1, batch_first=True, bidirectional=False, dropout=p_rnn)
 
         self.hx_dense = nn.Linear(2 * hidden_size, hidden_size)
 
@@ -439,24 +439,31 @@ class StackPtrNet(nn.Module):
     def _transform_decoder_init_state(self, hn):
         if isinstance(hn, tuple):
             hn, cn = hn
-            # hn [2 * num_layers, batch, hidden_size]
-            num_dir, batch, hidden_size = cn.size()
-            # first convert cn t0 [batch, 2 * num_layers, hidden_size]
+            # take the last layers
+            # [2, batch, hidden_size]
+            hn = hn[-2:]
+            cn = cn[-2:]
+            # hn [2, batch, hidden_size]
+            _, batch, hidden_size = cn.size()
+            # first convert cn t0 [batch, 2, hidden_size]
             cn = cn.transpose(0, 1).contiguous()
-            # then view to [batch, num_layers, 2 * hidden_size] --> [num_layer, batch, 2 * num_layers]
-            cn = cn.view(batch, num_dir / 2, 2 * hidden_size).transpose(0, 1)
-            # take hx_dense to [num_layers, batch, hidden_size]
+            # then view to [batch, 1, 2 * hidden_size] --> [1, batch, 2 * hidden_size]
+            cn = cn.view(batch, 1, 2 * hidden_size).transpose(0, 1)
+            # take hx_dense to [1, batch, hidden_size]
             cn = self.hx_dense(cn)
             # hn is tanh(cn)
             hn = F.tanh(cn)
             hn = (hn, cn)
         else:
-            # hn [2 * num_layers, batch, hidden_size]
-            num_dir, batch, hidden_size = hn.size()
-            # first convert hn t0 [batch, 2 * num_layers, hidden_size]
+            # take the last layers
+            # [2, batch, hidden_size]
+            hn = hn[-2:]
+            # hn [2, batch, hidden_size]
+            _, batch, hidden_size = hn.size()
+            # first convert hn t0 [batch, 2, hidden_size]
             hn = hn.transpose(0, 1).contiguous()
-            # then view to [batch, num_layers, 2 * hidden_size] --> [num_layer, batch, 2 * num_layers]
-            hn = hn.view(batch, num_dir / 2, 2 * hidden_size).transpose(0, 1)
+            # then view to [batch, 1, 2 * hidden_size] --> [1, batch, 2 * hidden_size]
+            hn = hn.view(batch, 1, 2 * hidden_size).transpose(0, 1)
             # take hx_dense to [num_layers, batch, hidden_size]
             hn = F.tanh(self.hx_dense(hn))
         return hn
@@ -470,7 +477,7 @@ class StackPtrNet(nn.Module):
         # output size [batch, length_encoder, type_space]
         type_c = F.elu(self.type_c(output_enc))
 
-        # transform hn to [num_layers, batch, hidden_size]
+        # transform hn to [1, batch, hidden_size]
         hn = self._transform_decoder_init_state(hn)
 
         # output from decoder [batch, length_decoder, tag_space]
@@ -582,7 +589,7 @@ class StackPtrNet(nn.Module):
         # output_enc [length, hidden_size * 2]
         # arc_c [length, arc_space]
         # type_c [length, type_space]
-        # hx [num_direction, hidden_size]
+        # hx [1, hidden_size]
         if length is not None:
             output_enc = output_enc[:length]
             arc_c = arc_c[:length]
@@ -590,7 +597,7 @@ class StackPtrNet(nn.Module):
         else:
             length = output_enc.size(0)
 
-        # [num_layers, 1, hidden_size]
+        # [1, 1, hidden_size]
         # hack to handle LSTM
         if isinstance(hx, tuple):
             hx, cx = hx
