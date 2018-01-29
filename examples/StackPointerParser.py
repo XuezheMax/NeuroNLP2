@@ -193,8 +193,11 @@ def main():
     char_table = construct_char_embedding_table()
 
     window = 3
-    network = StackPtrNet(word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, num_filters, window, mode, input_size_decoder, hidden_size, num_layers, num_types, arc_space, type_space,
-                          embedd_word=word_table, embedd_char=char_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn, biaffine=True, pos=use_pos, prior_order=prior_order,
+    network = StackPtrNet(word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, num_filters, window,
+                          mode, input_size_decoder, hidden_size, encoder_layers, decoder_layers,
+                          num_types, arc_space, type_space,
+                          embedd_word=word_table, embedd_char=char_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn,
+                          biaffine=True, pos=use_pos, prior_order=prior_order,
                           skipConnect=skipConnect, grandPar=grandPar, sibling=sibling)
 
     if use_gpu:
