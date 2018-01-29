@@ -37,7 +37,8 @@ def main():
     args_parser.add_argument('--hidden_size', type=int, default=256, help='Number of hidden units in RNN')
     args_parser.add_argument('--arc_space', type=int, default=128, help='Dimension of tag space')
     args_parser.add_argument('--type_space', type=int, default=128, help='Dimension of tag space')
-    args_parser.add_argument('--num_layers', type=int, default=1, help='Number of layers of RNN')
+    args_parser.add_argument('--encoder_layers', type=int, default=1, help='Number of layers of encoder RNN')
+    args_parser.add_argument('--decoder_layers', type=int, default=1, help='Number of layers of decoder RNN')
     args_parser.add_argument('--num_filters', type=int, default=50, help='Number of filters in CNN')
     args_parser.add_argument('--pos', action='store_true', help='use part-of-speech embedding.')
     args_parser.add_argument('--pos_dim', type=int, default=50, help='Dimension of POS embeddings')
@@ -86,7 +87,8 @@ def main():
     hidden_size = args.hidden_size
     arc_space = args.arc_space
     type_space = args.type_space
-    num_layers = args.num_layers
+    encoder_layers = args.encoder_layers
+    decoder_layers = args.decoder_layers
     num_filters = args.num_filters
     learning_rate = args.learning_rate
     opt = args.opt
@@ -222,7 +224,8 @@ def main():
         opt_info += 'betas=%s, eps=%.1e' % (betas, eps)
 
     logger.info("Embedding dim: word=%d, char=%d, pos=%d (%s)" % (word_dim, char_dim, pos_dim, use_pos))
-    logger.info("Network: %s, num_layer=%d, input_dec=%d, hidden=%d, filter=%d, arc_space=%d, type_space=%d" % (mode, num_layers, input_size_decoder, hidden_size, num_filters, arc_space, type_space))
+    logger.info("CNN: filter=%d, kernel=%d" % (num_filters, window))
+    logger.info("RNN: %s, num_layer=(%d, %d), input_dec=%d, hidden=%d,  arc_space=%d, type_space=%d" % (mode, encoder_layers, decoder_layers, input_size_decoder, hidden_size, arc_space, type_space))
     logger.info("train: cov: %.1f, (#data: %d, batch: %d, clip: %.2f, dropout(in, out, rnn): (%.2f, %.2f, %s), unk_repl: %.2f)" % (cov, num_data, batch_size, clip, p_in, p_out, p_rnn, unk_replace))
     logger.info('prior order: %s, grand parent: %s, sibling: %s, ' % (prior_order, grandPar, sibling))
     logger.info('skip connect: %s, beam: %d' % (skipConnect, beam))

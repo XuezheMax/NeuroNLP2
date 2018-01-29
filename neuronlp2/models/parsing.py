@@ -268,8 +268,11 @@ class BiRecurrentConvBiAffine(nn.Module):
 
 
 class StackPtrNet(nn.Module):
-    def __init__(self, word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, num_filters, kernel_size, rnn_mode, input_size_decoder, hidden_size, num_layers, num_labels, arc_space, type_space,
-                 embedd_word=None, embedd_char=None, embedd_pos=None, p_in=0.2, p_out=0.5, p_rnn=(0.5, 0.5), biaffine=True, pos=True, prior_order='deep_first', skipConnect=False,
+    def __init__(self, word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, num_filters, kernel_size,
+                 rnn_mode, input_size_decoder, hidden_size, encoder_layers, decoder_layers,
+                 num_labels, arc_space, type_space,
+                 embedd_word=None, embedd_char=None, embedd_pos=None, p_in=0.2, p_out=0.5, p_rnn=(0.5, 0.5),
+                 biaffine=True, pos=True, prior_order='deep_first', skipConnect=False,
                  grandPar=False, sibling=False):
 
         super(StackPtrNet, self).__init__()
@@ -314,9 +317,11 @@ class StackPtrNet(nn.Module):
 
         self.src_dense = nn.Linear(2 * hidden_size, dim_dec)
 
-        self.encoder = RNN_ENCODER(dim_enc, hidden_size, num_layers=num_layers, batch_first=True, bidirectional=True, dropout=p_rnn)
+        self.encoder_layers = encoder_layers
+        self.encoder = RNN_ENCODER(dim_enc, hidden_size, num_layers=encoder_layers, batch_first=True, bidirectional=True, dropout=p_rnn)
 
-        self.decoder = RNN_DECODER(dim_dec, hidden_size, num_layers=1, batch_first=True, bidirectional=False, dropout=p_rnn)
+        self.decoder_layers = decoder_layers
+        self.decoder = RNN_DECODER(dim_dec, hidden_size, num_layers=decoder_layers, batch_first=True, bidirectional=False, dropout=p_rnn)
 
         self.hx_dense = nn.Linear(2 * hidden_size, hidden_size)
 
@@ -441,7 +446,6 @@ class StackPtrNet(nn.Module):
             hn, cn = hn
             # take the last layers
             # [2, batch, hidden_size]
-            hn = hn[-2:]
             cn = cn[-2:]
             # hn [2, batch, hidden_size]
             _, batch, hidden_size = cn.size()
@@ -451,6 +455,9 @@ class StackPtrNet(nn.Module):
             cn = cn.view(batch, 1, 2 * hidden_size).transpose(0, 1)
             # take hx_dense to [1, batch, hidden_size]
             cn = self.hx_dense(cn)
+            # [decoder_layers, batch, hidden_size]
+            if self.decoder_layers > 1:
+                cn = torch.cat([cn, Variable(cn.data.new(self.decoder_layers - 1, batch, hidden_size))], dim=0)
             # hn is tanh(cn)
             hn = F.tanh(cn)
             hn = (hn, cn)
@@ -464,8 +471,11 @@ class StackPtrNet(nn.Module):
             hn = hn.transpose(0, 1).contiguous()
             # then view to [batch, 1, 2 * hidden_size] --> [1, batch, 2 * hidden_size]
             hn = hn.view(batch, 1, 2 * hidden_size).transpose(0, 1)
-            # take hx_dense to [num_layers, batch, hidden_size]
+            # take hx_dense to [1, batch, hidden_size]
             hn = F.tanh(self.hx_dense(hn))
+            # [decoder_layers, batch, hidden_size]
+            if self.decoder_layers > 1:
+                hn = torch.cat([hn, Variable(hn.data.new(self.decoder_layers - 1, batch, hidden_size))], dim=0)
         return hn
 
     def loss(self, input_word, input_char, input_pos, heads, stacked_heads, children, siblings, stacked_types, skip_connect=None, mask_e=None, length_e=None, mask_d=None, length_d=None, hx=None):
@@ -477,7 +487,7 @@ class StackPtrNet(nn.Module):
         # output size [batch, length_encoder, type_space]
         type_c = F.elu(self.type_c(output_enc))
 
-        # transform hn to [1, batch, hidden_size]
+        # transform hn to [decoder_layers, batch, hidden_size]
         hn = self._transform_decoder_init_state(hn)
 
         # output from decoder [batch, length_decoder, tag_space]
@@ -589,7 +599,7 @@ class StackPtrNet(nn.Module):
         # output_enc [length, hidden_size * 2]
         # arc_c [length, arc_space]
         # type_c [length, type_space]
-        # hx [1, hidden_size]
+        # hx [decoder_layers, hidden_size]
         if length is not None:
             output_enc = output_enc[:length]
             arc_c = arc_c[:length]
@@ -597,7 +607,7 @@ class StackPtrNet(nn.Module):
         else:
             length = output_enc.size(0)
 
-        # [1, 1, hidden_size]
+        # [decoder_layers, 1, hidden_size]
         # hack to handle LSTM
         if isinstance(hx, tuple):
             hx, cx = hx
@@ -635,7 +645,7 @@ class StackPtrNet(nn.Module):
             gpars = torch.LongTensor([grand_parents[i][-1] for i in range(num_hyp)]).type_as(children) if self.grandPar else None
             sibs = torch.LongTensor([siblings[i].pop() for i in range(num_hyp)]).type_as(children) if self.sibling else None
 
-            # [num_layers, num_hyp, hidden_size]
+            # [decoder_layers, num_hyp, hidden_size]
             hs = torch.cat([skip_connects[i].pop() for i in range(num_hyp)], dim=1) if self.skipConnect else None
 
             # [num_hyp, hidden_size * 2]
@@ -655,7 +665,7 @@ class StackPtrNet(nn.Module):
             src_encoding = F.elu(self.src_dense(src_encoding))
 
             # output [num_hyp, hidden_size]
-            # hx [num_layer, num_hyp, hidden_size]
+            # hx [decoder_layer, num_hyp, hidden_size]
             output_dec, hx = self.decoder.step(src_encoding, hx=hx, hs=hs) if self.skipConnect else self.decoder.step(src_encoding, hx=hx)
 
             # arc_h size [num_hyp, 1, arc_space]
@@ -782,7 +792,7 @@ class StackPtrNet(nn.Module):
             child_orders = new_child_orders
             children.copy_(new_children)
             stacked_types.copy_(new_stacked_types)
-            # hx [num_directions, num_hyp, hidden_size]
+            # hx [decoder_layers, num_hyp, hidden_size]
             # hack to handle LSTM
             if isinstance(hx, tuple):
                 hx, cx = hx
@@ -825,6 +835,7 @@ class StackPtrNet(nn.Module):
         arc_c = F.elu(self.arc_c(output_enc))
         # output size [batch, length_encoder, type_space]
         type_c = F.elu(self.type_c(output_enc))
+        # [decoder_layers, batch, hidden_size
         hn = self._transform_decoder_init_state(hn)
         batch, max_len_e, _ = output_enc.size()
 
