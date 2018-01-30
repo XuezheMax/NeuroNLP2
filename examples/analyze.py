@@ -301,7 +301,7 @@ def main():
 def calc_loss(network, word, char, pos, heads, stacked_heads, children, sibling, stacked_types, skip_connect, mask_e, length_e, mask_d, length_d):
     loss_arc_leaf, loss_arc_non_leaf, \
     loss_type_leaf, loss_type_non_leaf, \
-    loss_cov, num_leaf, num_non_leaf = network.loss(word, char, pos, heads, stacked_heads, children, sibling, stacked_types, skip_connect=skip_connect,
+    loss_cov, num_leaf, num_non_leaf = network.loss(word, char, pos, heads, stacked_heads, children, sibling, stacked_types, 1.0, skip_connect=skip_connect,
                                                     mask_e=mask_e, length_e=length_e, mask_d=mask_d, length_d=length_d)
 
     num_leaf = num_leaf.data[0]
