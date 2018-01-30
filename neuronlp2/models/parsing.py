@@ -24,16 +24,17 @@ class BiRecurrentConvBiAffine(nn.Module):
     def __init__(self, word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, num_filters, kernel_size,
                  rnn_mode, hidden_size, num_layers, num_labels, arc_space, type_space,
                  embedd_word=None, embedd_char=None, embedd_pos=None,
-                 p_in=0.2, p_out=0.5, p_rnn=(0.5, 0.5), biaffine=True):
+                 p_in=0.2, p_out=0.5, p_rnn=(0.5, 0.5), biaffine=True, pos=True):
         super(BiRecurrentConvBiAffine, self).__init__()
 
         self.word_embedd = Embedding(num_words, word_dim, init_embedding=embedd_word)
         self.char_embedd = Embedding(num_chars, char_dim, init_embedding=embedd_char)
-        self.pos_embedd = Embedding(num_pos, pos_dim, init_embedding=embedd_pos)
+        self.pos_embedd = Embedding(num_pos, pos_dim, init_embedding=embedd_pos) if pos else None
         self.conv1d = nn.Conv1d(char_dim, num_filters, kernel_size, padding=kernel_size - 1)
         self.dropout_in = nn.Dropout2d(p=p_in)
         self.dropout_out = nn.Dropout2d(p=p_out)
         self.num_labels = num_labels
+        self.pos = pos
 
         if rnn_mode == 'RNN':
             RNN = VarMaskedRNN
@@ -46,8 +47,8 @@ class BiRecurrentConvBiAffine(nn.Module):
         else:
             raise ValueError('Unknown RNN mode: %s' % rnn_mode)
 
-        self.rnn = RNN(word_dim + num_filters + pos_dim, hidden_size, num_layers=num_layers,
-                       batch_first=True, bidirectional=True, dropout=p_rnn)
+        dim_enc = word_dim + num_filters + pos_dim if self.pos else word_dim + num_filters
+        self.rnn = RNN(dim_enc, hidden_size, num_layers=num_layers, batch_first=True, bidirectional=True, dropout=p_rnn)
 
         out_dim = hidden_size * 2
         self.arc_h = nn.Linear(out_dim, arc_space)
@@ -61,8 +62,6 @@ class BiRecurrentConvBiAffine(nn.Module):
     def _get_rnn_output(self, input_word, input_char, input_pos, mask=None, length=None, hx=None):
         # [batch, length, word_dim]
         word = self.word_embedd(input_word)
-        # [batch, length, pos_dim]
-        pos = self.pos_embedd(input_pos)
 
         # [batch, length, char_length, char_dim]
         char = self.char_embedd(input_char)
@@ -78,10 +77,16 @@ class BiRecurrentConvBiAffine(nn.Module):
 
         # apply dropout on input
         word = self.dropout_in(word)
-        pos = self.dropout_in(pos)
         char = self.dropout_in(char)
         # concatenate word and char [batch, length, word_dim+char_filter]
-        input = torch.cat([word, char, pos], dim=2)
+        input = torch.cat([word, char], dim=2)
+
+        if self.pos:
+            # [batch, length, pos_dim]
+            pos = self.pos_embedd(input_pos)
+            pos = self.dropout_in(pos)
+            input = torch.cat([input, pos], dim=2)
+
         # output from rnn [batch, length, hidden_size]
         output, hn = self.rnn(input, mask, hx=hx)
 

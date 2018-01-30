@@ -6,6 +6,7 @@ Implementation of Bi-directional LSTM-CNNs-TreeCRF model for Graph-based depende
 """
 
 import sys
+import os
 
 sys.path.append(".")
 sys.path.append("..")
@@ -37,6 +38,7 @@ def main():
     args_parser.add_argument('--type_space', type=int, default=128, help='Dimension of tag space')
     args_parser.add_argument('--num_layers', type=int, default=1, help='Number of layers of RNN')
     args_parser.add_argument('--num_filters', type=int, default=50, help='Number of filters in CNN')
+    args_parser.add_argument('--pos', action='store_true', help='use part-of-speech embedding.')
     args_parser.add_argument('--pos_dim', type=int, default=50, help='Dimension of POS embeddings')
     args_parser.add_argument('--char_dim', type=int, default=50, help='Dimension of Character embeddings')
     args_parser.add_argument('--objective', choices=['cross_entropy', 'crf'], default='cross_entropy',
@@ -61,6 +63,7 @@ def main():
     args_parser.add_argument('--train')  # "data/POS-penn/wsj/split1/wsj1.train.original"
     args_parser.add_argument('--dev')  # "data/POS-penn/wsj/split1/wsj1.dev.original"
     args_parser.add_argument('--test')  # "data/POS-penn/wsj/split1/wsj1.test.original"
+    args_parser.add_argument('--model_path', help='path for saving model file.', required=True)
 
     args = args_parser.parse_args()
 
@@ -72,6 +75,7 @@ def main():
     train_path = args.train
     dev_path = args.dev
     test_path = args.test
+    model_path = args.model_path
     num_epochs = args.num_epochs
     batch_size = args.batch_size
     hidden_size = args.hidden_size
@@ -96,17 +100,18 @@ def main():
     char_embedding = args.char_embedding
     char_path = args.char_path
 
+    use_pos = args.pos
     pos_dim = args.pos_dim
     word_dict, word_dim = utils.load_embedding_dict(word_embedding, word_path)
     char_dict = None
     char_dim = args.char_dim
     if char_embedding != 'random':
         char_dict, char_dim = utils.load_embedding_dict(char_embedding, char_path)
+
     logger.info("Creating Alphabets")
-    word_alphabet, char_alphabet, pos_alphabet, \
-    type_alphabet = conllx_data.create_alphabets("data/alphabets/mst/", train_path,
-                                                 data_paths=[dev_path, test_path],
-                                                 max_vocabulary_size=50000, embedd_dict=word_dict)
+    alphabet_path = os.path.join(model_path, 'alphabets/')
+    word_alphabet, char_alphabet, pos_alphabet, type_alphabet = conllx_data.create_alphabets(alphabet_path, train_path, data_paths=[dev_path, test_path],
+                                                                                             max_vocabulary_size=50000, embedd_dict=word_dict)
 
     num_words = word_alphabet.size()
     num_chars = char_alphabet.size()
@@ -121,16 +126,13 @@ def main():
     logger.info("Reading Data")
     use_gpu = torch.cuda.is_available()
 
-    data_train = conllx_data.read_data_to_variable(train_path, word_alphabet, char_alphabet, pos_alphabet,
-                                                   type_alphabet, use_gpu=use_gpu, symbolic_root=True)
+    data_train = conllx_data.read_data_to_variable(train_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, use_gpu=use_gpu, symbolic_root=True)
     # data_train = conllx_data.read_data(train_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
     # num_data = sum([len(bucket) for bucket in data_train])
     num_data = sum(data_train[1])
 
-    data_dev = conllx_data.read_data_to_variable(dev_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
-                                                 use_gpu=use_gpu, volatile=True, symbolic_root=True)
-    data_test = conllx_data.read_data_to_variable(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
-                                                  use_gpu=use_gpu, volatile=True, symbolic_root=True)
+    data_dev = conllx_data.read_data_to_variable(dev_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, use_gpu=use_gpu, volatile=True, symbolic_root=True)
+    data_test = conllx_data.read_data_to_variable(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, use_gpu=use_gpu, volatile=True, symbolic_root=True)
 
     punct_set = None
     if punctuation is not None:
@@ -184,7 +186,7 @@ def main():
                                           mode, hidden_size, num_layers,
                                           num_types, arc_space, type_space,
                                           embedd_word=word_table, embedd_char=char_table,
-                                          p_in=p_in, p_out=p_out, p_rnn=p_rnn, biaffine=True)
+                                          p_in=p_in, p_out=p_out, p_rnn=p_rnn, biaffine=True, pos=use_pos)
     elif obj == 'crf':
         raise NotImplementedError
     else:
@@ -207,7 +209,7 @@ def main():
         lr = learning_rate
         optim = SGD(network.parameters(), lr=lr, momentum=momentum, weight_decay=gamma, nesterov=True)
 
-    logger.info("Embedding dim: word=%d, char=%d, pos=%d" % (word_dim, char_dim, pos_dim))
+    logger.info("Embedding dim: word=%d, char=%d, pos=%d (%s)" % (word_dim, char_dim, pos_dim, use_pos))
     logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, arc_space=%d, type_space=%d" % (
         mode, num_layers, hidden_size, num_filters, arc_space, type_space))
     logger.info("train: obj: %s, l2: %f, (#data: %d, batch: %d, dropout(in, out, rnn): (%.2f, %.2f, %s), unk replace: %.2f)" % (

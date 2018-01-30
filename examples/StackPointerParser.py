@@ -125,8 +125,8 @@ def main():
     char_dim = args.char_dim
     if char_embedding != 'random':
         char_dict, char_dim = utils.load_embedding_dict(char_embedding, char_path)
-    logger.info("Creating Alphabets")
 
+    logger.info("Creating Alphabets")
     alphabet_path = os.path.join(model_path, 'alphabets/')
     model_name = os.path.join(model_path, model_name)
     word_alphabet, char_alphabet, pos_alphabet, type_alphabet = conllx_stacked_data.create_alphabets(alphabet_path, train_path, data_paths=[dev_path, test_path],
