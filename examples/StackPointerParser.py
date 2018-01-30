@@ -53,6 +53,7 @@ def main():
     args_parser.add_argument('--p_rnn', nargs=2, type=float, required=True, help='dropout rate for RNN')
     args_parser.add_argument('--p_in', type=float, default=0.33, help='dropout rate for input embeddings')
     args_parser.add_argument('--p_out', type=float, default=0.33, help='dropout rate for output layer')
+    args_parser.add_argument('--label_smooth', type=float, default=0.9, help='weight of label smoothing method')
     args_parser.add_argument('--skipConnect', action='store_true', help='use skip connection for decoder RNN.')
     args_parser.add_argument('--grandPar', action='store_true', help='use grand parent.')
     args_parser.add_argument('--sibling', action='store_true', help='use sibling.')
@@ -103,6 +104,7 @@ def main():
     p_rnn = tuple(args.p_rnn)
     p_in = args.p_in
     p_out = args.p_out
+    label_smooth = args.label_smooth
     unk_replace = args.unk_replace
     prior_order = args.prior_order
     skipConnect = args.skipConnect
@@ -229,7 +231,8 @@ def main():
     logger.info("Embedding dim: word=%d, char=%d, pos=%d (%s)" % (word_dim, char_dim, pos_dim, use_pos))
     logger.info("CNN: filter=%d, kernel=%d" % (num_filters, window))
     logger.info("RNN: %s, num_layer=(%d, %d), input_dec=%d, hidden=%d,  arc_space=%d, type_space=%d" % (mode, encoder_layers, decoder_layers, input_size_decoder, hidden_size, arc_space, type_space))
-    logger.info("train: cov: %.1f, (#data: %d, batch: %d, clip: %.2f, dropout(in, out, rnn): (%.2f, %.2f, %s), unk_repl: %.2f)" % (cov, num_data, batch_size, clip, p_in, p_out, p_rnn, unk_replace))
+    logger.info("train: cov: %.1f, (#data: %d, batch: %d, clip: %.2f, label_smooth: %.2f, unk_repl: %.2f)" % (cov, num_data, batch_size, clip, label_smooth, unk_replace))
+    logger.info("dropout(in, out, rnn): (%.2f, %.2f, %s)" % (p_in, p_out, p_rnn))
     logger.info('prior order: %s, grand parent: %s, sibling: %s, ' % (prior_order, grandPar, sibling))
     logger.info('skip connect: %s, beam: %d' % (skipConnect, beam))
     logger.info(opt_info)
@@ -285,8 +288,8 @@ def main():
             optim.zero_grad()
             loss_arc_leaf, loss_arc_non_leaf, \
             loss_type_leaf, loss_type_non_leaf, \
-            loss_cov, num_leaf, num_non_leaf = network.loss(word, char, pos, heads, stacked_heads, children, sibling, stacked_types, skip_connect=skip_connect,
-                                                            mask_e=masks_e, length_e=lengths_e, mask_d=masks_d, length_d=lengths_d)
+            loss_cov, num_leaf, num_non_leaf = network.loss(word, char, pos, heads, stacked_heads, children, sibling, stacked_types, label_smooth,
+                                                            skip_connect=skip_connect, mask_e=masks_e, length_e=lengths_e, mask_d=masks_d, length_d=lengths_d)
             loss_arc = loss_arc_leaf + loss_arc_non_leaf
             loss_type = loss_type_leaf + loss_type_non_leaf
             loss = loss_arc + loss_type + cov * loss_cov

@@ -478,7 +478,8 @@ class StackPtrNet(nn.Module):
                 hn = torch.cat([hn, Variable(hn.data.new(self.decoder_layers - 1, batch, hidden_size))], dim=0)
         return hn
 
-    def loss(self, input_word, input_char, input_pos, heads, stacked_heads, children, siblings, stacked_types, skip_connect=None, mask_e=None, length_e=None, mask_d=None, length_d=None, hx=None):
+    def loss(self, input_word, input_char, input_pos, heads, stacked_heads, children, siblings, stacked_types, label_smooth,
+             skip_connect=None, mask_e=None, length_e=None, mask_d=None, length_d=None, hx=None):
         # output from encoder [batch, length_encoder, tag_space]
         output_enc, hn, mask_e, _ = self._get_encoder_output(input_word, input_char, input_pos, mask_e=mask_e, length_e=length_e, hx=hx)
 
@@ -568,11 +569,17 @@ class StackPtrNet(nn.Module):
         head_index = torch.arange(0, max_len_d).view(max_len_d, 1).expand(max_len_d, batch)
         head_index = head_index.type_as(out_arc.data).long()
         # [batch, length_decoder]
-        loss_arc = loss_arc[batch_index, head_index, children.data.t()].transpose(0, 1)
+        # label smoothing
+        loss_arc1 = loss_arc[batch_index, head_index, children.data.t()].transpose(0, 1)
+        loss_arc2 = loss_arc.sum(dim=2) / mask_e.sum(dim=1).unsqueeze(1)
+        loss_arc = loss_arc1 * label_smooth + loss_arc2 * (1 - label_smooth)
         loss_arc_leaf = loss_arc * mask_leaf
         loss_arc_non_leaf = loss_arc * mask_non_leaf
 
-        loss_type = loss_type[batch_index, head_index, stacked_types.data.t()].transpose(0, 1)
+        # label smoothing
+        loss_type1 = loss_type[batch_index, head_index, stacked_types.data.t()].transpose(0, 1)
+        loss_type2 = loss_type.sum(dim=2) / self.num_labels
+        loss_type = loss_type1 * label_smooth + loss_type2 * (1 - label_smooth)
         loss_type_leaf = loss_type * mask_leaf
         loss_type_non_leaf = loss_type * mask_non_leaf
 
