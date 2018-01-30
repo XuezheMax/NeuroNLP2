@@ -569,17 +569,22 @@ class StackPtrNet(nn.Module):
         head_index = torch.arange(0, max_len_d).view(max_len_d, 1).expand(max_len_d, batch)
         head_index = head_index.type_as(out_arc.data).long()
         # [batch, length_decoder]
-        # label smoothing
-        loss_arc1 = loss_arc[batch_index, head_index, children.data.t()].transpose(0, 1)
-        loss_arc2 = loss_arc.sum(dim=2) / mask_e.sum(dim=1).unsqueeze(1)
-        loss_arc = loss_arc1 * label_smooth + loss_arc2 * (1 - label_smooth)
+        if 0.0 < label_smooth < 1.0 - 1e-4:
+            # label smoothing
+            loss_arc1 = loss_arc[batch_index, head_index, children.data.t()].transpose(0, 1)
+            loss_arc2 = loss_arc.sum(dim=2) / mask_e.sum(dim=1).unsqueeze(1)
+            loss_arc = loss_arc1 * label_smooth + loss_arc2 * (1 - label_smooth)
+
+            loss_type1 = loss_type[batch_index, head_index, stacked_types.data.t()].transpose(0, 1)
+            loss_type2 = loss_type.sum(dim=2) / self.num_labels
+            loss_type = loss_type1 * label_smooth + loss_type2 * (1 - label_smooth)
+        else:
+            loss_arc = loss_arc[batch_index, head_index, children.data.t()].transpose(0, 1)
+            loss_type = loss_type[batch_index, head_index, stacked_types.data.t()].transpose(0, 1)
+
         loss_arc_leaf = loss_arc * mask_leaf
         loss_arc_non_leaf = loss_arc * mask_non_leaf
 
-        # label smoothing
-        loss_type1 = loss_type[batch_index, head_index, stacked_types.data.t()].transpose(0, 1)
-        loss_type2 = loss_type.sum(dim=2) / self.num_labels
-        loss_type = loss_type1 * label_smooth + loss_type2 * (1 - label_smooth)
         loss_type_leaf = loss_type * mask_leaf
         loss_type_non_leaf = loss_type * mask_non_leaf
 
