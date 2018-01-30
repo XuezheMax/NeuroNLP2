@@ -53,7 +53,7 @@ def main():
     args_parser.add_argument('--p_rnn', nargs=2, type=float, required=True, help='dropout rate for RNN')
     args_parser.add_argument('--p_in', type=float, default=0.33, help='dropout rate for input embeddings')
     args_parser.add_argument('--p_out', type=float, default=0.33, help='dropout rate for output layer')
-    args_parser.add_argument('--label_smooth', type=float, default=0.9, help='weight of label smoothing method')
+    args_parser.add_argument('--label_smooth', type=float, default=1.0, help='weight of label smoothing method')
     args_parser.add_argument('--skipConnect', action='store_true', help='use skip connection for decoder RNN.')
     args_parser.add_argument('--grandPar', action='store_true', help='use grand parent.')
     args_parser.add_argument('--sibling', action='store_true', help='use sibling.')
