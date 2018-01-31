@@ -82,6 +82,7 @@ def main():
     pred_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
     gold_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
 
+    logger.info('model: %s' % model_name)
     network = torch.load(model_name)
 
     if use_gpu:
