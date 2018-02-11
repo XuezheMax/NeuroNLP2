@@ -268,7 +268,8 @@ def main():
 
     patient = 0
     decay = 0
-    max_decay = 10
+    max_decay = 9
+    double_schedule_decay = 5
     for epoch in range(1, num_epochs + 1):
         print('Epoch %d (%s, optim: %s, learning rate=%.6f, eps=%.1e, decay rate=%.2f (schedule=%d, patient=%d, decay=%d)): ' % (epoch, mode, opt, lr, eps, decay_rate, schedule, patient, decay))
         train_err_arc_leaf = 0.
@@ -502,7 +503,7 @@ def main():
                 optim = generate_optimizer(opt, lr, network.parameters())
                 patient = 0
                 decay += 1
-                if decay % 3 == 0:
+                if decay % double_schedule_decay == 0:
                     schedule *= 2
 
         print('----------------------------------------------------------------------------------------------------------------------------')
