@@ -495,9 +495,7 @@ def main():
             pred_writer.close()
             gold_writer.close()
         else:
-            if patient < schedule:
-                patient += 1
-            else:
+            if dev_ucorr_nopunc * 100 / dev_total_nopunc < dev_ucorrect_nopunc * 100 / dev_total_nopunc - 5 or patient >= schedule:
                 network = torch.load(model_name)
                 lr = lr * decay_rate
                 optim = generate_optimizer(opt, lr, network.parameters())
@@ -505,6 +503,8 @@ def main():
                 decay += 1
                 if decay % double_schedule_decay == 0:
                     schedule *= 2
+            else:
+                patient += 1
 
         print('----------------------------------------------------------------------------------------------------------------------------')
         print('best dev  W. Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%, ucm: %.2f%%, lcm: %.2f%% (epoch: %d)' % (
