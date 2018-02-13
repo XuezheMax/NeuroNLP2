@@ -276,8 +276,7 @@ def main():
     max_decay = 9
     double_schedule_decay = 5
     for epoch in range(1, num_epochs + 1):
-        print('Epoch %d (%s, optim: %s, learning rate=%.4f, decay rate=%.4f (schedule=%d)): ' % (
-            epoch, mode, opt, lr, decay_rate, schedule))
+        print('Epoch %d (%s, optim: %s, learning rate=%.6f, eps=%.1e, decay rate=%.2f (schedule=%d, patient=%d, decay=%d)): ' % (epoch, mode, opt, lr, eps, decay_rate, schedule, patient, decay))
         train_err = 0.
         train_err_arc = 0.
         train_err_type = 0.
@@ -286,8 +285,7 @@ def main():
         num_back = 0
         network.train()
         for batch in range(1, num_batches + 1):
-            word, char, pos, heads, types, masks, lengths = conllx_data.get_batch_variable(data_train, batch_size,
-                                                                                           unk_replace=unk_replace)
+            word, char, pos, heads, types, masks, lengths = conllx_data.get_batch_variable(data_train, batch_size, unk_replace=unk_replace)
 
             optim.zero_grad()
             loss_arc, loss_type = network.loss(word, char, pos, heads, types, mask=masks, length=lengths)
