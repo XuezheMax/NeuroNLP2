@@ -107,7 +107,7 @@ def create_alphabets(alphabet_directory, train_path, data_paths=None, max_vocabu
 
         vocab_list = _START_VOCAB + sorted(vocab, key=vocab.get, reverse=True)
         logger.info("Total Vocabulary Size: %d" % len(vocab_list))
-        logger.info("TOtal Singleton Size:  %d" % len(singletons))
+        logger.info("Total Singleton Size:  %d" % len(singletons))
         vocab_list = [word for word in vocab_list if word in _START_VOCAB or vocab[word] > min_occurence]
         logger.info("Total Vocabulary Size (w.o rare words): %d" % len(vocab_list))
 
