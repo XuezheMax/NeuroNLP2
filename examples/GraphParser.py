@@ -17,7 +17,8 @@ import uuid
 
 import numpy as np
 import torch
-from torch.optim import Adam, SGD
+from torch.nn.utils import clip_grad_norm
+from torch.optim import Adam, SGD, Adamax
 from neuronlp2.io import get_logger, conllx_data
 from neuronlp2.models import BiRecurrentConvBiAffine
 from neuronlp2 import utils
@@ -41,12 +42,14 @@ def main():
     args_parser.add_argument('--pos', action='store_true', help='use part-of-speech embedding.')
     args_parser.add_argument('--pos_dim', type=int, default=50, help='Dimension of POS embeddings')
     args_parser.add_argument('--char_dim', type=int, default=50, help='Dimension of Character embeddings')
-    args_parser.add_argument('--objective', choices=['cross_entropy', 'crf'], default='cross_entropy',
-                             help='objective function of training procedure.')
+    args_parser.add_argument('--opt', choices=['adam', 'sgd', 'adamax'], help='optimization algorithm')
+    args_parser.add_argument('--objective', choices=['cross_entropy', 'crf'], default='cross_entropy', help='objective function of training procedure.')
     args_parser.add_argument('--decode', choices=['mst', 'greedy'], help='decoding algorithm', required=True)
     args_parser.add_argument('--learning_rate', type=float, default=0.01, help='Learning rate')
     args_parser.add_argument('--decay_rate', type=float, default=0.05, help='Decay rate of learning rate')
+    args_parser.add_argument('--clip', type=float, default=5.0, help='gradient clipping')
     args_parser.add_argument('--gamma', type=float, default=0.0, help='weight for regularization')
+    args_parser.add_argument('--epsilon', type=float, default=1e-8, help='epsilon for adam or adamax')
     args_parser.add_argument('--p_rnn', nargs=2, type=float, required=True, help='dropout rate for RNN')
     args_parser.add_argument('--p_in', type=float, default=0.33, help='dropout rate for input embeddings')
     args_parser.add_argument('--p_out', type=float, default=0.33, help='dropout rate for output layer')
@@ -64,6 +67,7 @@ def main():
     args_parser.add_argument('--dev')  # "data/POS-penn/wsj/split1/wsj1.dev.original"
     args_parser.add_argument('--test')  # "data/POS-penn/wsj/split1/wsj1.test.original"
     args_parser.add_argument('--model_path', help='path for saving model file.', required=True)
+    args_parser.add_argument('--model_name', help='name for saving model file.', required=True)
 
     args = args_parser.parse_args()
 
@@ -76,6 +80,7 @@ def main():
     dev_path = args.dev
     test_path = args.test
     model_path = args.model_path
+    model_name = args.model_name
     num_epochs = args.num_epochs
     batch_size = args.batch_size
     hidden_size = args.hidden_size
@@ -84,9 +89,12 @@ def main():
     num_layers = args.num_layers
     num_filters = args.num_filters
     learning_rate = args.learning_rate
+    opt = args.opt
     momentum = 0.9
     betas = (0.9, 0.9)
+    eps = args.epsilon
     decay_rate = args.decay_rate
+    clip = args.clip
     gamma = args.gamma
     schedule = args.schedule
     p_rnn = tuple(args.p_rnn)
@@ -110,6 +118,7 @@ def main():
 
     logger.info("Creating Alphabets")
     alphabet_path = os.path.join(model_path, 'alphabets/')
+    model_name = os.path.join(model_path, model_name)
     word_alphabet, char_alphabet, pos_alphabet, type_alphabet = conllx_data.create_alphabets(alphabet_path, train_path, data_paths=[dev_path, test_path],
                                                                                              max_vocabulary_size=50000, embedd_dict=word_dict)
 
@@ -198,23 +207,33 @@ def main():
     pred_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
     gold_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
 
-    adam_epochs = 50
-    adam_rate = 0.001
-    if adam_epochs > 0:
-        lr = adam_rate
-        opt = 'adam'
-        optim = Adam(network.parameters(), lr=adam_rate, betas=betas, weight_decay=gamma)
-    else:
-        opt = 'sgd'
-        lr = learning_rate
-        optim = SGD(network.parameters(), lr=lr, momentum=momentum, weight_decay=gamma, nesterov=True)
+    def generate_optimizer(opt, lr, params):
+        if opt == 'adam':
+            return Adam(params, lr=lr, betas=betas, weight_decay=gamma, eps=eps)
+        elif opt == 'sgd':
+            return SGD(params, lr=lr, momentum=momentum, weight_decay=gamma, nesterov=True)
+        elif opt == 'adamax':
+            return Adamax(params, lr=lr, betas=betas, weight_decay=gamma, eps=eps)
+        else:
+            raise ValueError('Unknown optimization algorithm: %s' % opt)
+
+    lr = learning_rate
+    optim = generate_optimizer(opt, lr, network.parameters())
+    opt_info = 'opt: %s, ' % opt
+    if opt == 'adam':
+        opt_info += 'betas=%s, eps=%.1e' % (betas, eps)
+    elif opt == 'sgd':
+        opt_info += 'momentum=%.2f' % momentum
+    elif opt == 'adamax':
+        opt_info += 'betas=%s, eps=%.1e' % (betas, eps)
 
     logger.info("Embedding dim: word=%d, char=%d, pos=%d (%s)" % (word_dim, char_dim, pos_dim, use_pos))
-    logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, arc_space=%d, type_space=%d" % (
-        mode, num_layers, hidden_size, num_filters, arc_space, type_space))
-    logger.info("train: obj: %s, l2: %f, (#data: %d, batch: %d, dropout(in, out, rnn): (%.2f, %.2f, %s), unk replace: %.2f)" % (
-        obj, gamma, num_data, batch_size, p_in, p_out, p_rnn, unk_replace))
+    logger.info("CNN: filter=%d, kernel=%d" % (num_filters, window))
+    logger.info("RNN: %s, num_layer=%d, hidden=%d, arc_space=%d, type_space=%d" % (mode, num_layers, hidden_size, arc_space, type_space))
+    logger.info("train: obj: %s, l2: %f, (#data: %d, batch: %d, clip: %.2f, unk replace: %.2f)" % (obj, gamma, num_data, batch_size, clip, unk_replace))
+    logger.info("dropout(in, out, rnn): (%.2f, %.2f, %s)" % (p_in, p_out, p_rnn))
     logger.info("decoding algorithm: %s" % decoding)
+    logger.info(opt_info)
 
     num_batches = num_data / batch_size + 1
     dev_ucorrect = 0.0
@@ -252,6 +271,10 @@ def main():
     else:
         raise ValueError('Unknown decoding algorithm: %s' % decoding)
 
+    patient = 0
+    decay = 0
+    max_decay = 9
+    double_schedule_decay = 5
     for epoch in range(1, num_epochs + 1):
         print('Epoch %d (%s, optim: %s, learning rate=%.4f, decay rate=%.4f (schedule=%d)): ' % (
             epoch, mode, opt, lr, decay_rate, schedule))
@@ -270,6 +293,7 @@ def main():
             loss_arc, loss_type = network.loss(word, char, pos, heads, types, mask=masks, length=lengths)
             loss = loss_arc + loss_type
             loss.backward()
+            clip_grad_norm(network.parameters(), clip)
             optim.step()
 
             num_inst = word.size(0) if obj == 'crf' else masks.data.sum() - word.size(0)
@@ -366,7 +390,7 @@ def main():
         print('Root: corr: %d, total: %d, acc: %.2f%%' %(
             dev_root_corr, dev_total_root, dev_root_corr * 100 / dev_total_root))
 
-        if dev_ucorrect_nopunc <= dev_ucorr_nopunc:
+        if dev_lcorrect_nopunc < dev_lcorr_nopunc or (dev_lcorrect_nopunc == dev_lcorr_nopunc and dev_ucorrect_nopunc < dev_ucorr_nopunc):
             dev_ucorrect_nopunc = dev_ucorr_nopunc
             dev_lcorrect_nopunc = dev_lcorr_nopunc
             dev_ucomlpete_match_nopunc = dev_ucomlpete_nopunc
@@ -380,6 +404,8 @@ def main():
             dev_root_correct = dev_root_corr
 
             best_epoch = epoch
+            patient = 0
+            torch.save(network, model_name)
 
             pred_filename = 'tmp/%spred_test%d' % (str(uid), epoch)
             pred_writer.start(pred_filename)
@@ -437,6 +463,17 @@ def main():
 
             pred_writer.close()
             gold_writer.close()
+        else:
+            if dev_ucorr_nopunc * 100 / dev_total_nopunc < dev_ucorrect_nopunc * 100 / dev_total_nopunc - 5 or patient >= schedule:
+                network = torch.load(model_name)
+                lr = lr * decay_rate
+                optim = generate_optimizer(opt, lr, network.parameters())
+                patient = 0
+                decay += 1
+                if decay % double_schedule_decay == 0:
+                    schedule *= 2
+            else:
+                patient += 1
 
         print('----------------------------------------------------------------------------------------------------------------------------')
         print('best dev  W. Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%, ucm: %.2f%%, lcm: %.2f%% (epoch: %d)' % (
@@ -464,16 +501,8 @@ def main():
             test_root_correct, test_total_root, test_root_correct * 100 / test_total_root, best_epoch))
         print('============================================================================================================================')
 
-        if epoch % schedule == 0:
-            # lr = lr * decay_rate
-            if epoch < adam_epochs:
-                opt = 'adam'
-                lr = adam_rate / (1.0 + epoch * decay_rate)
-                optim = Adam(network.parameters(), lr=lr, betas=betas, weight_decay=gamma)
-            else:
-                opt = 'sgd'
-                lr = learning_rate / (1.0 + (epoch - adam_epochs) * decay_rate)
-                optim = SGD(network.parameters(), lr=lr, momentum=momentum, weight_decay=gamma, nesterov=True)
+        if decay == max_decay:
+            break
 
 
 if __name__ == '__main__':
