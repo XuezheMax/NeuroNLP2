@@ -45,7 +45,7 @@ def main():
     args_parser.add_argument('--char_dim', type=int, default=50, help='Dimension of Character embeddings')
     args_parser.add_argument('--opt', choices=['adam', 'sgd', 'adamax'], help='optimization algorithm')
     args_parser.add_argument('--learning_rate', type=float, default=0.001, help='Learning rate')
-    args_parser.add_argument('--decay_rate', type=float, default=0.5, help='Decay rate of learning rate')
+    args_parser.add_argument('--decay_rate', type=float, default=0.75, help='Decay rate of learning rate')
     args_parser.add_argument('--max_decay', type=int, default=9, help='Number of decays before stop')
     args_parser.add_argument('--double_schedule_decay', type=int, default=5, help='Number of decays to double schedule')
     args_parser.add_argument('--clip', type=float, default=5.0, help='gradient clipping')

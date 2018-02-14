@@ -119,17 +119,14 @@ class BiRecurrentConvBiAffine(nn.Module):
 
     def forward(self, input_word, input_char, input_pos, mask=None, length=None, hx=None):
         # output from rnn [batch, length, tag_space]
-        arc, type, _, mask, length = self._get_rnn_output(input_word, input_char, input_pos,
-                                                          mask=mask, length=length, hx=hx)
+        arc, type, _, mask, length = self._get_rnn_output(input_word, input_char, input_pos, mask=mask, length=length, hx=hx)
         # [batch, length, length]
         out_arc = self.attention(arc[0], arc[1], mask_d=mask, mask_e=mask).squeeze(dim=1)
         return out_arc, type, mask, length
 
-    def loss(self, input_word, input_char, input_pos, heads, types,
-             mask=None, length=None, hx=None):
+    def loss(self, input_word, input_char, input_pos, heads, types, mask=None, length=None, hx=None):
         # out_arc shape [batch, length, length]
-        out_arc, out_type, mask, length = self.forward(input_word, input_char, input_pos,
-                                                       mask=mask, length=length, hx=hx)
+        out_arc, out_type, mask, length = self.forward(input_word, input_char, input_pos, mask=mask, length=length, hx=hx)
         batch, max_len, _ = out_arc.size()
 
         if length is not None and heads.size(1) != mask.size(1):
@@ -194,8 +191,7 @@ class BiRecurrentConvBiAffine(nn.Module):
 
     def decode(self, input_word, input_char, input_pos, mask=None, length=None, hx=None, leading_symbolic=0):
         # out_arc shape [batch, length, length]
-        out_arc, out_type, mask, length = self.forward(input_word, input_char, input_pos,
-                                                       mask=mask, length=length, hx=hx)
+        out_arc, out_type, mask, length = self.forward(input_word, input_char, input_pos, mask=mask, length=length, hx=hx)
         out_arc = out_arc.data
         batch, max_len, _ = out_arc.size()
         # set diagonal elements to -inf

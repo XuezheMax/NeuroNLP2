@@ -17,11 +17,7 @@ import uuid
 
 import numpy as np
 import torch
-from torch.nn.utils import clip_grad_norm
-from torch.optim import Adam, SGD, Adadelta
 from neuronlp2.io import get_logger, conllx_stacked_data
-from neuronlp2.models import StackPtrNet
-from neuronlp2 import utils
 from neuronlp2.io import CoNLLXWriter
 from neuronlp2.tasks import parser
 
