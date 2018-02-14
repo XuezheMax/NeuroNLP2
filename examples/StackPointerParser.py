@@ -46,6 +46,8 @@ def main():
     args_parser.add_argument('--opt', choices=['adam', 'sgd', 'adamax'], help='optimization algorithm')
     args_parser.add_argument('--learning_rate', type=float, default=0.001, help='Learning rate')
     args_parser.add_argument('--decay_rate', type=float, default=0.5, help='Decay rate of learning rate')
+    args_parser.add_argument('--max_decay', type=int, default=9, help='Number of decays before stop')
+    args_parser.add_argument('--double_schedule_decay', type=int, default=5, help='Number of decays to double schedule')
     args_parser.add_argument('--clip', type=float, default=5.0, help='gradient clipping')
     args_parser.add_argument('--gamma', type=float, default=0.0, help='weight for regularization')
     args_parser.add_argument('--epsilon', type=float, default=1e-8, help='epsilon for adam or adamax')
@@ -268,10 +270,11 @@ def main():
 
     patient = 0
     decay = 0
-    max_decay = 9
-    double_schedule_decay = 5
+    max_decay = args.max_decay
+    double_schedule_decay = args.double_schedule_decay
     for epoch in range(1, num_epochs + 1):
-        print('Epoch %d (%s, optim: %s, learning rate=%.6f, eps=%.1e, decay rate=%.2f (schedule=%d, patient=%d, decay=%d)): ' % (epoch, mode, opt, lr, eps, decay_rate, schedule, patient, decay))
+        print('Epoch %d (%s, optim: %s, learning rate=%.6f, eps=%.1e, decay rate=%.2f (schedule=%d, patient=%d, decay=%d (%d, %d))): ' % (
+            epoch, mode, opt, lr, eps, decay_rate, schedule, patient, decay, max_decay, double_schedule_decay))
         train_err_arc_leaf = 0.
         train_err_arc_non_leaf = 0.
         train_err_type_leaf = 0.
