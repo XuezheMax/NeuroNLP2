@@ -379,14 +379,12 @@ def main():
         pred_writer.close()
         gold_writer.close()
         print('W. Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%, ucm: %.2f%%, lcm: %.2f%%' % (
-            dev_ucorr, dev_lcorr, dev_total, dev_ucorr * 100 / dev_total, dev_lcorr * 100 / dev_total,
-            dev_ucomlpete * 100 / dev_total_inst, dev_lcomplete * 100 / dev_total_inst))
+            dev_ucorr, dev_lcorr, dev_total, dev_ucorr * 100 / dev_total, dev_lcorr * 100 / dev_total, dev_ucomlpete * 100 / dev_total_inst, dev_lcomplete * 100 / dev_total_inst))
         print('Wo Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%, ucm: %.2f%%, lcm: %.2f%%' % (
             dev_ucorr_nopunc, dev_lcorr_nopunc, dev_total_nopunc, dev_ucorr_nopunc * 100 / dev_total_nopunc,
             dev_lcorr_nopunc * 100 / dev_total_nopunc,
             dev_ucomlpete_nopunc * 100 / dev_total_inst, dev_lcomplete_nopunc * 100 / dev_total_inst))
-        print('Root: corr: %d, total: %d, acc: %.2f%%' %(
-            dev_root_corr, dev_total_root, dev_root_corr * 100 / dev_total_root))
+        print('Root: corr: %d, total: %d, acc: %.2f%%' %(dev_root_corr, dev_total_root, dev_root_corr * 100 / dev_total_root))
 
         if dev_lcorrect_nopunc < dev_lcorr_nopunc or (dev_lcorrect_nopunc == dev_lcorr_nopunc and dev_ucorrect_nopunc < dev_ucorr_nopunc):
             dev_ucorrect_nopunc = dev_ucorr_nopunc
@@ -466,6 +464,14 @@ def main():
                 network = torch.load(model_name)
                 lr = lr * decay_rate
                 optim = generate_optimizer(opt, lr, network.parameters())
+
+                if decoding == 'greedy':
+                    decode = network.decode
+                elif decoding == 'mst':
+                    decode = network.decode_mst
+                else:
+                    raise ValueError('Unknown decoding algorithm: %s' % decoding)
+
                 patient = 0
                 decay += 1
                 if decay % double_schedule_decay == 0:

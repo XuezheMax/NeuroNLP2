@@ -286,6 +286,7 @@ def main():
             input_encoder, input_decoder = conllx_stacked_data.get_batch_stacked_variable(data_train, batch_size, unk_replace=unk_replace)
             word, char, pos, heads, types, masks_e, lengths_e = input_encoder
             stacked_heads, children, sibling, stacked_types, skip_connect, masks_d, lengths_d = input_decoder
+
             optim.zero_grad()
             loss_arc_leaf, loss_arc_non_leaf, \
             loss_type_leaf, loss_type_non_leaf, \
