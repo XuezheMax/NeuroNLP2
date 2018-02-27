@@ -50,5 +50,5 @@ To train a Deep BiAffine parser, simply run
     ./example/run_graphParser.sh
 Again, remember to setup the paths for data and embeddings.
 
-To train a Neural MST parser (<span style="color:red">under development</span>), run the same script, but change the argument ```objective``` from ```cross_entropy``` to ```crf```.
+To train a Neural MST parser, run the same script, but change the argument ```objective``` from ```cross_entropy``` to ```crf``` (this part is still under development).
  
