@@ -35,7 +35,7 @@ def logsumexp(x, dim=None):
     if dim is None:
         xmax = x.max()
         xmax_ = x.max()
-        return xmax_ + numpy.log(torch.exp(x - xmax).sum())
+        return xmax_ + torch.log(torch.exp(x - xmax).sum())
     else:
         xmax, _ = x.max(dim, keepdim=True)
         xmax_, _ = x.max(dim)
