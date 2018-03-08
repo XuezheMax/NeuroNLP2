@@ -20,7 +20,6 @@ class BiRecurrentConv(nn.Module):
         self.dropout_in = nn.Dropout2d(p=p_in)
         # standard dropout
         self.dropout_rnn_in = nn.Dropout(p=p_rnn[0])
-        self.dropout_rnn_out = nn.Dropout(p=p_rnn[1])
         self.dropout_out = nn.Dropout(p_out)
 
         if rnn_mode == 'RNN':
@@ -83,7 +82,7 @@ class BiRecurrentConv(nn.Module):
             output, hn = self.rnn(input, hx=hx)
 
         # apply dropout for the output of rnn
-        output = self.dropout_rnn_out(output)
+        output = self.dropout_out(output)
 
         if self.dense is not None:
             # [batch, length, tag_space]
@@ -132,7 +131,6 @@ class BiVarRecurrentConv(BiRecurrentConv):
                                                  p_in=p_in, p_out=p_out, p_rnn=p_rnn)
 
         self.dropout_rnn_in = None
-        self.dropout_rnn_out = nn.Dropout2d(p=p_rnn[1])
         self.dropout_out = nn.Dropout2d(p_out)
 
         if rnn_mode == 'RNN':
@@ -173,7 +171,7 @@ class BiVarRecurrentConv(BiRecurrentConv):
 
         # apply dropout for the output of rnn
         # [batch, length, hidden_size] --> [batch, hidden_size, length] --> [batch, length, hidden_size]
-        output = self.dropout_rnn_out(output.transpose(1, 2)).transpose(1, 2)
+        output = self.dropout_out(output.transpose(1, 2)).transpose(1, 2)
 
         if self.dense is not None:
             # [batch, length, tag_space] --> [batch, tag_space, length] --> [batch, length, tag_space]
