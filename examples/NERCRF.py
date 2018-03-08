@@ -19,7 +19,7 @@ import numpy as np
 import torch
 from torch.optim import Adam, SGD
 from neuronlp2.io import get_logger, conll03_data, CoNLL03Writer
-from neuronlp2.models import BiRecurrentConvCRF
+from neuronlp2.models import BiRecurrentConvCRF, BiVarRecurrentConvCRF
 from neuronlp2 import utils
 
 uid = uuid.uuid4().hex[:6]
@@ -46,13 +46,16 @@ def main():
     parser.add_argument('--batch_size', type=int, default=16, help='Number of sentences in each batch')
     parser.add_argument('--hidden_size', type=int, default=128, help='Number of hidden units in RNN')
     parser.add_argument('--tag_space', type=int, default=0, help='Dimension of tag space')
+    parser.add_argument('--num_layers', type=int, default=1, help='Number of layers of RNN')
     parser.add_argument('--num_filters', type=int, default=30, help='Number of filters in CNN')
     parser.add_argument('--char_dim', type=int, default=30, help='Dimension of Character embeddings')
     parser.add_argument('--learning_rate', type=float, default=0.015, help='Learning rate')
     parser.add_argument('--decay_rate', type=float, default=0.1, help='Decay rate of learning rate')
     parser.add_argument('--gamma', type=float, default=0.0, help='weight for regularization')
     parser.add_argument('--dropout', choices=['std', 'variational'], help='type of dropout', required=True)
-    parser.add_argument('--p', type=float, default=0.5, help='dropout rate')
+    parser.add_argument('--p_rnn', nargs=2, type=float, required=True, help='dropout rate for RNN')
+    parser.add_argument('--p_in', type=float, default=0.33, help='dropout rate for input embeddings')
+    parser.add_argument('--p_out', type=float, default=0.33, help='dropout rate for output layer')
     parser.add_argument('--bigram', action='store_true', help='bi-gram parameter for CRF')
     parser.add_argument('--schedule', type=int, help='schedule for learning rate decay')
     parser.add_argument('--unk_replace', type=float, default=0., help='The rate to replace a singleton word with UNK')
@@ -79,7 +82,9 @@ def main():
     decay_rate = args.decay_rate
     gamma = args.gamma
     schedule = args.schedule
-    p = args.p
+    p_rnn = tuple(args.p_rnn)
+    p_in = args.p_in
+    p_out = args.p_out
     unk_replace = args.unk_replace
     bigram = args.bigram
     embedding = args.embedding
@@ -89,10 +94,8 @@ def main():
 
     logger.info("Creating Alphabets")
     word_alphabet, char_alphabet, pos_alphabet, \
-    chunk_alphabet, ner_alphabet = conll03_data.create_alphabets("data/alphabets/ner_crf/", train_path,
-                                                                 data_paths=[dev_path, test_path],
-                                                                 embedd_dict=embedd_dict,
-                                                                 max_vocabulary_size=50000)
+    chunk_alphabet, ner_alphabet = conll03_data.create_alphabets("data/alphabets/ner_crf/", train_path, data_paths=[dev_path, test_path],
+                                                                 embedd_dict=embedd_dict, max_vocabulary_size=50000)
 
     logger.info("Word Alphabet Size: %d" % word_alphabet.size())
     logger.info("Character Alphabet Size: %d" % char_alphabet.size())
@@ -103,15 +106,13 @@ def main():
     logger.info("Reading Data")
     use_gpu = torch.cuda.is_available()
 
-    data_train = conll03_data.read_data_to_variable(train_path, word_alphabet, char_alphabet, pos_alphabet,
-                                                    chunk_alphabet, ner_alphabet, use_gpu=use_gpu)
+    data_train = conll03_data.read_data_to_variable(train_path, word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet, use_gpu=use_gpu)
     num_data = sum(data_train[1])
     num_labels = ner_alphabet.size()
 
-    data_dev = conll03_data.read_data_to_variable(dev_path, word_alphabet, char_alphabet, pos_alphabet,
-                                                  chunk_alphabet, ner_alphabet, use_gpu=use_gpu, volatile=True)
-    data_test = conll03_data.read_data_to_variable(test_path, word_alphabet, char_alphabet, pos_alphabet,
-                                                   chunk_alphabet, ner_alphabet, use_gpu=use_gpu, volatile=True)
+    data_dev = conll03_data.read_data_to_variable(dev_path, word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet, use_gpu=use_gpu, volatile=True)
+    data_test = conll03_data.read_data_to_variable(test_path, word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet, use_gpu=use_gpu, volatile=True)
+
     writer = CoNLL03Writer(word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet)
 
     def construct_word_embedding_table():
@@ -136,26 +137,23 @@ def main():
 
     char_dim = args.char_dim
     window = 3
-    num_layers = 1
+    num_layers = args.num_layers
     tag_space = args.tag_space
     if args.dropout == 'std':
-        network = BiRecurrentConvCRF(embedd_dim, word_alphabet.size(),
-                                     char_dim, char_alphabet.size(),
-                                     num_filters, window,
-                                     mode, hidden_size, num_layers, num_labels,
-                                     tag_space=tag_space, embedd_word=word_table, p_rnn=p, bigram=bigram)
+        network = BiRecurrentConvCRF(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), num_filters, window, mode, hidden_size, num_layers, num_labels,
+                                     tag_space=tag_space, embedd_word=word_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn, bigram=bigram)
     else:
-        raise NotImplementedError
+        network = BiVarRecurrentConvCRF(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), num_filters, window, mode, hidden_size, num_layers, num_labels,
+                                        tag_space=tag_space, embedd_word=word_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn, bigram=bigram)
 
     if use_gpu:
         network.cuda()
 
     lr = learning_rate
     optim = SGD(network.parameters(), lr=lr, momentum=momentum, weight_decay=gamma, nesterov=True)
-    logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, tag_space=%d, crf=%s" % (
-        mode, num_layers, hidden_size, num_filters, tag_space, 'bigram' if bigram else 'unigram'))
-    logger.info("training: l2: %f, (#training data: %d, batch: %d, dropout: %.2f, unk replace: %.2f)" % (
-        gamma, num_data, batch_size, p, unk_replace))
+    logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, tag_space=%d, crf=%s" % (mode, num_layers, hidden_size, num_filters, tag_space, 'bigram' if bigram else 'unigram'))
+    logger.info("training: l2: %f, (#training data: %d, batch: %d, unk replace: %.2f)" % (gamma, num_data, batch_size, unk_replace))
+    logger.info("dropout(in, out, rnn): (%.2f, %.2f, %s)" % (p_in, p_out, p_rnn))
 
     num_batches = num_data / batch_size + 1
     dev_f1 = 0.0
@@ -168,8 +166,7 @@ def main():
     test_recall = 0.0
     best_epoch = 0
     for epoch in range(1, num_epochs + 1):
-        print('Epoch %d (%s(%s), learning rate=%.4f, decay rate=%.4f (schedule=%d)): ' % (
-            epoch, mode, args.dropout, lr, decay_rate, schedule))
+        print('Epoch %d (%s(%s), learning rate=%.4f, decay rate=%.4f (schedule=%d)): ' % (epoch, mode, args.dropout, lr, decay_rate, schedule))
         train_err = 0.
         train_total = 0.
 
@@ -177,8 +174,7 @@ def main():
         num_back = 0
         network.train()
         for batch in range(1, num_batches + 1):
-            word, char, _, _, labels, masks, lengths = conll03_data.get_batch_variable(data_train, batch_size,
-                                                                                       unk_replace=unk_replace)
+            word, char, _, _, labels, masks, lengths = conll03_data.get_batch_variable(data_train, batch_size, unk_replace=unk_replace)
 
             optim.zero_grad()
             loss = network.loss(word, char, labels, mask=masks)
@@ -197,8 +193,7 @@ def main():
                 sys.stdout.write("\b" * num_back)
                 sys.stdout.write(" " * num_back)
                 sys.stdout.write("\b" * num_back)
-                log_info = 'train: %d/%d loss: %.4f, time left (estimated): %.2fs' % (
-                    batch, num_batches, train_err / train_total, time_left)
+                log_info = 'train: %d/%d loss: %.4f, time left (estimated): %.2fs' % (batch, num_batches, train_err / train_total, time_left)
                 sys.stdout.write(log_info)
                 sys.stdout.flush()
                 num_back = len(log_info)
@@ -215,10 +210,8 @@ def main():
 
         for batch in conll03_data.iterate_batch_variable(data_dev, batch_size):
             word, char, pos, chunk, labels, masks, lengths = batch
-            preds, _ = network.decode(word, char, target=labels, mask=masks,
-                                         leading_symbolic=conll03_data.NUM_SYMBOLIC_TAGS)
-            writer.write(word.data.cpu().numpy(), pos.data.cpu().numpy(), chunk.data.cpu().numpy(),
-                         preds.cpu().numpy(), labels.data.cpu().numpy(), lengths.cpu().numpy())
+            preds, _ = network.decode(word, char, target=labels, mask=masks, leading_symbolic=conll03_data.NUM_SYMBOLIC_TAGS)
+            writer.write(word.data.cpu().numpy(), pos.data.cpu().numpy(), chunk.data.cpu().numpy(), preds.cpu().numpy(), labels.data.cpu().numpy(), lengths.cpu().numpy())
         writer.close()
         acc, precision, recall, f1 = evaluate(tmp_filename)
         print('dev acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%%' % (acc, precision, recall, f1))
@@ -236,17 +229,13 @@ def main():
 
             for batch in conll03_data.iterate_batch_variable(data_test, batch_size):
                 word, char, pos, chunk, labels, masks, lengths = batch
-                preds, _ = network.decode(word, char, target=labels, mask=masks,
-                                          leading_symbolic=conll03_data.NUM_SYMBOLIC_TAGS)
-                writer.write(word.data.cpu().numpy(), pos.data.cpu().numpy(), chunk.data.cpu().numpy(),
-                             preds.cpu().numpy(), labels.data.cpu().numpy(), lengths.cpu().numpy())
+                preds, _ = network.decode(word, char, target=labels, mask=masks, leading_symbolic=conll03_data.NUM_SYMBOLIC_TAGS)
+                writer.write(word.data.cpu().numpy(), pos.data.cpu().numpy(), chunk.data.cpu().numpy(), preds.cpu().numpy(), labels.data.cpu().numpy(), lengths.cpu().numpy())
             writer.close()
             test_acc, test_precision, test_recall, test_f1 = evaluate(tmp_filename)
 
-        print("best dev  acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%% (epoch: %d)" % (
-            dev_acc, dev_precision, dev_recall, dev_f1, best_epoch))
-        print("best test acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%% (epoch: %d)" % (
-            test_acc, test_precision, test_recall, test_f1, best_epoch))
+        print("best dev  acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%% (epoch: %d)" % (dev_acc, dev_precision, dev_recall, dev_f1, best_epoch))
+        print("best test acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%% (epoch: %d)" % (test_acc, test_precision, test_recall, test_f1, best_epoch))
 
         if epoch % schedule == 0:
             lr = learning_rate / (1.0 + epoch * decay_rate)

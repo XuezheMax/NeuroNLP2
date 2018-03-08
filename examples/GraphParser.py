@@ -188,12 +188,8 @@ def main():
 
     window = 3
     if obj == 'cross_entropy':
-        network = BiRecurrentConvBiAffine(word_dim, num_words,
-                                          char_dim, num_chars,
-                                          pos_dim, num_pos,
-                                          num_filters, window,
-                                          mode, hidden_size, num_layers,
-                                          num_types, arc_space, type_space,
+        network = BiRecurrentConvBiAffine(word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, num_filters, window,
+                                          mode, hidden_size, num_layers, num_types, arc_space, type_space,
                                           embedd_word=word_table, embedd_char=char_table,
                                           p_in=p_in, p_out=p_out, p_rnn=p_rnn, biaffine=True, pos=use_pos)
     elif obj == 'crf':
@@ -308,9 +304,8 @@ def main():
                 sys.stdout.write("\b" * num_back)
                 sys.stdout.write(" " * num_back)
                 sys.stdout.write("\b" * num_back)
-                log_info = 'train: %d/%d loss: %.4f, arc: %.4f, type: %.4f, time left (estimated): %.2fs' % (
-                    batch, num_batches, train_err / train_total,
-                    train_err_arc / train_total, train_err_type / train_total, time_left)
+                log_info = 'train: %d/%d loss: %.4f, arc: %.4f, type: %.4f, time left: %.2fs' % (batch, num_batches, train_err / train_total,
+                                                                                                 train_err_arc / train_total, train_err_type / train_total, time_left)
                 sys.stdout.write(log_info)
                 sys.stdout.flush()
                 num_back = len(log_info)
@@ -318,9 +313,7 @@ def main():
         sys.stdout.write("\b" * num_back)
         sys.stdout.write(" " * num_back)
         sys.stdout.write("\b" * num_back)
-        print('train: %d loss: %.4f, arc: %.4f, type: %.4f, time: %.2fs' % (
-            num_batches, train_err / train_total, train_err_arc / train_total, train_err_type / train_total,
-            time.time() - start_time))
+        print('train: %d loss: %.4f, arc: %.4f, type: %.4f, time: %.2fs' % (num_batches, train_err / train_total, train_err_arc / train_total, train_err_type / train_total, time.time() - start_time))
 
         # evaluate performance on dev data
         network.eval()
