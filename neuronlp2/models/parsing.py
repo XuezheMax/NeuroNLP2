@@ -21,10 +21,8 @@ class PriorOrder(Enum):
 
 
 class BiRecurrentConvBiAffine(nn.Module):
-    def __init__(self, word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, num_filters, kernel_size,
-                 rnn_mode, hidden_size, num_layers, num_labels, arc_space, type_space,
-                 embedd_word=None, embedd_char=None, embedd_pos=None,
-                 p_in=0.2, p_out=0.5, p_rnn=(0.5, 0.5), biaffine=True, pos=True):
+    def __init__(self, word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, num_filters, kernel_size, rnn_mode, hidden_size, num_layers, num_labels, arc_space, type_space,
+                 embedd_word=None, embedd_char=None, embedd_pos=None, p_in=0.33, p_out=0.33, p_rnn=(0.33, 0.33), biaffine=True, pos=True):
         super(BiRecurrentConvBiAffine, self).__init__()
 
         self.word_embedd = Embedding(num_words, word_dim, init_embedding=embedd_word)
@@ -272,9 +270,8 @@ class StackPtrNet(nn.Module):
     def __init__(self, word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, num_filters, kernel_size,
                  rnn_mode, input_size_decoder, hidden_size, encoder_layers, decoder_layers,
                  num_labels, arc_space, type_space,
-                 embedd_word=None, embedd_char=None, embedd_pos=None, p_in=0.2, p_out=0.5, p_rnn=(0.5, 0.5),
-                 biaffine=True, pos=True, prior_order='deep_first', skipConnect=False,
-                 grandPar=False, sibling=False):
+                 embedd_word=None, embedd_char=None, embedd_pos=None, p_in=0.33, p_out=0.33, p_rnn=(0.33, 0.33),
+                 biaffine=True, pos=True, prior_order='deep_first', skipConnect=False, grandPar=False, sibling=False):
 
         super(StackPtrNet, self).__init__()
         self.word_embedd = Embedding(num_words, word_dim, init_embedding=embedd_word)
