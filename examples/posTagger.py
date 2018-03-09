@@ -211,7 +211,7 @@ def main():
         print("best dev  corr: %d, total: %d, acc: %.2f%% (epoch: %d)" % (dev_correct, dev_total, dev_correct * 100 / dev_total, best_epoch))
         print("best test corr: %d, total: %d, acc: %.2f%% (epoch: %d)" % (test_correct, test_total, test_correct * 100 / test_total, best_epoch))
 
-        if epoch in schedule:
+        if epoch % schedule == 0:
             lr = learning_rate / (1.0 + epoch * decay_rate)
             optim = SGD(network.parameters(), lr=lr, momentum=momentum, weight_decay=gamma, nesterov=True)
 
