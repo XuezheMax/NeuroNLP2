@@ -28,6 +28,7 @@ def main():
     parser.add_argument('--num_epochs', type=int, default=1000, help='Number of training epochs')
     parser.add_argument('--batch_size', type=int, default=16, help='Number of sentences in each batch')
     parser.add_argument('--hidden_size', type=int, default=128, help='Number of hidden units in RNN')
+    parser.add_argument('--tag_space', type=int, default=0, help='Dimension of tag space')
     parser.add_argument('--num_layers', type=int, default=1, help='Number of layers of RNN')
     parser.add_argument('--num_filters', type=int, default=30, help='Number of filters in CNN')
     parser.add_argument('--char_dim', type=int, default=30, help='Dimension of Character embeddings')
@@ -120,13 +121,14 @@ def main():
     char_dim = args.char_dim
     window = 3
     num_layers = args.num_layers
+    tag_space = args.tag_space
     initializer = nn.init.xavier_uniform
     if args.dropout == 'std':
         network = BiRecurrentConv(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), num_filters, window, mode, hidden_size, num_layers, num_labels,
-                                  embedd_word=word_table,  p_in=p_in, p_out=p_out, p_rnn=p_rnn, initializer=initializer)
+                                  tag_space=tag_space, embedd_word=word_table,  p_in=p_in, p_out=p_out, p_rnn=p_rnn, initializer=initializer)
     else:
         network = BiVarRecurrentConv(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), num_filters, window, mode, hidden_size, num_layers, num_labels,
-                                     embedd_word=word_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn, initializer=initializer)
+                                     tag_space=tag_space, embedd_word=word_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn, initializer=initializer)
     if use_gpu:
         network.cuda()
 
