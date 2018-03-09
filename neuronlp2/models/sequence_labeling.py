@@ -10,7 +10,7 @@ from ..nn import utils
 
 class BiRecurrentConv(nn.Module):
     def __init__(self, word_dim, num_words, char_dim, num_chars, num_filters, kernel_size, rnn_mode, hidden_size, num_layers, num_labels,
-                 tag_space=0, embedd_word=None, embedd_char=None, p_in=0.33, p_out=0.5, p_rnn=(0.5, 0.5)):
+                 tag_space=0, embedd_word=None, embedd_char=None, p_in=0.33, p_out=0.5, p_rnn=(0.5, 0.5), initializer=None):
         super(BiRecurrentConv, self).__init__()
 
         self.word_embedd = Embedding(num_words, word_dim, init_embedding=embedd_word)
@@ -41,6 +41,20 @@ class BiRecurrentConv(nn.Module):
         self.dense_softmax = nn.Linear(out_dim, num_labels)
         self.logsoftmax = nn.LogSoftmax(dim=1)
         self.nll_loss = nn.NLLLoss(size_average=False, reduce=False)
+
+        self.initializer = initializer
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        if self.initializer is None:
+            return
+
+        for name, parameter in self.named_parameters():
+            if name.find('embedd') == -1:
+                if parameter.dim() == 1:
+                    parameter.data.zero_()
+                else:
+                    self.initializer(parameter.data)
 
     def _get_rnn_output(self, input_word, input_char, mask=None, length=None, hx=None):
         # hack length from mask
@@ -90,7 +104,6 @@ class BiRecurrentConv(nn.Module):
 
         return output, hn, mask, length
 
-
     def forward(self, input_word, input_char, mask=None, length=None, hx=None):
         # output from rnn [batch, length, tag_space]
         output, _, mask, length = self._get_rnn_output(input_word, input_char, mask=mask, length=length, hx=hx)
@@ -125,10 +138,10 @@ class BiRecurrentConv(nn.Module):
 
 class BiVarRecurrentConv(BiRecurrentConv):
     def __init__(self, word_dim, num_words, char_dim, num_chars, num_filters, kernel_size, rnn_mode, hidden_size, num_layers, num_labels,
-                 tag_space=0, embedd_word=None, embedd_char=None, p_in=0.33, p_out=0.33, p_rnn=(0.33, 0.33)):
+                 tag_space=0, embedd_word=None, embedd_char=None, p_in=0.33, p_out=0.33, p_rnn=(0.33, 0.33), initializer=None):
         super(BiVarRecurrentConv, self).__init__(word_dim, num_words, char_dim, num_chars, num_filters, kernel_size, rnn_mode, hidden_size, num_layers, num_labels,
                                                  tag_space=tag_space, embedd_word=embedd_word, embedd_char=embedd_char,
-                                                 p_in=p_in, p_out=p_out, p_rnn=p_rnn)
+                                                 p_in=p_in, p_out=p_out, p_rnn=p_rnn, initializer=initializer)
 
         self.dropout_rnn_in = None
         self.dropout_out = nn.Dropout2d(p_out)
@@ -142,7 +155,7 @@ class BiVarRecurrentConv(BiRecurrentConv):
         else:
             raise ValueError('Unknown RNN mode: %s' % rnn_mode)
 
-        self.rnn = RNN(word_dim + num_filters, hidden_size, num_layers=num_layers, batch_first=True, bidirectional=True, dropout=p_rnn)
+        self.rnn = RNN(word_dim + num_filters, hidden_size, num_layers=num_layers, batch_first=True, bidirectional=True, dropout=p_rnn, initializer=self.initializer)
 
     def _get_rnn_output(self, input_word, input_char, mask=None, length=None, hx=None):
         # [batch, length, word_dim]
@@ -182,10 +195,10 @@ class BiVarRecurrentConv(BiRecurrentConv):
 
 class BiRecurrentConvCRF(BiRecurrentConv):
     def __init__(self, word_dim, num_words, char_dim, num_chars, num_filters, kernel_size, rnn_mode, hidden_size, num_layers, num_labels,
-                 tag_space=0, embedd_word=None, embedd_char=None, p_in=0.33, p_out=0.5, p_rnn=(0.5, 0.5), bigram=False):
+                 tag_space=0, embedd_word=None, embedd_char=None, p_in=0.33, p_out=0.5, p_rnn=(0.5, 0.5), bigram=False, initializer=None):
         super(BiRecurrentConvCRF, self).__init__(word_dim, num_words, char_dim, num_chars, num_filters, kernel_size, rnn_mode, hidden_size, num_layers, num_labels,
                                                  tag_space=tag_space, embedd_word=embedd_word, embedd_char=embedd_char,
-                                                 p_in=p_in, p_out=p_out, p_rnn=p_rnn)
+                                                 p_in=p_in, p_out=p_out, p_rnn=p_rnn, initializer=initializer)
 
         out_dim = tag_space if tag_space else hidden_size * 2
         self.crf = ChainCRF(out_dim, num_labels, bigram=bigram)
@@ -230,10 +243,10 @@ class BiRecurrentConvCRF(BiRecurrentConv):
 
 class BiVarRecurrentConvCRF(BiVarRecurrentConv):
     def __init__(self, word_dim, num_words, char_dim, num_chars, num_filters, kernel_size, rnn_mode, hidden_size, num_layers, num_labels,
-                 tag_space=0, embedd_word=None, embedd_char=None, p_in=0.33, p_out=0.33, p_rnn=(0.33, 0.33), bigram=False):
+                 tag_space=0, embedd_word=None, embedd_char=None, p_in=0.33, p_out=0.33, p_rnn=(0.33, 0.33), bigram=False, initializer=None):
         super(BiVarRecurrentConvCRF, self).__init__(word_dim, num_words, char_dim, num_chars, num_filters, kernel_size, rnn_mode, hidden_size, num_layers, num_labels,
-                                                 tag_space=tag_space, embedd_word=embedd_word, embedd_char=embedd_char,
-                                                 p_in=p_in, p_out=p_out, p_rnn=p_rnn)
+                                                    tag_space=tag_space, embedd_word=embedd_word, embedd_char=embedd_char,
+                                                    p_in=p_in, p_out=p_out, p_rnn=p_rnn, initializer=initializer)
 
         out_dim = tag_space if tag_space else hidden_size * 2
         self.crf = ChainCRF(out_dim, num_labels, bigram=bigram)
@@ -274,4 +287,3 @@ class BiVarRecurrentConvCRF(BiVarRecurrentConv):
             return preds, torch.eq(preds, target.data).float().sum()
         else:
             return preds, (torch.eq(preds, target.data).float() * mask.data).sum()
-

@@ -17,6 +17,7 @@ import uuid
 
 import numpy as np
 import torch
+import torch.nn as nn
 from torch.optim import Adam, SGD
 from neuronlp2.io import get_logger, conll03_data, CoNLL03Writer
 from neuronlp2.models import BiRecurrentConv, BiVarRecurrentConv
@@ -137,12 +138,13 @@ def main():
     window = 3
     num_layers = args.num_layers
     tag_space = args.tag_space
+    initializer = nn.init.xavier_uniform
     if args.dropout == 'std':
         network = BiRecurrentConv(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), num_filters, window, mode, hidden_size, num_layers, num_labels,
-                                  tag_space=tag_space, embedd_word=word_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn)
+                                  tag_space=tag_space, embedd_word=word_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn, initializer=initializer)
     else:
         network = BiVarRecurrentConv(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), num_filters, window, mode, hidden_size, num_layers, num_labels,
-                                     tag_space=tag_space, embedd_word=word_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn)
+                                     tag_space=tag_space, embedd_word=word_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn, initializer=initializer)
     if use_gpu:
         network.cuda()
 

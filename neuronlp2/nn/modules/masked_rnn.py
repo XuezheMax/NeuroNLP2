@@ -33,8 +33,6 @@ class MaskedRNNBase(nn.Module):
                 self.all_cells.append(cell)
                 self.add_module('cell%d' % (layer * num_directions + direction), cell)
 
-        self.reset_parameters()
-
     def reset_parameters(self):
         for cell in self.all_cells:
             cell.reset_parameters()

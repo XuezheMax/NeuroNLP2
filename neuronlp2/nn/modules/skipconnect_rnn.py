@@ -6,13 +6,13 @@ import torch.nn as nn
 from torch.nn.parameter import Parameter
 from torch.autograd import Variable
 from .._functions import skipconnect_rnn as rnn_F
-from .variational_rnn import VarRNNCellBase
+from .variational_rnn import VarRNNCellBase, default_initializer
 
 
 class SkipConnectRNNBase(nn.Module):
     def __init__(self, Cell, input_size, hidden_size,
                  num_layers=1, bias=True, batch_first=False,
-                 dropout=(0, 0), bidirectional=False, **kwargs):
+                 dropout=(0, 0), bidirectional=False, initializer=None, **kwargs):
 
         super(SkipConnectRNNBase, self).__init__()
         self.Cell = Cell
@@ -30,11 +30,9 @@ class SkipConnectRNNBase(nn.Module):
             for direction in range(num_directions):
                 layer_input_size = input_size if layer == 0 else hidden_size * num_directions
 
-                cell = self.Cell(layer_input_size, hidden_size, self.bias, p=dropout, **kwargs)
+                cell = self.Cell(layer_input_size, hidden_size, self.bias, p=dropout, initializer=initializer, **kwargs)
                 self.all_cells.append(cell)
                 self.add_module('cell%d' % (layer * num_directions + direction), cell)
-
-        self.reset_parameters()
 
     def reset_parameters(self):
         for cell in self.all_cells:
@@ -417,7 +415,7 @@ class SkipConnectRNNCell(VarRNNCellBase):
 
     """
 
-    def __init__(self, input_size, hidden_size, bias=True, nonlinearity="tanh", p=(0.5, 0.5)):
+    def __init__(self, input_size, hidden_size, bias=True, nonlinearity="tanh", p=(0.5, 0.5), initializer=None):
         super(SkipConnectRNNCell, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -431,6 +429,8 @@ class SkipConnectRNNCell(VarRNNCellBase):
         else:
             self.register_parameter('bias_ih', None)
             self.register_parameter('bias_hh', None)
+
+        self.initializer = default_initializer(self.hidden_size) if initializer is None else initializer
         self.reset_parameters()
         p_in, p_hidden = p
         if p_in < 0 or p_in > 1:
@@ -445,9 +445,11 @@ class SkipConnectRNNCell(VarRNNCellBase):
         self.noise_hidden = None
 
     def reset_parameters(self):
-        stdv = 1.0 / math.sqrt(self.hidden_size)
         for weight in self.parameters():
-            weight.data.uniform_(-stdv, stdv)
+            if weight.dim() == 1:
+                weight.data.zero_()
+            else:
+                self.initializer(weight.data)
 
     def reset_noise(self, batch_size):
         if self.training:
@@ -529,7 +531,7 @@ class SkipConnectFastLSTMCell(VarRNNCellBase):
         bias_hh: the learnable hidden-hidden bias, of shape `(4*hidden_size)`
     """
 
-    def __init__(self, input_size, hidden_size, bias=True, p=(0.5, 0.5)):
+    def __init__(self, input_size, hidden_size, bias=True, p=(0.5, 0.5), initializer=None):
         super(SkipConnectFastLSTMCell, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -542,6 +544,8 @@ class SkipConnectFastLSTMCell(VarRNNCellBase):
         else:
             self.register_parameter('bias_ih', None)
             self.register_parameter('bias_hh', None)
+
+        self.initializer = default_initializer(self.hidden_size) if initializer is None else initializer
         self.reset_parameters()
         p_in, p_hidden = p
         if p_in < 0 or p_in > 1:
@@ -556,9 +560,11 @@ class SkipConnectFastLSTMCell(VarRNNCellBase):
         self.noise_hidden = None
 
     def reset_parameters(self):
-        stdv = 1.0 / math.sqrt(self.hidden_size)
         for weight in self.parameters():
-            weight.data.uniform_(-stdv, stdv)
+            if weight.dim() == 1:
+                weight.data.zero_()
+            else:
+                self.initializer(weight.data)
 
     def reset_noise(self, batch_size):
         if self.training:
@@ -632,7 +638,7 @@ class SkipConnectLSTMCell(VarRNNCellBase):
         bias_hh: the learnable hidden-hidden bias, of shape `(4 x hidden_size)`
     """
 
-    def __init__(self, input_size, hidden_size, bias=True, p=(0.5, 0.5)):
+    def __init__(self, input_size, hidden_size, bias=True, p=(0.5, 0.5), initializer=None):
         super(SkipConnectLSTMCell, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -645,6 +651,8 @@ class SkipConnectLSTMCell(VarRNNCellBase):
         else:
             self.register_parameter('bias_ih', None)
             self.register_parameter('bias_hh', None)
+
+        self.initializer = default_initializer(self.hidden_size) if initializer is None else initializer
         self.reset_parameters()
         p_in, p_hidden = p
         if p_in < 0 or p_in > 1:
@@ -659,9 +667,11 @@ class SkipConnectLSTMCell(VarRNNCellBase):
         self.noise_hidden = None
 
     def reset_parameters(self):
-        stdv = 1.0 / math.sqrt(self.hidden_size)
         for weight in self.parameters():
-            weight.data.uniform_(-stdv, stdv)
+            if weight.dim() == 2:
+                weight.data.zero_()
+            else:
+                self.initializer(weight.data)
 
     def reset_noise(self, batch_size):
         if self.training:
@@ -728,7 +738,7 @@ class SkipConnectFastGRUCell(VarRNNCellBase):
         bias_hh: the learnable hidden-hidden bias, of shape `(3*hidden_size)`
     """
 
-    def __init__(self, input_size, hidden_size, bias=True, p=(0.5, 0.5)):
+    def __init__(self, input_size, hidden_size, bias=True, p=(0.5, 0.5), initializer=None):
         super(SkipConnectFastGRUCell, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -741,6 +751,8 @@ class SkipConnectFastGRUCell(VarRNNCellBase):
         else:
             self.register_parameter('bias_ih', None)
             self.register_parameter('bias_hh', None)
+
+        self.initializer = default_initializer(self.hidden_size) if initializer is None else initializer
         self.reset_parameters()
         p_in, p_hidden = p
         if p_in < 0 or p_in > 1:
@@ -755,9 +767,11 @@ class SkipConnectFastGRUCell(VarRNNCellBase):
         self.noise_hidden = None
 
     def reset_parameters(self):
-        stdv = 1.0 / math.sqrt(self.hidden_size)
         for weight in self.parameters():
-            weight.data.uniform_(-stdv, stdv)
+            if weight.dim() == 1:
+                weight.data.zero_()
+            else:
+                self.initializer(weight.data)
 
     def reset_noise(self, batch_size):
         if self.training:
@@ -824,7 +838,7 @@ class SkipConnectGRUCell(VarRNNCellBase):
         bias_hh: the learnable hidden-hidden bias, of shape `(3 x hidden_size)`
     """
 
-    def __init__(self, input_size, hidden_size, bias=True, p=(0.5, 0.5)):
+    def __init__(self, input_size, hidden_size, bias=True, p=(0.5, 0.5), initializer=None):
         super(SkipConnectGRUCell, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -837,6 +851,8 @@ class SkipConnectGRUCell(VarRNNCellBase):
         else:
             self.register_parameter('bias_ih', None)
             self.register_parameter('bias_hh', None)
+
+        self.initializer = default_initializer(self.hidden_size) if initializer is None else initializer
         self.reset_parameters()
         p_in, p_hidden = p
         if p_in < 0 or p_in > 1:
@@ -851,9 +867,11 @@ class SkipConnectGRUCell(VarRNNCellBase):
         self.noise_hidden = None
 
     def reset_parameters(self):
-        stdv = 1.0 / math.sqrt(self.hidden_size)
         for weight in self.parameters():
-            weight.data.uniform_(-stdv, stdv)
+            if weight.dim() == 2:
+                weight.data.zero_()
+            else:
+                self.initializer(weight.data)
 
     def reset_noise(self, batch_size):
         if self.training:
