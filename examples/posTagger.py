@@ -135,7 +135,7 @@ def main():
     lr = learning_rate
     # optim = Adam(network.parameters(), lr=lr, betas=(0.9, 0.9), weight_decay=gamma)
     optim = SGD(network.parameters(), lr=lr, momentum=momentum, weight_decay=gamma, nesterov=True)
-    logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d" % (mode, num_layers, hidden_size, num_filters))
+    logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, tag_space=%d" % (mode, num_layers, hidden_size, num_filters, tag_space))
     logger.info("training: l2: %f, (#training data: %d, batch: %d, unk replace: %.2f)" % (gamma, num_data, batch_size, unk_replace))
     logger.info("dropout(in, out, rnn): (%.2f, %.2f, %s)" % (p_in, p_out, p_rnn))
 

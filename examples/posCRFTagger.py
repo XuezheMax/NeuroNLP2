@@ -134,7 +134,7 @@ def main():
 
     lr = learning_rate
     optim = SGD(network.parameters(), lr=lr, momentum=momentum, weight_decay=gamma)
-    logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, crf=%s" % (mode, num_layers, hidden_size, num_filters, 'bigram' if bigram else 'unigram'))
+    logger.info("Network: %s, num_layer=%d, hidden=%d, filter=%d, tag_space=%d, crf=%s" % (mode, num_layers, hidden_size, num_filters, tag_space, 'bigram' if bigram else 'unigram'))
     logger.info("training: l2: %f, (#training data: %d, batch: %d, unk replace: %.2f)" % (gamma, num_data, batch_size, unk_replace))
     logger.info("dropout(in, out, rnn): (%.2f, %.2f, %s)" % (p_in, p_out, p_rnn))
 
