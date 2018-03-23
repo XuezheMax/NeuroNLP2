@@ -22,17 +22,18 @@ class PriorOrder(Enum):
 
 class BiRecurrentConvBiAffine(nn.Module):
     def __init__(self, word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, num_filters, kernel_size, rnn_mode, hidden_size, num_layers, num_labels, arc_space, type_space,
-                 embedd_word=None, embedd_char=None, embedd_pos=None, p_in=0.33, p_out=0.33, p_rnn=(0.33, 0.33), biaffine=True, pos=True):
+                 embedd_word=None, embedd_char=None, embedd_pos=None, p_in=0.33, p_out=0.33, p_rnn=(0.33, 0.33), biaffine=True, pos=True, char=True):
         super(BiRecurrentConvBiAffine, self).__init__()
 
         self.word_embedd = Embedding(num_words, word_dim, init_embedding=embedd_word)
-        self.char_embedd = Embedding(num_chars, char_dim, init_embedding=embedd_char)
         self.pos_embedd = Embedding(num_pos, pos_dim, init_embedding=embedd_pos) if pos else None
-        self.conv1d = nn.Conv1d(char_dim, num_filters, kernel_size, padding=kernel_size - 1)
+        self.char_embedd = Embedding(num_chars, char_dim, init_embedding=embedd_char) if char else None
+        self.conv1d = nn.Conv1d(char_dim, num_filters, kernel_size, padding=kernel_size - 1) if char else None
         self.dropout_in = nn.Dropout2d(p=p_in)
         self.dropout_out = nn.Dropout2d(p=p_out)
         self.num_labels = num_labels
         self.pos = pos
+        self.char = char
 
         if rnn_mode == 'RNN':
             RNN = VarMaskedRNN
@@ -45,7 +46,12 @@ class BiRecurrentConvBiAffine(nn.Module):
         else:
             raise ValueError('Unknown RNN mode: %s' % rnn_mode)
 
-        dim_enc = word_dim + num_filters + pos_dim if self.pos else word_dim + num_filters
+        dim_enc = word_dim
+        if pos:
+            dim_enc += pos_dim
+        if char:
+            dim_enc += num_filters
+
         self.rnn = RNN(dim_enc, hidden_size, num_layers=num_layers, batch_first=True, bidirectional=True, dropout=p_rnn)
 
         out_dim = hidden_size * 2
@@ -60,28 +66,32 @@ class BiRecurrentConvBiAffine(nn.Module):
     def _get_rnn_output(self, input_word, input_char, input_pos, mask=None, length=None, hx=None):
         # [batch, length, word_dim]
         word = self.word_embedd(input_word)
-
-        # [batch, length, char_length, char_dim]
-        char = self.char_embedd(input_char)
-        char_size = char.size()
-        # first transform to [batch *length, char_length, char_dim]
-        # then transpose to [batch * length, char_dim, char_length]
-        char = char.view(char_size[0] * char_size[1], char_size[2], char_size[3]).transpose(1, 2)
-        # put into cnn [batch*length, char_filters, char_length]
-        # then put into maxpooling [batch * length, char_filters]
-        char, _ = self.conv1d(char).max(dim=2)
-        # reshape to [batch, length, char_filters]
-        char = torch.tanh(char).view(char_size[0], char_size[1], -1)
-
         # apply dropout on input
         word = self.dropout_in(word)
-        char = self.dropout_in(char)
-        # concatenate word and char [batch, length, word_dim+char_filter]
-        input = torch.cat([word, char], dim=2)
+
+        input = word
+
+        if self.char:
+            # [batch, length, char_length, char_dim]
+            char = self.char_embedd(input_char)
+            char_size = char.size()
+            # first transform to [batch *length, char_length, char_dim]
+            # then transpose to [batch * length, char_dim, char_length]
+            char = char.view(char_size[0] * char_size[1], char_size[2], char_size[3]).transpose(1, 2)
+            # put into cnn [batch*length, char_filters, char_length]
+            # then put into maxpooling [batch * length, char_filters]
+            char, _ = self.conv1d(char).max(dim=2)
+            # reshape to [batch, length, char_filters]
+            char = torch.tanh(char).view(char_size[0], char_size[1], -1)
+            # apply dropout on input
+            char = self.dropout_in(char)
+            # concatenate word and char [batch, length, word_dim+char_filter]
+            input = torch.cat([input, char], dim=2)
 
         if self.pos:
             # [batch, length, pos_dim]
             pos = self.pos_embedd(input_pos)
+            # apply dropout on input
             pos = self.dropout_in(pos)
             input = torch.cat([input, pos], dim=2)
 
@@ -231,8 +241,7 @@ class BiRecurrentConvBiAffine(nn.Module):
 
         '''
         # out_arc shape [batch, length, length]
-        out_arc, out_type, mask, length = self.forward(input_word, input_char, input_pos,
-                                                       mask=mask, length=length, hx=hx)
+        out_arc, out_type, mask, length = self.forward(input_word, input_char, input_pos, mask=mask, length=length, hx=hx)
 
         # out_type shape [batch, length, type_space]
         type_h, type_c = out_type
@@ -271,13 +280,13 @@ class StackPtrNet(nn.Module):
                  rnn_mode, input_size_decoder, hidden_size, encoder_layers, decoder_layers,
                  num_labels, arc_space, type_space,
                  embedd_word=None, embedd_char=None, embedd_pos=None, p_in=0.33, p_out=0.33, p_rnn=(0.33, 0.33),
-                 biaffine=True, pos=True, prior_order='deep_first', skipConnect=False, grandPar=False, sibling=False):
+                 biaffine=True, pos=True, char=True, prior_order='inside_out', skipConnect=False, grandPar=False, sibling=False):
 
         super(StackPtrNet, self).__init__()
         self.word_embedd = Embedding(num_words, word_dim, init_embedding=embedd_word)
-        self.char_embedd = Embedding(num_chars, char_dim, init_embedding=embedd_char)
         self.pos_embedd = Embedding(num_pos, pos_dim, init_embedding=embedd_pos) if pos else None
-        self.conv1d = nn.Conv1d(char_dim, num_filters, kernel_size, padding=kernel_size - 1)
+        self.char_embedd = Embedding(num_chars, char_dim, init_embedding=embedd_char) if char else None
+        self.conv1d = nn.Conv1d(char_dim, num_filters, kernel_size, padding=kernel_size - 1) if char else None
         self.dropout_in = nn.Dropout2d(p=p_in)
         self.dropout_out = nn.Dropout2d(p=p_out)
         self.num_labels = num_labels
@@ -290,6 +299,7 @@ class StackPtrNet(nn.Module):
         else:
             raise ValueError('Unknown prior order: %s' % prior_order)
         self.pos = pos
+        self.char = char
         self.skipConnect = skipConnect
         self.grandPar = grandPar
         self.sibling = sibling
@@ -309,7 +319,11 @@ class StackPtrNet(nn.Module):
         else:
             raise ValueError('Unknown RNN mode: %s' % rnn_mode)
 
-        dim_enc = word_dim + num_filters + pos_dim if self.pos else word_dim + num_filters
+        dim_enc = word_dim
+        if pos:
+            dim_enc += pos_dim
+        if char:
+            dim_enc += num_filters
 
         dim_dec = input_size_decoder
 
@@ -334,30 +348,32 @@ class StackPtrNet(nn.Module):
     def _get_encoder_output(self, input_word, input_char, input_pos, mask_e=None, length_e=None, hx=None):
         # [batch, length, word_dim]
         word = self.word_embedd(input_word)
-
-        # [batch, length, char_length, char_dim]
-        char = self.char_embedd(input_char)
-        char_size = char.size()
-        # first transform to [batch *length, char_length, char_dim]
-        # then transpose to [batch * length, char_dim, char_length]
-        char = char.view(char_size[0] * char_size[1], char_size[2], char_size[3]).transpose(1, 2)
-        # put into cnn [batch*length, char_filters, char_length]
-        # then put into maxpooling [batch * length, char_filters]
-        char, _ = self.conv1d(char).max(dim=2)
-        # reshape to [batch, length, char_filters]
-        char = torch.tanh(char).view(char_size[0], char_size[1], -1)
-
-
         # apply dropout on input
         word = self.dropout_in(word)
-        char = self.dropout_in(char)
 
-        # concatenate word and char [batch, length, word_dim+char_filter]
-        src_encoding = torch.cat([word, char], dim=2)
+        src_encoding = word
+
+        if self.char:
+            # [batch, length, char_length, char_dim]
+            char = self.char_embedd(input_char)
+            char_size = char.size()
+            # first transform to [batch *length, char_length, char_dim]
+            # then transpose to [batch * length, char_dim, char_length]
+            char = char.view(char_size[0] * char_size[1], char_size[2], char_size[3]).transpose(1, 2)
+            # put into cnn [batch*length, char_filters, char_length]
+            # then put into maxpooling [batch * length, char_filters]
+            char, _ = self.conv1d(char).max(dim=2)
+            # reshape to [batch, length, char_filters]
+            char = torch.tanh(char).view(char_size[0], char_size[1], -1)
+            # apply dropout on input
+            char = self.dropout_in(char)
+            # concatenate word and char [batch, length, word_dim+char_filter]
+            src_encoding = torch.cat([src_encoding, char], dim=2)
 
         if self.pos:
             # [batch, length, pos_dim]
             pos = self.pos_embedd(input_pos)
+            # apply dropout on input
             pos = self.dropout_in(pos)
             src_encoding = torch.cat([src_encoding, pos], dim=2)
 

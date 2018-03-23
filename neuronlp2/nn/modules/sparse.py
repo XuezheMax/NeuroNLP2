@@ -8,6 +8,7 @@ from torch.nn.parameter import Parameter
 
 from ..init import assign_tensor
 
+
 class Embedding(nn.Module):
     r"""A simple lookup table that stores embeddings of a fixed dictionary and size.
     This module is often used to store word embeddings and retrieve them using indices.
@@ -17,6 +18,7 @@ class Embedding(nn.Module):
         num_embeddings (int): size of the dictionary of embeddings
         embedding_dim (int): the size of each embedding vector
         init_embedding (Tensor or Variable): If given, the embedding will be initialized with the given tensor.
+        freeze (boolean, optional): If ``True``, the tensor does not get updated in the learning process.
         padding_idx (int, optional): If given, pads the output with zeros whenever it encounters the index.
         max_norm (float, optional): If given, will renormalize the embeddings to always have a norm lesser than this
         norm_type (float, optional): The p of the p-norm to compute for the max_norm option
@@ -35,9 +37,8 @@ class Embedding(nn.Module):
         and `optim.Adagrad` (`cpu`)
     """
 
-    def __init__(self, num_embeddings, embedding_dim, init_embedding=None, padding_idx=None,
-                 max_norm=None, norm_type=2, scale_grad_by_freq=False,
-                 sparse=False):
+    def __init__(self, num_embeddings, embedding_dim, init_embedding=None, freeze=False, padding_idx=None,
+                 max_norm=None, norm_type=2, scale_grad_by_freq=False, sparse=False):
         super(Embedding, self).__init__()
         self.num_embeddings = num_embeddings
         self.embedding_dim = embedding_dim
@@ -46,6 +47,7 @@ class Embedding(nn.Module):
         self.norm_type = norm_type
         self.scale_grad_by_freq = scale_grad_by_freq
         self.weight = Parameter(torch.Tensor(num_embeddings, embedding_dim))
+        self.freeze = freeze
         self.sparse = sparse
 
         self.reset_parameters(init_embedding)
@@ -59,6 +61,15 @@ class Embedding(nn.Module):
         if self.padding_idx is not None:
             self.weight.data[self.padding_idx].fill_(0)
 
+        if self.freeze:
+            if init_embedding is None:
+                raise Warning('Freeze embeddings which are randomly initialized.')
+            self.weight.requires_grad = False
+
+    def freeze(self):
+        self.weight.requires_grad = False
+        self.freeze = True
+
     def forward(self, input):
         padding_idx = self.padding_idx
         if padding_idx is None:
@@ -69,7 +80,7 @@ class Embedding(nn.Module):
             num_inputs = int(np.prod(input_size[:-1]))
             input = input.view(num_inputs, input_size[-1])
 
-        output_size = input_size + (self.embedding_dim, )
+        output_size = input_size + (self.embedding_dim,)
         return self._backend.Embedding.apply(
             input, self.weight,
             padding_idx, self.max_norm, self.norm_type,

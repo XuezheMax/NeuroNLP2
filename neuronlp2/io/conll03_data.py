@@ -97,13 +97,13 @@ def create_alphabets(alphabet_directory, train_path, data_paths=None, max_vocabu
                 else:
                     vocab[word] = 1
         # collect singletons
-        singletons = set([word for word, count in vocab.items() if count == 1])
+        singletons = set([word for word, count in vocab.items() if count <= min_occurence])
 
-        # if a singleton is in pretrained embedding dict, set the count to 2
+        # if a singleton is in pretrained embedding dict, set the count to min_occur + c
         if embedd_dict is not None:
             for word in vocab.keys():
                 if word in embedd_dict or word.lower() in embedd_dict:
-                    vocab[word] += 1
+                    vocab[word] += min_occurence
 
         vocab_list = _START_VOCAB + sorted(vocab, key=vocab.get, reverse=True)
         logger.info("Total Vocabulary Size: %d" % len(vocab_list))

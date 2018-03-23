@@ -40,6 +40,7 @@ def main():
     args_parser.add_argument('--num_layers', type=int, default=1, help='Number of layers of RNN')
     args_parser.add_argument('--num_filters', type=int, default=50, help='Number of filters in CNN')
     args_parser.add_argument('--pos', action='store_true', help='use part-of-speech embedding.')
+    args_parser.add_argument('--char', action='store_true', help='use character embedding and CNN.')
     args_parser.add_argument('--pos_dim', type=int, default=50, help='Dimension of POS embeddings')
     args_parser.add_argument('--char_dim', type=int, default=50, help='Dimension of Character embeddings')
     args_parser.add_argument('--opt', choices=['adam', 'sgd', 'adamax'], help='optimization algorithm')
@@ -54,14 +55,12 @@ def main():
     args_parser.add_argument('--p_in', type=float, default=0.33, help='dropout rate for input embeddings')
     args_parser.add_argument('--p_out', type=float, default=0.33, help='dropout rate for output layer')
     args_parser.add_argument('--schedule', type=int, help='schedule for learning rate decay')
-    args_parser.add_argument('--unk_replace', type=float, default=0.,
-                             help='The rate to replace a singleton word with UNK')
+    args_parser.add_argument('--unk_replace', type=float, default=0., help='The rate to replace a singleton word with UNK')
     args_parser.add_argument('--punctuation', nargs='+', type=str, help='List of punctuations')
-    args_parser.add_argument('--word_embedding', choices=['glove', 'senna', 'sskip', 'polyglot'],
-                             help='Embedding for words', required=True)
+    args_parser.add_argument('--word_embedding', choices=['glove', 'senna', 'sskip', 'polyglot'], help='Embedding for words', required=True)
     args_parser.add_argument('--word_path', help='path for word embedding dict')
-    args_parser.add_argument('--char_embedding', choices=['random', 'polyglot'], help='Embedding for characters',
-                             required=True)
+    args_parser.add_argument('--freeze', action='store_true', help='freeze the word embedding (disable fine-tuning).')
+    args_parser.add_argument('--char_embedding', choices=['random', 'polyglot'], help='Embedding for characters', required=True)
     args_parser.add_argument('--char_path', help='path for character embedding dict')
     args_parser.add_argument('--train')  # "data/POS-penn/wsj/split1/wsj1.train.original"
     args_parser.add_argument('--dev')  # "data/POS-penn/wsj/split1/wsj1.dev.original"
@@ -103,8 +102,11 @@ def main():
     unk_replace = args.unk_replace
     punctuation = args.punctuation
 
+    freeze = args.freeze
     word_embedding = args.word_embedding
     word_path = args.word_path
+
+    use_char = args.char
     char_embedding = args.char_embedding
     char_path = args.char_path
 
@@ -151,7 +153,7 @@ def main():
     def construct_word_embedding_table():
         scale = np.sqrt(3.0 / word_dim)
         table = np.empty([word_alphabet.size(), word_dim], dtype=np.float32)
-        table[conllx_data.UNK_ID, :] = np.random.uniform(-scale, scale, [1, word_dim]).astype(np.float32)
+        table[conllx_data.UNK_ID, :] = np.zeros([1, word_dim]).astype(np.float32) if freeze else np.random.uniform(-scale, scale, [1, word_dim]).astype(np.float32)
         oov = 0
         for word, index in word_alphabet.items():
             if word in word_dict:
@@ -159,7 +161,7 @@ def main():
             elif word.lower() in word_dict:
                 embedding = word_dict[word.lower()]
             else:
-                embedding = np.random.uniform(-scale, scale, [1, word_dim]).astype(np.float32)
+                embedding = np.zeros([1, word_dim]).astype(np.float32) if freeze else np.random.uniform(-scale, scale, [1, word_dim]).astype(np.float32)
                 oov += 1
             table[index, :] = embedding
         print('word OOV: %d' % oov)
@@ -191,11 +193,14 @@ def main():
         network = BiRecurrentConvBiAffine(word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, num_filters, window,
                                           mode, hidden_size, num_layers, num_types, arc_space, type_space,
                                           embedd_word=word_table, embedd_char=char_table,
-                                          p_in=p_in, p_out=p_out, p_rnn=p_rnn, biaffine=True, pos=use_pos)
+                                          p_in=p_in, p_out=p_out, p_rnn=p_rnn, biaffine=True, pos=use_pos, char=use_char)
     elif obj == 'crf':
         raise NotImplementedError
     else:
         raise RuntimeError('Unknown objective: %s' % obj)
+
+    if freeze:
+        network.word_embedd.freeze()
 
     if use_gpu:
         network.cuda()
@@ -223,7 +228,10 @@ def main():
     elif opt == 'adamax':
         opt_info += 'betas=%s, eps=%.1e' % (betas, eps)
 
-    logger.info("Embedding dim: word=%d, char=%d, pos=%d (%s)" % (word_dim, char_dim, pos_dim, use_pos))
+    word_status = 'frozen' if freeze else 'fine tune'
+    char_status = 'enabled' if use_char else 'disabled'
+    pos_status = 'enabled' if use_pos else 'disabled'
+    logger.info("Embedding dim: word=%d (%s), char=%d (%s), pos=%d (%s)" % (word_dim, word_status, char_dim, char_status, pos_dim, pos_status))
     logger.info("CNN: filter=%d, kernel=%d" % (num_filters, window))
     logger.info("RNN: %s, num_layer=%d, hidden=%d, arc_space=%d, type_space=%d" % (mode, num_layers, hidden_size, arc_space, type_space))
     logger.info("train: obj: %s, l2: %f, (#data: %d, batch: %d, clip: %.2f, unk replace: %.2f)" % (obj, gamma, num_data, batch_size, clip, unk_replace))
