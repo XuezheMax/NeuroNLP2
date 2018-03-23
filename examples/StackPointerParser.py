@@ -67,7 +67,7 @@ def main():
     args_parser.add_argument('--beam', type=int, default=1, help='Beam size for decoding')
     args_parser.add_argument('--word_embedding', choices=['glove', 'senna', 'sskip', 'polyglot'], help='Embedding for words', required=True)
     args_parser.add_argument('--word_path', help='path for word embedding dict')
-    args_parser.add_argument('--freeze', action='store_true', help='freeze the word embedding (disable fine-tuning).')
+    args_parser.add_argument('--freeze', action='store_true', help='frozen the word embedding (disable fine-tuning).')
     args_parser.add_argument('--char_embedding', choices=['random', 'polyglot'], help='Embedding for characters', required=True)
     args_parser.add_argument('--char_path', help='path for character embedding dict')
     args_parser.add_argument('--train')  # "data/POS-penn/wsj/split1/wsj1.train.original"

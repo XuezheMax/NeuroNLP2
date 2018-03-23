@@ -47,7 +47,7 @@ class Embedding(nn.Module):
         self.norm_type = norm_type
         self.scale_grad_by_freq = scale_grad_by_freq
         self.weight = Parameter(torch.Tensor(num_embeddings, embedding_dim))
-        self.freeze = freeze
+        self.frozen = freeze
         self.sparse = sparse
 
         self.reset_parameters(init_embedding)
@@ -61,14 +61,14 @@ class Embedding(nn.Module):
         if self.padding_idx is not None:
             self.weight.data[self.padding_idx].fill_(0)
 
-        if self.freeze:
+        if self.frozen:
             if init_embedding is None:
                 raise Warning('Freeze embeddings which are randomly initialized.')
             self.weight.requires_grad = False
 
     def freeze(self):
         self.weight.requires_grad = False
-        self.freeze = True
+        self.frozen = True
 
     def forward(self, input):
         padding_idx = self.padding_idx
