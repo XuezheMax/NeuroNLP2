@@ -218,6 +218,7 @@ def main():
     gold_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
 
     def generate_optimizer(opt, lr, params):
+        params = filter(lambda param: param.requires_grad, params)
         if opt == 'adam':
             return Adam(params, lr=lr, betas=betas, weight_decay=gamma, eps=eps)
         elif opt == 'sgd':
