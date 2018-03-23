@@ -14,6 +14,7 @@ sys.path.append("..")
 import time
 import argparse
 import uuid
+import json
 
 import numpy as np
 import torch
@@ -208,11 +209,22 @@ def main():
                           embedd_word=word_table, embedd_char=char_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn,
                           biaffine=True, pos=use_pos, char=use_char, prior_order=prior_order,
                           skipConnect=skipConnect, grandPar=grandPar, sibling=sibling)
+    def save_args():
+        arg_path = model_name + '.arg.json'
+        arguments = [word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, num_filters, window,
+                     mode, input_size_decoder, hidden_size, encoder_layers, decoder_layers,
+                     num_types, arc_space, type_space]
+        kwargs = {'p_in': p_in, 'p_out': p_out, 'p_rnn': p_rnn, 'biaffine': True, 'pos': use_pos, 'char': use_char, 'prior_order': prior_order,
+                  'skipConnect': skipConnect, 'grandPar': grandPar, 'sibling': sibling}
+        json.dump({'args': arguments, 'kwargs': kwargs}, open(arg_path, 'w'), indent=4)
+
     if freeze:
         network.word_embedd.freeze()
 
     if use_gpu:
         network.cuda()
+
+    save_args()
 
     pred_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
     gold_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)

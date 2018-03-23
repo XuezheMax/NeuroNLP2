@@ -14,12 +14,14 @@ sys.path.append("..")
 import time
 import argparse
 import uuid
+import json
 
 import numpy as np
 import torch
 from neuronlp2.io import get_logger, conllx_stacked_data
 from neuronlp2.io import CoNLLXWriter
 from neuronlp2.tasks import parser
+from neuronlp2.models import StackPtrNet
 
 uid = uuid.uuid4().hex[:6]
 
@@ -34,7 +36,6 @@ def main():
     args_parser.add_argument('--ordered', action='store_true', help='Using order constraints in decoding')
     args_parser.add_argument('--display', action='store_true', help='Display wrong examples')
     args_parser.add_argument('--gpu', action='store_true', help='Using GPU')
-    args_parser.add_argument('--prior_order', choices=['inside_out', 'left2right', 'deep_first', 'shallow_first'], help='prior order of children.', required=True)
 
     args = args_parser.parse_args()
 
@@ -59,27 +60,36 @@ def main():
     logger.info("POS Alphabet Size: %d" % num_pos)
     logger.info("Type Alphabet Size: %d" % num_types)
 
-    use_gpu = args.gpu
-    prior_order = args.prior_order
-    beam = args.beam
-    ordered = args.ordered
-    display_inst = args.display
-
-    data_test = conllx_stacked_data.read_stacked_data_to_variable(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
-                                                                  use_gpu=use_gpu, volatile=True, prior_order=prior_order)
-
-    logger.info('use gpu: %s, beam: %d, ordered: %s' % (use_gpu, beam, ordered))
     punct_set = None
     punctuation = args.punctuation
     if punctuation is not None:
         punct_set = set(punctuation)
         logger.info("punctuations(%d): %s" % (len(punct_set), ' '.join(punct_set)))
 
+    use_gpu = args.gpu
+    beam = args.beam
+    ordered = args.ordered
+    display_inst = args.display
+
+    def load_model_arguments_from_json():
+        arguments = json.load(open(arg_path, 'r'))
+        return arguments['args'], arguments['kwargs']
+
+    arg_path = model_name + '.arg.json'
+    args, kwargs = load_model_arguments_from_json()
+
+    prior_order = kwargs['prior_order']
+    logger.info('use gpu: %s, beam: %d, order: %s (%s)' % (use_gpu, beam, prior_order, ordered))
+
+    data_test = conllx_stacked_data.read_stacked_data_to_variable(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
+                                                                  use_gpu=use_gpu, volatile=True, prior_order=prior_order)
+
     pred_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
     gold_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
 
     logger.info('model: %s' % model_name)
-    network = torch.load(model_name)
+    network = StackPtrNet(*args, **kwargs)
+    network.load_state_dict(torch.load(model_name))
 
     if use_gpu:
         network.cuda()
