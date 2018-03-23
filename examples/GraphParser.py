@@ -403,7 +403,8 @@ def main():
 
             best_epoch = epoch
             patient = 0
-            torch.save(network, model_name)
+            # torch.save(network, model_name)
+            torch.save(network.state_dict(), model_name)
 
             pred_filename = 'tmp/%spred_test%d' % (str(uid), epoch)
             pred_writer.start(pred_filename)
@@ -463,7 +464,8 @@ def main():
             gold_writer.close()
         else:
             if dev_ucorr_nopunc * 100 / dev_total_nopunc < dev_ucorrect_nopunc * 100 / dev_total_nopunc - 5 or patient >= schedule:
-                network = torch.load(model_name)
+                # network = torch.load(model_name)
+                network.load_state_dict(torch.load(model_name))
                 lr = lr * decay_rate
                 optim = generate_optimizer(opt, lr, network.parameters())
 
