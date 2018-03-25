@@ -471,7 +471,7 @@ class StackPtrNet(nn.Module):
             cn = self.hx_dense(cn)
             # [decoder_layers, batch, hidden_size]
             if self.decoder_layers > 1:
-                cn = torch.cat([cn, Variable(cn.data.new(self.decoder_layers - 1, batch, hidden_size))], dim=0)
+                cn = torch.cat([cn, Variable(cn.data.new(self.decoder_layers - 1, batch, hidden_size).zero_())], dim=0)
             # hn is tanh(cn)
             hn = F.tanh(cn)
             hn = (hn, cn)
@@ -489,7 +489,7 @@ class StackPtrNet(nn.Module):
             hn = F.tanh(self.hx_dense(hn))
             # [decoder_layers, batch, hidden_size]
             if self.decoder_layers > 1:
-                hn = torch.cat([hn, Variable(hn.data.new(self.decoder_layers - 1, batch, hidden_size))], dim=0)
+                hn = torch.cat([hn, Variable(hn.data.new(self.decoder_layers - 1, batch, hidden_size).zero_())], dim=0)
         return hn
 
     def loss(self, input_word, input_char, input_pos, heads, stacked_heads, children, siblings, stacked_types, label_smooth,
