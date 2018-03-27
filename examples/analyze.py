@@ -81,13 +81,6 @@ def biaffine(model_path, model_name, test_path, punct_set, use_gpu, logger, args
     logger.info("POS Alphabet Size: %d" % num_pos)
     logger.info("Type Alphabet Size: %d" % num_types)
 
-    def load_model_arguments_from_json():
-        arguments = json.load(open(arg_path, 'r'))
-        return arguments['args'], arguments['kwargs']
-
-    arg_path = model_name + '.arg.json'
-    args, kwargs = load_model_arguments_from_json()
-
     decoding = args.decode
 
     logger.info('use gpu: %s, decoding: %s' % (use_gpu, decoding))
@@ -99,6 +92,13 @@ def biaffine(model_path, model_name, test_path, punct_set, use_gpu, logger, args
     gold_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
 
     logger.info('model: %s' % model_name)
+
+    def load_model_arguments_from_json():
+        arguments = json.load(open(arg_path, 'r'))
+        return arguments['args'], arguments['kwargs']
+
+    arg_path = model_name + '.arg.json'
+    args, kwargs = load_model_arguments_from_json()
     network = BiRecurrentConvBiAffine(*args, **kwargs)
     network.load_state_dict(torch.load(model_name))
 
