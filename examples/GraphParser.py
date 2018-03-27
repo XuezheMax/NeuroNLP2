@@ -213,6 +213,8 @@ def main():
     if use_gpu:
         network.cuda()
 
+    save_args()
+
     pred_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
     gold_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
 
