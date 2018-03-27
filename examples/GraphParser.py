@@ -14,6 +14,7 @@ sys.path.append("..")
 import time
 import argparse
 import uuid
+import json
 
 import numpy as np
 import torch
@@ -198,6 +199,13 @@ def main():
         raise NotImplementedError
     else:
         raise RuntimeError('Unknown objective: %s' % obj)
+
+    def save_args():
+        arg_path = model_name + '.arg.json'
+        arguments = [word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, num_filters, window,
+                     mode, hidden_size, num_layers, num_types, arc_space, type_space]
+        kwargs = {'p_in': p_in, 'p_out': p_out, 'p_rnn': p_rnn, 'biaffine': True, 'pos': use_pos, 'char': use_char}
+        json.dump({'args': arguments, 'kwargs': kwargs}, open(arg_path, 'w'), indent=4)
 
     if freeze:
         network.word_embedd.freeze()
