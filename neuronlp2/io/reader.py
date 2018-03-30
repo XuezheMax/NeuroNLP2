@@ -108,6 +108,12 @@ class CoNLL03Reader(object):
     def getNext(self, normalize_digits=True):
         lines = []
         line = self.__source_file.readline()
+        # skip multiple blank lines.
+        while line is not None and len(line.strip()) == 0:
+            line = self.__source_file.readline()
+        if line is None:
+            return None
+
         while line is not None and len(line.strip()) > 0:
             line = line.strip()
             line = line.decode('utf-8')
