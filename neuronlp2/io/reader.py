@@ -106,15 +106,15 @@ class CoNLL03Reader(object):
         self.__source_file.close()
 
     def getNext(self, normalize_digits=True):
-        lines = []
         line = self.__source_file.readline()
         # skip multiple blank lines.
-        while line is not None and len(line.strip()) == 0:
+        while len(line) > 0 and len(line.strip()) == 0:
             line = self.__source_file.readline()
-        if line is None:
+        if len(line) == 0:
             return None
 
-        while line is not None and len(line.strip()) > 0:
+        lines = []
+        while len(line.strip()) > 0:
             line = line.strip()
             line = line.decode('utf-8')
             lines.append(line.split(' '))
