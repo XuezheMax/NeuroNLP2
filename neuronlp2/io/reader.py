@@ -18,9 +18,15 @@ class CoNLLXReader(object):
         self.__source_file.close()
 
     def getNext(self, normalize_digits=True, symbolic_root=False, symbolic_end=False):
-        lines = []
         line = self.__source_file.readline()
-        while line is not None and len(line.strip()) > 0:
+        # skip multiple blank lines.
+        while len(line) > 0 and len(line.strip()) == 0:
+            line = self.__source_file.readline()
+        if len(line) == 0:
+            return None
+
+        lines = []
+        while len(line.strip()) > 0:
             line = line.strip()
             line = line.decode('utf-8')
             lines.append(line.split('\t'))
