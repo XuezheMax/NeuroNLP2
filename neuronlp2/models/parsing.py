@@ -494,7 +494,7 @@ class StackPtrNet(nn.Module):
 
     def loss(self, input_word, input_char, input_pos, heads, stacked_heads, children, siblings, stacked_types, label_smooth,
              skip_connect=None, mask_e=None, length_e=None, mask_d=None, length_d=None, hx=None):
-        # output from encoder [batch, length_encoder, tag_space]
+        # output from encoder [batch, length_encoder, hidden_size]
         output_enc, hn, mask_e, _ = self._get_encoder_output(input_word, input_char, input_pos, mask_e=mask_e, length_e=length_e, hx=hx)
 
         # output size [batch, length_encoder, arc_space]
