@@ -13,8 +13,4 @@ def assign_tensor(tensor, val):
     Returns:
 
     """
-    if isinstance(tensor, Variable):
-        assign_tensor(tensor.data, val)
-        return tensor
-
     return tensor.copy_(val)
