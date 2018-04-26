@@ -6,10 +6,8 @@ from enum import Enum
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.autograd import Variable
 from ..nn import TreeCRF, VarMaskedGRU, VarMaskedRNN, VarMaskedLSTM, VarMaskedFastLSTM
 from ..nn import SkipConnectFastLSTM, SkipConnectGRU, SkipConnectLSTM, SkipConnectRNN
-from ..nn import Embedding
 from ..nn import BiAAttention, BiLinear
 from neuronlp2.tasks import parser
 
@@ -25,9 +23,9 @@ class BiRecurrentConvBiAffine(nn.Module):
                  embedd_word=None, embedd_char=None, embedd_pos=None, p_in=0.33, p_out=0.33, p_rnn=(0.33, 0.33), biaffine=True, pos=True, char=True):
         super(BiRecurrentConvBiAffine, self).__init__()
 
-        self.word_embedd = Embedding(num_words, word_dim, init_embedding=embedd_word)
-        self.pos_embedd = Embedding(num_pos, pos_dim, init_embedding=embedd_pos) if pos else None
-        self.char_embedd = Embedding(num_chars, char_dim, init_embedding=embedd_char) if char else None
+        self.word_embedd = nn.Embedding(num_words, word_dim, _weight=embedd_word)
+        self.pos_embedd = nn.Embedding(num_pos, pos_dim, _weight=embedd_pos) if pos else None
+        self.char_embedd = nn.Embedding(num_chars, char_dim, _weight=embedd_char) if char else None
         self.conv1d = nn.Conv1d(char_dim, num_filters, kernel_size, padding=kernel_size - 1) if char else None
         self.dropout_in = nn.Dropout2d(p=p_in)
         self.dropout_out = nn.Dropout2d(p=p_out)
@@ -145,9 +143,9 @@ class BiRecurrentConvBiAffine(nn.Module):
         type_h, type_c = out_type
 
         # create batch index [batch]
-        batch_index = torch.arange(0, batch).type_as(out_arc.data).long()
+        batch_index = torch.arange(0, batch).type_as(out_arc).long()
         # get vector for heads [batch, length, type_space],
-        type_h = type_h[batch_index, heads.data.t()].transpose(0, 1).contiguous()
+        type_h = type_h[batch_index, heads.t()].transpose(0, 1).contiguous()
         # compute output for type [batch, length, num_labels]
         out_type = self.bilinear(type_h, type_c)
 
@@ -174,10 +172,10 @@ class BiRecurrentConvBiAffine(nn.Module):
 
         # first create index matrix [length, batch]
         child_index = torch.arange(0, max_len).view(max_len, 1).expand(max_len, batch)
-        child_index = child_index.type_as(out_arc.data).long()
+        child_index = child_index.type_as(out_arc).long()
         # [length-1, batch]
-        loss_arc = loss_arc[batch_index, heads.data.t(), child_index][1:]
-        loss_type = loss_type[batch_index, child_index, types.data.t()][1:]
+        loss_arc = loss_arc[batch_index, heads.t(), child_index][1:]
+        loss_type = loss_type[batch_index, child_index, types.t()][1:]
 
         return -loss_arc.sum() / num, -loss_type.sum() / num
 
@@ -186,7 +184,7 @@ class BiRecurrentConvBiAffine(nn.Module):
         type_h, type_c = out_type
         batch, max_len, _ = type_h.size()
         # create batch index [batch]
-        batch_index = torch.arange(0, batch).type_as(type_h.data).long()
+        batch_index = torch.arange(0, batch).type_as(type_h).long()
         # get vector for heads [batch, length, type_space],
         type_h = type_h[batch_index, heads.t()].transpose(0, 1).contiguous()
         # compute output for type [batch, length, num_labels]
@@ -200,14 +198,13 @@ class BiRecurrentConvBiAffine(nn.Module):
     def decode(self, input_word, input_char, input_pos, mask=None, length=None, hx=None, leading_symbolic=0):
         # out_arc shape [batch, length, length]
         out_arc, out_type, mask, length = self.forward(input_word, input_char, input_pos, mask=mask, length=length, hx=hx)
-        out_arc = out_arc.data
         batch, max_len, _ = out_arc.size()
         # set diagonal elements to -inf
-        out_arc = out_arc + torch.diag(out_arc.new(max_len).fill_(-np.inf))
+        out_arc = out_arc + torch.diag(out_arc.new_full((max_len, ), -np.inf))
         # set invalid positions to -inf
         if mask is not None:
-            # minus_mask = (1 - mask.data).byte().view(batch, max_len, 1)
-            minus_mask = (1 - mask.data).byte().unsqueeze(2)
+            # minus_mask = (1 - mask).byte().view(batch, max_len, 1)
+            minus_mask = (1 - mask).byte().unsqueeze(2)
             out_arc.masked_fill_(minus_mask, -np.inf)
 
         # compute naive predictions.
@@ -216,7 +213,7 @@ class BiRecurrentConvBiAffine(nn.Module):
 
         types = self._decode_types(out_type, heads, leading_symbolic)
 
-        return heads.cpu().numpy(), types.data.cpu().numpy()
+        return heads.cpu().numpy(), types.cpu().numpy()
 
     def decode_mst(self, input_word, input_char, input_pos, mask=None, length=None, hx=None, leading_symbolic=0):
         '''
@@ -252,7 +249,7 @@ class BiRecurrentConvBiAffine(nn.Module):
             if mask is None:
                 length = [max_len for _ in range(batch)]
             else:
-                length = mask.data.sum(dim=1).long().cpu().numpy()
+                length = mask.sum(dim=1).long().cpu().numpy()
 
         type_h = type_h.unsqueeze(2).expand(batch, max_len, max_len, type_space).contiguous()
         type_c = type_c.unsqueeze(1).expand(batch, max_len, max_len, type_space).contiguous()
@@ -272,7 +269,7 @@ class BiRecurrentConvBiAffine(nn.Module):
         # [batch, num_labels, length, length]
         energy = torch.exp(loss_arc.unsqueeze(1) + loss_type)
 
-        return parser.decode_MST(energy.data.cpu().numpy(), length, leading_symbolic=leading_symbolic, labeled=True)
+        return parser.decode_MST(energy.cpu().numpy(), length, leading_symbolic=leading_symbolic, labeled=True)
 
 
 class StackPtrNet(nn.Module):
@@ -283,9 +280,9 @@ class StackPtrNet(nn.Module):
                  biaffine=True, pos=True, char=True, prior_order='inside_out', skipConnect=False, grandPar=False, sibling=False):
 
         super(StackPtrNet, self).__init__()
-        self.word_embedd = Embedding(num_words, word_dim, init_embedding=embedd_word)
-        self.pos_embedd = Embedding(num_pos, pos_dim, init_embedding=embedd_pos) if pos else None
-        self.char_embedd = Embedding(num_chars, char_dim, init_embedding=embedd_char) if char else None
+        self.word_embedd = nn.Embedding(num_words, word_dim, _weight=embedd_word)
+        self.pos_embedd = nn.Embedding(num_pos, pos_dim, _weight=embedd_pos) if pos else None
+        self.char_embedd = nn.Embedding(num_chars, char_dim, _weight=embedd_char) if char else None
         self.conv1d = nn.Conv1d(char_dim, num_filters, kernel_size, padding=kernel_size - 1) if char else None
         self.dropout_in = nn.Dropout2d(p=p_in)
         self.dropout_out = nn.Dropout2d(p=p_out)
@@ -389,19 +386,19 @@ class StackPtrNet(nn.Module):
     def _get_decoder_output(self, output_enc, heads, heads_stack, siblings, hx, mask_d=None, length_d=None):
         batch, _, _ = output_enc.size()
         # create batch index [batch]
-        batch_index = torch.arange(0, batch).type_as(output_enc.data).long()
+        batch_index = torch.arange(0, batch).type_as(output_enc).long()
         # get vector for heads [batch, length_decoder, input_dim],
-        src_encoding = output_enc[batch_index, heads_stack.data.t()].transpose(0, 1)
+        src_encoding = output_enc[batch_index, heads_stack.t()].transpose(0, 1)
 
         if self.sibling:
             # [batch, length_decoder, hidden_size * 2]
             mask_sibs = siblings.ne(0).float().unsqueeze(2)
-            output_enc_sibling = output_enc[batch_index, siblings.data.t()].transpose(0, 1) * mask_sibs
+            output_enc_sibling = output_enc[batch_index, siblings.t()].transpose(0, 1) * mask_sibs
             src_encoding = src_encoding + output_enc_sibling
 
         if self.grandPar:
             # [length_decoder, batch]
-            gpars = heads[batch_index, heads_stack.data.t()].data
+            gpars = heads[batch_index, heads_stack.t()]
             # [batch, length_decoder, hidden_size * 2]
             output_enc_gpar = output_enc[batch_index, gpars].transpose(0, 1)
             src_encoding = src_encoding + output_enc_gpar
@@ -422,19 +419,19 @@ class StackPtrNet(nn.Module):
     def _get_decoder_output_with_skip_connect(self, output_enc, heads, heads_stack, siblings, skip_connect, hx, mask_d=None, length_d=None):
         batch, _, _ = output_enc.size()
         # create batch index [batch]
-        batch_index = torch.arange(0, batch).type_as(output_enc.data).long()
+        batch_index = torch.arange(0, batch).type_as(output_enc).long()
         # get vector for heads [batch, length_decoder, input_dim],
-        src_encoding = output_enc[batch_index, heads_stack.data.t()].transpose(0, 1)
+        src_encoding = output_enc[batch_index, heads_stack.t()].transpose(0, 1)
 
         if self.sibling:
             # [batch, length_decoder, hidden_size * 2]
             mask_sibs = siblings.ne(0).float().unsqueeze(2)
-            output_enc_sibling = output_enc[batch_index, siblings.data.t()].transpose(0, 1) * mask_sibs
+            output_enc_sibling = output_enc[batch_index, siblings.t()].transpose(0, 1) * mask_sibs
             src_encoding = src_encoding + output_enc_sibling
 
         if self.grandPar:
             # [length_decoder, batch]
-            gpars = heads[batch_index, heads_stack.data.t()].data
+            gpars = heads[batch_index, heads_stack.t()]
             # [batch, length_decoder, hidden_size * 2]
             output_enc_gpar = output_enc[batch_index, gpars].transpose(0, 1)
             src_encoding = src_encoding + output_enc_gpar
@@ -471,7 +468,7 @@ class StackPtrNet(nn.Module):
             cn = self.hx_dense(cn)
             # [decoder_layers, batch, hidden_size]
             if self.decoder_layers > 1:
-                cn = torch.cat([cn, Variable(cn.data.new(self.decoder_layers - 1, batch, hidden_size).zero_())], dim=0)
+                cn = torch.cat([cn, cn.new_zeros(self.decoder_layers - 1, batch, hidden_size)], dim=0)
             # hn is tanh(cn)
             hn = F.tanh(cn)
             hn = (hn, cn)
@@ -489,7 +486,7 @@ class StackPtrNet(nn.Module):
             hn = F.tanh(self.hx_dense(hn))
             # [decoder_layers, batch, hidden_size]
             if self.decoder_layers > 1:
-                hn = torch.cat([hn, Variable(hn.data.new(self.decoder_layers - 1, batch, hidden_size).zero_())], dim=0)
+                hn = torch.cat([hn, hn.new_zeros(self.decoder_layers - 1, batch, hidden_size)], dim=0)
         return hn
 
     def loss(self, input_word, input_char, input_pos, heads, stacked_heads, children, siblings, stacked_types, label_smooth,
@@ -536,9 +533,9 @@ class StackPtrNet(nn.Module):
 
         batch, max_len_e, _ = arc_c.size()
         # create batch index [batch]
-        batch_index = torch.arange(0, batch).type_as(arc_c.data).long()
+        batch_index = torch.arange(0, batch).type_as(arc_c).long()
         # get vector for heads [batch, length_decoder, type_space],
-        type_c = type_c[batch_index, children.data.t()].transpose(0, 1).contiguous()
+        type_c = type_c[batch_index, children.t()].transpose(0, 1).contiguous()
         # compute output for type [batch, length_decoder, num_labels]
         out_type = self.bilinear(type_h, type_c)
 
@@ -581,20 +578,20 @@ class StackPtrNet(nn.Module):
 
         # first create index matrix [length, batch]
         head_index = torch.arange(0, max_len_d).view(max_len_d, 1).expand(max_len_d, batch)
-        head_index = head_index.type_as(out_arc.data).long()
+        head_index = head_index.type_as(out_arc).long()
         # [batch, length_decoder]
         if 0.0 < label_smooth < 1.0 - 1e-4:
             # label smoothing
-            loss_arc1 = loss_arc[batch_index, head_index, children.data.t()].transpose(0, 1)
+            loss_arc1 = loss_arc[batch_index, head_index, children.t()].transpose(0, 1)
             loss_arc2 = loss_arc.sum(dim=2) / mask_e.sum(dim=1).unsqueeze(1)
             loss_arc = loss_arc1 * label_smooth + loss_arc2 * (1 - label_smooth)
 
-            loss_type1 = loss_type[batch_index, head_index, stacked_types.data.t()].transpose(0, 1)
+            loss_type1 = loss_type[batch_index, head_index, stacked_types.t()].transpose(0, 1)
             loss_type2 = loss_type.sum(dim=2) / self.num_labels
             loss_type = loss_type1 * label_smooth + loss_type2 * (1 - label_smooth)
         else:
-            loss_arc = loss_arc[batch_index, head_index, children.data.t()].transpose(0, 1)
-            loss_type = loss_type[batch_index, head_index, stacked_types.data.t()].transpose(0, 1)
+            loss_arc = loss_arc[batch_index, head_index, children.t()].transpose(0, 1)
+            loss_type = loss_type[batch_index, head_index, stacked_types.t()].transpose(0, 1)
 
         loss_arc_leaf = loss_arc * mask_leaf
         loss_arc_non_leaf = loss_arc * mask_non_leaf
@@ -649,9 +646,9 @@ class StackPtrNet(nn.Module):
         grand_parents = [[0] for _ in range(beam)] if self.grandPar else None
         siblings = [[0] for _ in range(beam)] if self.sibling else None
         skip_connects = [[h0] for _ in range(beam)] if self.skipConnect else None
-        children = torch.zeros(beam, 2 * length - 1).type_as(output_enc.data).long()
-        stacked_types = children.new(children.size()).zero_()
-        hypothesis_scores = output_enc.data.new(beam).zero_()
+        children = torch.zeros(beam, 2 * length - 1).type_as(output_enc).long()
+        stacked_types = children.new_zeros(children.size())
+        hypothesis_scores = output_enc.new_zeros(beam)
         constraints = np.zeros([beam, length], dtype=np.bool)
         constraints[:, 0] = True
         child_orders = np.zeros([beam, length], dtype=np.int32)
@@ -661,8 +658,8 @@ class StackPtrNet(nn.Module):
         new_grand_parents = [[] for _ in range(beam)] if self.grandPar else None
         new_siblings = [[] for _ in range(beam)] if self.sibling else None
         new_skip_connects = [[] for _ in range(beam)] if self.skipConnect else None
-        new_children = children.new(children.size()).zero_()
-        new_stacked_types = stacked_types.new(stacked_types.size()).zero_()
+        new_children = children.new_zeros(children.size())
+        new_stacked_types = stacked_types.new_zeros(stacked_types.size())
         num_hyp = 1
         num_step = 2 * length - 1
         for t in range(num_step):
@@ -678,7 +675,7 @@ class StackPtrNet(nn.Module):
             src_encoding = output_enc[heads]
 
             if self.sibling:
-                mask_sibs = Variable(sibs.ne(0).float().unsqueeze(1))
+                mask_sibs = sibs.ne(0).float().unsqueeze(1)
                 output_enc_sibling = output_enc[sibs] * mask_sibs
                 src_encoding = src_encoding + output_enc_sibling
 
@@ -703,7 +700,7 @@ class StackPtrNet(nn.Module):
             out_arc = self.attention(arc_h, arc_c.expand(num_hyp, *arc_c.size())).squeeze(dim=1).squeeze(dim=1)
 
             # [num_hyp, length_encoder]
-            hyp_scores = F.log_softmax(out_arc, dim=1).data
+            hyp_scores = F.log_softmax(out_arc, dim=1)
 
             new_hypothesis_scores = hypothesis_scores[:num_hyp].unsqueeze(1) + hyp_scores
             # [num_hyp * length_encoder]
@@ -787,8 +784,6 @@ class StackPtrNet(nn.Module):
             num_hyp = len(ids)
             if num_hyp == 0:
                 return None
-            elif num_hyp == 1:
-                index = base_index.new(1).fill_(ids[0])
             else:
                 index = torch.from_numpy(np.array(ids)).type_as(base_index)
             base_index = base_index[index]
@@ -797,7 +792,7 @@ class StackPtrNet(nn.Module):
             # predict types for new hypotheses
             # compute output for type [num_hyp, num_labels]
             out_type = self.bilinear(type_h[base_index], type_c[child_index])
-            hyp_type_scores = F.log_softmax(out_type, dim=1).data
+            hyp_type_scores = F.log_softmax(out_type, dim=1)
             # compute the prediction of types [num_hyp]
             hyp_type_scores, hyp_types = hyp_type_scores.max(dim=1)
             hypothesis_scores[:num_hyp] = hypothesis_scores[:num_hyp] + hyp_type_scores
