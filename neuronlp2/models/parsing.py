@@ -651,7 +651,7 @@ class StackPtrNet(nn.Module):
         hypothesis_scores = output_enc.new_zeros(beam)
         constraints = np.zeros([beam, length], dtype=np.bool)
         constraints[:, 0] = True
-        child_orders = np.zeros([beam, length], dtype=np.int32)
+        child_orders = np.zeros([beam, length], dtype=np.int64)
 
         # temporal tensors for each step.
         new_stacked_heads = [[] for _ in range(beam)]
@@ -711,7 +711,7 @@ class StackPtrNet(nn.Module):
             cc = 0
             ids = []
             new_constraints = np.zeros([beam, length], dtype=np.bool)
-            new_child_orders = np.zeros([beam, length], dtype=np.int32)
+            new_child_orders = np.zeros([beam, length], dtype=np.int64)
             for id in range(num_hyp * length):
                 base_id = base_index[id]
                 child_id = child_index[id]

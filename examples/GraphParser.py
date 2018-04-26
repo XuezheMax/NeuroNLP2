@@ -18,7 +18,7 @@ import json
 
 import numpy as np
 import torch
-from torch.nn.utils import clip_grad_norm
+from torch.nn.utils import clip_grad_norm_
 from torch.optim import Adam, SGD, Adamax
 from neuronlp2.io import get_logger, conllx_data
 from neuronlp2.models import BiRecurrentConvBiAffine
@@ -306,7 +306,7 @@ def main():
             loss_arc, loss_type = network.loss(word, char, pos, heads, types, mask=masks, length=lengths)
             loss = loss_arc + loss_type
             loss.backward()
-            clip_grad_norm(network.parameters(), clip)
+            clip_grad_norm_(network.parameters(), clip)
             optim.step()
 
             with torch.no_grad():
