@@ -122,7 +122,7 @@ def main():
     window = 3
     num_layers = args.num_layers
     tag_space = args.tag_space
-    initializer = nn.init.xavier_uniform
+    initializer = nn.init.xavier_uniform_
     if args.dropout == 'std':
         network = BiRecurrentConvCRF(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), num_filters, window, mode, hidden_size, num_layers, num_labels,
                                      tag_space=tag_space, embedd_word=word_table, bigram=bigram, p_in=p_in, p_out=p_out, p_rnn=p_rnn, initializer=initializer)
@@ -159,9 +159,10 @@ def main():
             loss.backward()
             optim.step()
 
-            num_inst = word.size(0)
-            train_err += loss * num_inst
-            train_total += num_inst
+            with torch.no_grad():
+                num_inst = word.size(0)
+                train_err += loss * num_inst
+                train_total += num_inst
 
             time_ave = (time.time() - start_time) / batch
             time_left = (num_batches - batch) * time_ave
