@@ -171,7 +171,7 @@ class ChainCRF(nn.Module):
         pointer[0] = -1
         for t in range(1, length):
             pi_prev = pi[t - 1]
-            pi[t], pointer[t] = torch.max(energy_transpose[t] + pi_prev.usqueeze(2), dim=1)
+            pi[t], pointer[t] = torch.max(energy_transpose[t] + pi_prev.unsqueeze(2), dim=1)
 
         _, back_pointer[-1] = torch.max(pi[-1], dim=1)
         for t in reversed(range(length - 1)):
