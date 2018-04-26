@@ -173,10 +173,7 @@ def main():
                 sys.stdout.write("\b" * num_back)
                 sys.stdout.write(" " * num_back)
                 sys.stdout.write("\b" * num_back)
-                err = train_err.cpu().numpy()
-                total = train_total.cpu().numpy()
-                corr = train_corr.cpu().numpy()
-                log_info = 'train: %d/%d loss: %.4f, acc: %.2f%%, time left (estimated): %.2fs' % (batch, num_batches, err / total, corr * 100 / total, time_left)
+                log_info = 'train: %d/%d loss: %.4f, acc: %.2f%%, time left (estimated): %.2fs' % (batch, num_batches, train_err / train_total, train_corr * 100 / train_total, time_left)
                 sys.stdout.write(log_info)
                 sys.stdout.flush()
                 num_back = len(log_info)
@@ -184,9 +181,6 @@ def main():
         sys.stdout.write("\b" * num_back)
         sys.stdout.write(" " * num_back)
         sys.stdout.write("\b" * num_back)
-        train_err = train_err.cpu().numpy()
-        train_total = train_total.cpu().numpy()
-        train_corr = train_corr.cpu().numpy()
         print('train: %d loss: %.4f, acc: %.2f%%, time: %.2fs' % (num_batches, train_err / train_total, train_corr * 100 / train_total, time.time() - start_time))
 
         # evaluate performance on dev data
@@ -201,8 +195,6 @@ def main():
                 dev_corr += corr
                 dev_total += num_tokens
 
-            dev_corr = dev_corr.cpu().numpy()
-            dev_total = dev_total.cpu().numpy()
             print('dev corr: %d, total: %d, acc: %.2f%%' % (dev_corr, dev_total, dev_corr * 100 / dev_total))
 
             if dev_correct < dev_corr:
@@ -219,8 +211,6 @@ def main():
                     test_corr += corr
                     test_total += num_tokens
 
-                test_corr = test_corr.cpu().numpy()
-                test_total = test_total.cpu().numpy()
                 test_correct = test_corr
             print("best dev  corr: %d, total: %d, acc: %.2f%% (epoch: %d)" % (dev_correct, dev_total, dev_correct * 100 / dev_total, best_epoch))
             print("best test corr: %d, total: %d, acc: %.2f%% (epoch: %d)" % (test_correct, test_total, test_correct * 100 / test_total, best_epoch))
