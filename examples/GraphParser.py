@@ -138,13 +138,13 @@ def main():
     logger.info("Reading Data")
     use_gpu = torch.cuda.is_available()
 
-    data_train = conllx_data.read_data_to_variable(train_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, use_gpu=use_gpu, symbolic_root=True)
+    data_train = conllx_data.read_data_to_tensor(train_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, use_gpu=use_gpu, symbolic_root=True)
     # data_train = conllx_data.read_data(train_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
     # num_data = sum([len(bucket) for bucket in data_train])
     num_data = sum(data_train[1])
 
-    data_dev = conllx_data.read_data_to_variable(dev_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, use_gpu=use_gpu, volatile=True, symbolic_root=True)
-    data_test = conllx_data.read_data_to_variable(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, use_gpu=use_gpu, volatile=True, symbolic_root=True)
+    data_dev = conllx_data.read_data_to_tensor(dev_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, use_gpu=use_gpu, volatile=True, symbolic_root=True)
+    data_test = conllx_data.read_data_to_tensor(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, use_gpu=use_gpu, volatile=True, symbolic_root=True)
 
     punct_set = None
     if punctuation is not None:
@@ -300,7 +300,7 @@ def main():
         num_back = 0
         network.train()
         for batch in range(1, num_batches + 1):
-            word, char, pos, heads, types, masks, lengths = conllx_data.get_batch_variable(data_train, batch_size, unk_replace=unk_replace)
+            word, char, pos, heads, types, masks, lengths = conllx_data.get_batch_tensor(data_train, batch_size, unk_replace=unk_replace)
 
             optim.zero_grad()
             loss_arc, loss_type = network.loss(word, char, pos, heads, types, mask=masks, length=lengths)
@@ -354,7 +354,7 @@ def main():
         dev_root_corr = 0.0
         dev_total_root = 0.0
         dev_total_inst = 0.0
-        for batch in conllx_data.iterate_batch_variable(data_dev, batch_size):
+        for batch in conllx_data.iterate_batch_tensor(data_dev, batch_size):
             word, char, pos, heads, types, masks, lengths = batch
             heads_pred, types_pred = decode(word, char, pos, mask=masks, length=lengths, leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
             word = word.data.cpu().numpy()
@@ -436,7 +436,7 @@ def main():
 
             test_root_correct = 0.0
             test_total_root = 0
-            for batch in conllx_data.iterate_batch_variable(data_test, batch_size):
+            for batch in conllx_data.iterate_batch_tensor(data_test, batch_size):
                 word, char, pos, heads, types, masks, lengths = batch
                 heads_pred, types_pred = decode(word, char, pos, mask=masks, length=lengths, leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
                 word = word.data.cpu().numpy()

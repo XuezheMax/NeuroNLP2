@@ -25,6 +25,7 @@ from neuronlp2 import utils
 def main():
     parser = argparse.ArgumentParser(description='Tuning with bi-directional RNN-CNN-CRF')
     parser.add_argument('--mode', choices=['RNN', 'LSTM', 'GRU'], help='architecture of rnn', required=True)
+    parser.add_argument('--cuda', action='store_true', help='using GPU')
     parser.add_argument('--num_epochs', type=int, default=1000, help='Number of training epochs')
     parser.add_argument('--batch_size', type=int, default=16, help='Number of sentences in each batch')
     parser.add_argument('--hidden_size', type=int, default=128, help='Number of hidden units in RNN')
@@ -86,16 +87,16 @@ def main():
     logger.info("POS Alphabet Size: %d" % pos_alphabet.size())
 
     logger.info("Reading Data")
-    use_gpu = torch.cuda.is_available()
+    device = torch.device('cuda') if args.cuda else torch.device('cpu')
 
-    data_train = conllx_data.read_data_to_variable(train_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, use_gpu=use_gpu)
+    data_train = conllx_data.read_data_to_tensor(train_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, device=device)
     # data_train = conllx_data.read_data(train_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
     # num_data = sum([len(bucket) for bucket in data_train])
     num_data = sum(data_train[1])
     num_labels = pos_alphabet.size()
 
-    data_dev = conllx_data.read_data_to_variable(dev_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, use_gpu=use_gpu, volatile=True)
-    data_test = conllx_data.read_data_to_variable(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, use_gpu=use_gpu, volatile=True)
+    data_dev = conllx_data.read_data_to_tensor(dev_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, device=device)
+    data_test = conllx_data.read_data_to_tensor(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, device=device)
 
     def construct_word_embedding_table():
         scale = np.sqrt(3.0 / embedd_dim)
@@ -129,8 +130,7 @@ def main():
         network = BiVarRecurrentConvCRF(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), num_filters, window, mode, hidden_size, num_layers, num_labels,
                                         tag_space=tag_space, embedd_word=word_table, bigram=bigram, p_in=p_in, p_out=p_out, p_rnn=p_rnn, initializer=initializer)
 
-    if use_gpu:
-        network.cuda()
+    network = network.to(device)
 
     lr = learning_rate
     optim = SGD(network.parameters(), lr=lr, momentum=momentum, weight_decay=gamma)
@@ -152,7 +152,7 @@ def main():
         num_back = 0
         network.train()
         for batch in range(1, num_batches + 1):
-            word, char, labels, _, _, masks, lengths = conllx_data.get_batch_variable(data_train, batch_size, unk_replace=unk_replace)
+            word, char, labels, _, _, masks, lengths = conllx_data.get_batch_tensor(data_train, batch_size, unk_replace=unk_replace)
 
             optim.zero_grad()
             loss = network.loss(word, char, labels, mask=masks)
@@ -160,7 +160,7 @@ def main():
             optim.step()
 
             num_inst = word.size(0)
-            train_err += loss.data[0] * num_inst
+            train_err += loss * num_inst
             train_total += num_inst
 
             time_ave = (time.time() - start_time) / batch
@@ -171,7 +171,8 @@ def main():
                 sys.stdout.write("\b" * num_back)
                 sys.stdout.write(" " * num_back)
                 sys.stdout.write("\b" * num_back)
-                log_info = 'train: %d/%d loss: %.4f, time left (estimated): %.2fs' % (batch, num_batches, train_err / train_total, time_left)
+                err = train_err.cpu().numpy()
+                log_info = 'train: %d/%d loss: %.4f, time left (estimated): %.2fs' % (batch, num_batches, err / train_total, time_left)
                 sys.stdout.write(log_info)
                 sys.stdout.flush()
                 num_back = len(log_info)
@@ -179,37 +180,44 @@ def main():
         sys.stdout.write("\b" * num_back)
         sys.stdout.write(" " * num_back)
         sys.stdout.write("\b" * num_back)
+        train_err = train_err.cpu().numpy()
         print('train: %d loss: %.4f, time: %.2fs' % (num_batches, train_err / train_total, time.time() - start_time))
 
         # evaluate performance on dev data
-        network.eval()
-        dev_corr = 0.0
-        dev_total = 0
-        for batch in conllx_data.iterate_batch_variable(data_dev, batch_size):
-            word, char, labels, _, _, masks, lengths = batch
-            preds, corr = network.decode(word, char, target=labels, mask=masks,
-                                         leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
-            num_tokens = masks.data.sum()
-            dev_corr += corr
-            dev_total += num_tokens
-        print('dev corr: %d, total: %d, acc: %.2f%%' % (dev_corr, dev_total, dev_corr * 100 / dev_total))
-
-        if dev_correct < dev_corr:
-            dev_correct = dev_corr
-            best_epoch = epoch
-
-            # evaluate on test data when better performance detected
-            test_corr = 0.0
-            test_total = 0
-            for batch in conllx_data.iterate_batch_variable(data_test, batch_size):
+        with torch.no_grad():
+            network.eval()
+            dev_corr = 0.0
+            dev_total = 0
+            for batch in conllx_data.iterate_batch_tensor(data_dev, batch_size):
                 word, char, labels, _, _, masks, lengths = batch
                 preds, corr = network.decode(word, char, target=labels, mask=masks, leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
-                num_tokens = masks.data.sum()
-                test_corr += corr
-                test_total += num_tokens
-            test_correct = test_corr
-        print("best dev  corr: %d, total: %d, acc: %.2f%% (epoch: %d)" % (dev_correct, dev_total, dev_correct * 100 / dev_total, best_epoch))
-        print("best test corr: %d, total: %d, acc: %.2f%% (epoch: %d)" % (test_correct, test_total, test_correct * 100 / test_total, best_epoch))
+                num_tokens = masks.sum()
+                dev_corr += corr
+                dev_total += num_tokens
+
+            dev_corr = dev_corr.cpu().numpy()
+            dev_total = dev_total.cpu().numpy()
+            print('dev corr: %d, total: %d, acc: %.2f%%' % (dev_corr, dev_total, dev_corr * 100 / dev_total))
+
+            if dev_correct < dev_corr:
+                dev_correct = dev_corr
+                best_epoch = epoch
+
+                # evaluate on test data when better performance detected
+                test_corr = 0.0
+                test_total = 0
+                for batch in conllx_data.iterate_batch_tensor(data_test, batch_size):
+                    word, char, labels, _, _, masks, lengths = batch
+                    preds, corr = network.decode(word, char, target=labels, mask=masks, leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
+                    num_tokens = masks.sum()
+                    test_corr += corr
+                    test_total += num_tokens
+
+                test_corr = test_corr.cpu().numpy()
+                test_total = test_total.cpu().numpy()
+                test_correct = test_corr
+            print("best dev  corr: %d, total: %d, acc: %.2f%% (epoch: %d)" % (dev_correct, dev_total, dev_correct * 100 / dev_total, best_epoch))
+            print("best test corr: %d, total: %d, acc: %.2f%% (epoch: %d)" % (test_correct, test_total, test_correct * 100 / test_total, best_epoch))
 
         if epoch % schedule == 0:
             lr = learning_rate / (1.0 + epoch * decay_rate)

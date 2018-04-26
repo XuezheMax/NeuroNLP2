@@ -1,8 +1,8 @@
 import collections
 from itertools import repeat
 import torch
+import torch.nn as nn
 import torch.nn.utils.rnn as rnn_utils
-from torch.autograd import Variable
 
 
 def _ntuple(n):
@@ -37,7 +37,7 @@ def prepare_rnn_seq(rnn_input, lengths, hx=None, masks=None, batch_first=False):
             return None
         else:
             _, rev_order = torch.sort(order)
-            return lens, Variable(order), Variable(rev_order)
+            return lens, order, rev_order
 
     check_res = check_decreasing(lengths)
 
@@ -83,3 +83,8 @@ def recover_rnn_seq(seq, rev_order, hx=None, batch_first=False):
             else:
                 hx = hx.index_select(1, rev_order)
     return output, hx
+
+
+def freeze_embedding(embedding):
+    assert isinstance(embedding, nn.Embedding), "input should be an Embedding module."
+    embedding.weight.detach_()

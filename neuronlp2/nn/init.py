@@ -1,6 +1,6 @@
 __author__ = 'max'
 
-from torch.autograd import Variable
+import torch
 
 
 def assign_tensor(tensor, val):
@@ -13,7 +13,5 @@ def assign_tensor(tensor, val):
     Returns:
 
     """
-    if isinstance(tensor, Variable):
-        assign_tensor(tensor.data, val)
-        return tensor
-    return tensor.copy_(val)
+    with torch.no_grad():
+        return tensor.copy_(val)

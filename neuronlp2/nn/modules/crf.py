@@ -4,10 +4,8 @@ import math
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
 from torch.nn.parameter import Parameter
 from neuronlp2.nlinalg import logsumexp, logdet
-from neuronlp2.tasks import parser
 from .attention import BiAAttention
 
 
@@ -44,14 +42,12 @@ class ChainCRF(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        nn.init.constant(self.state_nn.bias, 0.)
+        nn.init.constant_(self.state_nn.bias, 0.)
         if self.bigram:
-            nn.init.xavier_uniform(self.trans_nn.weight)
-            nn.init.constant(self.trans_nn.bias, 0.)
+            nn.init.xavier_uniform_(self.trans_nn.weight)
+            nn.init.constant_(self.trans_nn.bias, 0.)
         else:
-            nn.init.normal(self.trans_matrix)
-        # if not self.bigram:
-        #     nn.init.normal(self.trans_matrix)
+            nn.init.normal_(self.trans_matrix)
 
     def forward(self, input, mask=None):
         '''
@@ -119,12 +115,12 @@ class ChainCRF(nn.Module):
             # shape = [batch]
             batch_index = torch.arange(0, batch).long().cuda()
             prev_label = torch.cuda.LongTensor(batch).fill_(self.num_labels - 1)
-            tgt_energy = Variable(torch.zeros(batch)).cuda()
+            tgt_energy = torch.zeros(batch).cuda()
         else:
             # shape = [batch]
             batch_index = torch.arange(0, batch).long()
             prev_label = torch.LongTensor(batch).fill_(self.num_labels - 1)
-            tgt_energy = Variable(torch.zeros(batch))
+            tgt_energy = torch.zeros(batch)
 
         for t in range(length):
             # shape = [batch, num_label, num_label]
@@ -139,8 +135,8 @@ class ChainCRF(nn.Module):
                 else:
                     mask_t = mask_transpose[t]
                     partition = partition + (partition_new - partition) * mask_t
-            tgt_energy += curr_energy[batch_index, prev_label, target_transpose[t].data]
-            prev_label = target_transpose[t].data
+            tgt_energy += curr_energy[batch_index, prev_label, target_transpose[t]]
+            prev_label = target_transpose[t]
 
         return logsumexp(partition, dim=1) - tgt_energy
 
@@ -160,7 +156,7 @@ class ChainCRF(nn.Module):
 
         """
 
-        energy = self.forward(input, mask=mask).data
+        energy = self.forward(input, mask=mask)
 
         # Input should be provided as (n_batch, n_time_steps, num_labels, num_labels)
         # For convenience, we need to dimshuffle to (n_time_steps, n_batch, num_labels, num_labels)
@@ -240,7 +236,7 @@ class TreeCRF(nn.Module):
         # [batch, num_labels, length, length]
         output = self.attention(input_h, input_c, mask_d=mask, mask_e=mask)
         # set diagonal elements to -inf
-        output = output + Variable(torch.diag(output.data.new(length).fill_(-np.inf)))
+        output = output + torch.diag(output.new_full(length, -np.inf))
         return output
 
     def loss(self, input_h, input_c, heads, types, mask=None, lengths=None):
@@ -280,9 +276,9 @@ class TreeCRF(nn.Module):
         D += D * rtol + atol
 
         # [batch, length, length]
-        D = Variable(A.data.new(A.size()).zero_()) + D
+        D = A.new_zeros(A.size()) + D
         # zeros out all elements except diagonal.
-        D = D * Variable(torch.eye(length)).type_as(D)
+        D = D * torch.eye(length).type_as(D)
 
         # compute laplacian matrix
         # [batch, length, length]
@@ -293,22 +289,22 @@ class TreeCRF(nn.Module):
             if mask is None:
                 lengths = [length for _ in range(batch)]
             else:
-                lengths = mask.data.sum(dim=1).long()
+                lengths = mask.sum(dim=1).long()
 
         # compute partition Z(x) [batch]
-        z = Variable(energy.data.new(batch))
+        z = energy.new_empty(batch)
         for b in range(batch):
             Lx = L[b, 1:lengths[b], 1:lengths[b]]
-            # print(torch.log(torch.eig(Lx.data)[0]))
+            # print(torch.log(torch.eig(Lx)[0]))
             z[b] = logdet(Lx)
 
         # first create index matrix [length, batch]
         # index = torch.zeros(length, batch) + torch.arange(0, length).view(length, 1)
         index = torch.arange(0, length).view(length, 1).expand(length, batch)
-        index = index.type_as(energy.data).long()
-        batch_index = torch.arange(0, batch).type_as(energy.data).long()
+        index = index.type_as(energy).long()
+        batch_index = torch.arange(0, batch).type_as(energy).long()
         # compute target energy [length-1, batch]
-        tgt_energy = energy[batch_index, types.data.t(), heads.data.t(), index][1:]
+        tgt_energy = energy[batch_index, types.t(), heads.t(), index][1:]
         # sum over dim=0 shape = [batch]
         tgt_energy = tgt_energy.sum(dim=0)
 

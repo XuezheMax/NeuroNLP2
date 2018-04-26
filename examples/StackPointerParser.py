@@ -153,11 +153,11 @@ def main():
     logger.info("Reading Data")
     use_gpu = torch.cuda.is_available()
 
-    data_train = conllx_stacked_data.read_stacked_data_to_variable(train_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, use_gpu=use_gpu, prior_order=prior_order)
+    data_train = conllx_stacked_data.read_stacked_data_to_tensor(train_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, use_gpu=use_gpu, prior_order=prior_order)
     num_data = sum(data_train[1])
 
-    data_dev = conllx_stacked_data.read_stacked_data_to_variable(dev_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, use_gpu=use_gpu, volatile=True, prior_order=prior_order)
-    data_test = conllx_stacked_data.read_stacked_data_to_variable(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, use_gpu=use_gpu, volatile=True, prior_order=prior_order)
+    data_dev = conllx_stacked_data.read_stacked_data_to_tensor(dev_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, use_gpu=use_gpu, volatile=True, prior_order=prior_order)
+    data_test = conllx_stacked_data.read_stacked_data_to_tensor(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, use_gpu=use_gpu, volatile=True, prior_order=prior_order)
 
     punct_set = None
     if punctuation is not None:
@@ -309,7 +309,7 @@ def main():
         num_back = 0
         network.train()
         for batch in range(1, num_batches + 1):
-            input_encoder, input_decoder = conllx_stacked_data.get_batch_stacked_variable(data_train, batch_size, unk_replace=unk_replace)
+            input_encoder, input_decoder = conllx_stacked_data.get_batch_stacked_tensor(data_train, batch_size, unk_replace=unk_replace)
             word, char, pos, heads, types, masks_e, lengths_e = input_encoder
             stacked_heads, children, sibling, stacked_types, skip_connect, masks_d, lengths_d = input_decoder
 

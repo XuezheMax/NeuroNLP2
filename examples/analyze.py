@@ -85,8 +85,8 @@ def biaffine(model_path, model_name, test_path, punct_set, use_gpu, logger, args
 
     logger.info('use gpu: %s, decoding: %s' % (use_gpu, decoding))
 
-    data_test = conllx_data.read_data_to_variable(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
-                                                  use_gpu=use_gpu, volatile=True, symbolic_root=True)
+    data_test = conllx_data.read_data_to_tensor(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
+                                                use_gpu=use_gpu, volatile=True, symbolic_root=True)
 
     pred_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
     gold_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
@@ -137,7 +137,7 @@ def biaffine(model_path, model_name, test_path, punct_set, use_gpu, logger, args
     sent = 0
     start_time = time.time()
 
-    for batch in conllx_data.iterate_batch_variable(data_test, 1):
+    for batch in conllx_data.iterate_batch_tensor(data_test, 1):
         sys.stdout.write('%d, ' % sent)
         sys.stdout.flush()
         sent += 1
@@ -220,8 +220,8 @@ def stackptr(model_path, model_name, test_path, punct_set, use_gpu, logger, args
     prior_order = kwargs['prior_order']
     logger.info('use gpu: %s, beam: %d, order: %s (%s)' % (use_gpu, beam, prior_order, ordered))
 
-    data_test = conllx_stacked_data.read_stacked_data_to_variable(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
-                                                                  use_gpu=use_gpu, volatile=True, prior_order=prior_order)
+    data_test = conllx_stacked_data.read_stacked_data_to_tensor(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
+                                                                use_gpu=use_gpu, volatile=True, prior_order=prior_order)
 
     pred_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
     gold_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
@@ -371,10 +371,10 @@ def stackptr(model_path, model_name, test_path, punct_set, use_gpu, logger, args
     def analyze():
         np.set_printoptions(linewidth=100000)
         pred_path = 'tmp/analyze_pred_%s' % str(uid)
-        data_gold = conllx_stacked_data.read_stacked_data_to_variable(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
-                                                                      use_gpu=use_gpu, volatile=True, prior_order=prior_order)
-        data_pred = conllx_stacked_data.read_stacked_data_to_variable(pred_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
-                                                                      use_gpu=use_gpu, volatile=True, prior_order=prior_order)
+        data_gold = conllx_stacked_data.read_stacked_data_to_tensor(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
+                                                                    use_gpu=use_gpu, volatile=True, prior_order=prior_order)
+        data_pred = conllx_stacked_data.read_stacked_data_to_tensor(pred_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
+                                                                    use_gpu=use_gpu, volatile=True, prior_order=prior_order)
 
         gold_iter = conllx_stacked_data.iterate_batch_stacked_variable(data_gold, 1)
         test_iter = conllx_stacked_data.iterate_batch_stacked_variable(data_pred, 1)

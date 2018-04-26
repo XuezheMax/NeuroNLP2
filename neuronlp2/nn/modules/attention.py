@@ -42,11 +42,11 @@ class BiAAttention(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        nn.init.xavier_uniform(self.W_d)
-        nn.init.xavier_uniform(self.W_e)
-        nn.init.constant(self.b, 0.)
+        nn.init.xavier_uniform_(self.W_d)
+        nn.init.xavier_uniform_(self.W_e)
+        nn.init.constant_(self.b, 0.)
         if self.biaffine:
-            nn.init.xavier_uniform(self.U)
+            nn.init.xavier_uniform_(self.U)
 
     def forward(self, input_d, input_e, mask_d=None, mask_e=None):
         '''
@@ -132,10 +132,10 @@ class ConcatAttention(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        nn.init.xavier_uniform(self.W_d)
-        nn.init.xavier_uniform(self.W_e)
-        nn.init.xavier_uniform(self.v)
-        nn.init.constant(self.b, 0.)
+        nn.init.xavier_uniform_(self.W_d)
+        nn.init.xavier_uniform_(self.W_e)
+        nn.init.xavier_uniform_(self.v)
+        nn.init.constant_(self.b, 0.)
 
     def forward(self, input_d, input_e, mask_d=None, mask_e=None):
         '''

@@ -9,7 +9,7 @@ from torch.nn.parameter import Parameter
 from ..init import assign_tensor
 
 
-class Embedding(nn.Module):
+class Embedding(nn.Embedding):
     r"""A simple lookup table that stores embeddings of a fixed dictionary and size.
     This module is often used to store word embeddings and retrieve them using indices.
     The input to the module is a list of indices, and the output is the corresponding

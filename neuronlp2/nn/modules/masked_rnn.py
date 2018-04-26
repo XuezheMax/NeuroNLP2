@@ -1,10 +1,6 @@
 __author__ = 'max'
 
-import math
-import torch
 import torch.nn as nn
-from torch.nn.parameter import Parameter
-import torch.nn.functional as F
 from .._functions.masked_rnn import AutogradMaskedRNN, AutogradMaskedStep
 
 
@@ -42,7 +38,7 @@ class MaskedRNNBase(nn.Module):
         lstm = self.Cell is nn.LSTMCell
         if hx is None:
             num_directions = 2 if self.bidirectional else 1
-            hx = torch.autograd.Variable(input.data.new(self.num_layers * num_directions, batch_size, self.hidden_size).zero_())
+            hx = input.new_zeros(self.num_layers * num_directions, batch_size, self.hidden_size)
             if lstm:
                 hx = (hx, hx)
 
@@ -72,7 +68,7 @@ class MaskedRNNBase(nn.Module):
         batch_size = input.size(0)
         lstm = self.Cell is nn.LSTMCell
         if hx is None:
-            hx = torch.autograd.Variable(input.data.new(self.num_layers, batch_size, self.hidden_size).zero_())
+            hx = input.new_zeros(self.num_layers, batch_size, self.hidden_size)
             if lstm:
                 hx = (hx, hx)
 

@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from ..nn import ChainCRF, VarMaskedGRU, VarMaskedRNN, VarMaskedLSTM
-from ..nn import Embedding
 from ..nn import utils
 
 
@@ -13,8 +12,8 @@ class BiRecurrentConv(nn.Module):
                  tag_space=0, embedd_word=None, embedd_char=None, p_in=0.33, p_out=0.5, p_rnn=(0.5, 0.5), initializer=None):
         super(BiRecurrentConv, self).__init__()
 
-        self.word_embedd = Embedding(num_words, word_dim, init_embedding=embedd_word)
-        self.char_embedd = Embedding(num_chars, char_dim, init_embedding=embedd_char)
+        self.word_embedd = nn.Embedding(num_words, word_dim, _weight=embedd_word)
+        self.char_embedd = nn.Embedding(num_chars, char_dim, _weight=embedd_char)
         self.conv1d = nn.Conv1d(char_dim, num_filters, kernel_size, padding=kernel_size - 1)
         # dropout word
         self.dropout_in = nn.Dropout2d(p=p_in)
@@ -52,16 +51,16 @@ class BiRecurrentConv(nn.Module):
         for name, parameter in self.named_parameters():
             if name.find('embedd') == -1:
                 if parameter.dim() == 1:
-                    parameter.data.zero_()
+                    nn.init.constant_(parameter, 0.)
                 else:
-                    self.initializer(parameter.data)
+                    self.initializer(parameter)
 
     def _get_rnn_output(self, input_word, input_char, mask=None, length=None, hx=None):
         # hack length from mask
         # we do not hack mask from length for special reasons.
         # Thus, always provide mask if it is necessary.
         if length is None and mask is not None:
-            length = mask.data.sum(dim=1).long()
+            length = mask.sum(dim=1).long()
 
         # [batch, length, word_dim]
         word = self.word_embedd(input_word)
@@ -236,9 +235,9 @@ class BiRecurrentConvCRF(BiRecurrentConv):
 
         preds = self.crf.decode(output, mask=mask, leading_symbolic=leading_symbolic)
         if mask is None:
-            return preds, torch.eq(preds, target.data).float().sum()
+            return preds, torch.eq(preds, target).float().sum()
         else:
-            return preds, (torch.eq(preds, target.data).float() * mask.data).sum()
+            return preds, (torch.eq(preds, target).float() * mask).sum()
 
 
 class BiVarRecurrentConvCRF(BiVarRecurrentConv):
@@ -284,6 +283,6 @@ class BiVarRecurrentConvCRF(BiVarRecurrentConv):
 
         preds = self.crf.decode(output, mask=mask, leading_symbolic=leading_symbolic)
         if mask is None:
-            return preds, torch.eq(preds, target.data).float().sum()
+            return preds, torch.eq(preds, target).float().sum()
         else:
-            return preds, (torch.eq(preds, target.data).float() * mask.data).sum()
+            return preds, (torch.eq(preds, target).float() * mask).sum()
