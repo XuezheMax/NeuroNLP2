@@ -107,20 +107,13 @@ class ChainCRF(nn.Module):
         if mask is not None:
             mask_transpose = mask.unsqueeze(2).transpose(0, 1)
 
-
         # shape = [batch, num_label]
         partition = None
 
-        if input.is_cuda:
-            # shape = [batch]
-            batch_index = torch.arange(0, batch).long().cuda()
-            prev_label = torch.cuda.LongTensor(batch).fill_(self.num_labels - 1)
-            tgt_energy = torch.zeros(batch).cuda()
-        else:
-            # shape = [batch]
-            batch_index = torch.arange(0, batch).long()
-            prev_label = torch.LongTensor(batch).fill_(self.num_labels - 1)
-            tgt_energy = torch.zeros(batch)
+        # shape = [batch]
+        batch_index = torch.arange(0, batch).type_as(input).long()
+        prev_label = input.new_full((batch, ), self.num_labels - 1).long()
+        tgt_energy = input.new_zeros(batch)
 
         for t in range(length):
             # shape = [batch, num_label, num_label]
@@ -169,22 +162,16 @@ class ChainCRF(nn.Module):
 
         length, batch_size, num_label, _ = energy_transpose.size()
 
-        if input.is_cuda:
-            batch_index = torch.arange(0, batch_size).long().cuda()
-            pi = torch.zeros([length, batch_size, num_label, 1]).cuda()
-            pointer = torch.cuda.LongTensor(length, batch_size, num_label).zero_()
-            back_pointer = torch.cuda.LongTensor(length, batch_size).zero_()
-        else:
-            batch_index = torch.arange(0, batch_size).long()
-            pi = torch.zeros([length, batch_size, num_label, 1])
-            pointer = torch.LongTensor(length, batch_size, num_label).zero_()
-            back_pointer = torch.LongTensor(length, batch_size).zero_()
+        batch_index = torch.arange(0, batch_size).type_as(input).long()
+        pi = input.new_zeros([length, batch_size, num_label])
+        pointer = batch_index.new_zeros(length, batch_size, num_label)
+        back_pointer = batch_index.new_zeros(length, batch_size)
 
         pi[0] = energy[:, 0, -1, leading_symbolic:-1]
         pointer[0] = -1
         for t in range(1, length):
             pi_prev = pi[t - 1]
-            pi[t], pointer[t] = torch.max(energy_transpose[t] + pi_prev, dim=1)
+            pi[t], pointer[t] = torch.max(energy_transpose[t] + pi_prev.usqueeze(2), dim=1)
 
         _, back_pointer[-1] = torch.max(pi[-1], dim=1)
         for t in reversed(range(length - 1)):
@@ -236,7 +223,7 @@ class TreeCRF(nn.Module):
         # [batch, num_labels, length, length]
         output = self.attention(input_h, input_c, mask_d=mask, mask_e=mask)
         # set diagonal elements to -inf
-        output = output + torch.diag(output.new_full(length, -np.inf))
+        output = output + torch.diag(output.new_full((length,), -np.inf))
         return output
 
     def loss(self, input_h, input_c, heads, types, mask=None, lengths=None):
