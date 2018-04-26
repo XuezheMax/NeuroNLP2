@@ -2,7 +2,6 @@ __author__ = 'max'
 
 import numpy as np
 import torch
-from torch.autograd import Variable
 from .conllx_data import _buckets, PAD_ID_WORD, PAD_ID_CHAR, PAD_ID_TAG, UNK_ID
 from .conllx_data import NUM_SYMBOLIC_TAGS
 from .conllx_data import create_alphabets
@@ -123,17 +122,17 @@ def read_stacked_data(source_path, word_alphabet, char_alphabet, pos_alphabet, t
     return data, max_char_length
 
 
-def read_stacked_data_to_variable(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
-                                  max_size=None, normalize_digits=True, prior_order='deep_first', use_gpu=False, volatile=False):
+def read_stacked_data_to_tensor(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
+                                max_size=None, normalize_digits=True, prior_order='deep_first', device=torch.device('cpu')):
     data, max_char_length = read_stacked_data(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, max_size=max_size, normalize_digits=normalize_digits, prior_order=prior_order)
     bucket_sizes = [len(data[b]) for b in range(len(_buckets))]
 
-    data_variable = []
+    data_tensor = []
 
     for bucket_id in range(len(_buckets)):
         bucket_size = bucket_sizes[bucket_id]
         if bucket_size == 0:
-            data_variable.append((1, 1))
+            data_tensor.append((1, 1))
             continue
 
         bucket_length = _buckets[bucket_id]
@@ -203,48 +202,31 @@ def read_stacked_data_to_variable(source_path, word_alphabet, char_alphabet, pos
             # masks_d
             masks_d[i, :inst_size_decoder] = 1.0
 
-        words = Variable(torch.from_numpy(wid_inputs), volatile=volatile)
-        chars = Variable(torch.from_numpy(cid_inputs), volatile=volatile)
-        pos = Variable(torch.from_numpy(pid_inputs), volatile=volatile)
-        heads = Variable(torch.from_numpy(hid_inputs), volatile=volatile)
-        types = Variable(torch.from_numpy(tid_inputs), volatile=volatile)
-        masks_e = Variable(torch.from_numpy(masks_e), volatile=volatile)
-        single = Variable(torch.from_numpy(single), volatile=volatile)
-        lengths_e = torch.from_numpy(lengths_e)
+        words = torch.from_numpy(wid_inputs).to(device)
+        chars = torch.from_numpy(cid_inputs).to(device)
+        pos = torch.from_numpy(pid_inputs).to(device)
+        heads = torch.from_numpy(hid_inputs).to(device)
+        types = torch.from_numpy(tid_inputs).to(device)
+        masks_e = torch.from_numpy(masks_e).to(device)
+        single = torch.from_numpy(single).to(device)
+        lengths_e = torch.from_numpy(lengths_e).to(device)
 
-        stacked_heads = Variable(torch.from_numpy(stack_hid_inputs), volatile=volatile)
-        children = Variable(torch.from_numpy(chid_inputs), volatile=volatile)
-        siblings = Variable(torch.from_numpy(ssid_inputs), volatile=volatile)
-        stacked_types = Variable(torch.from_numpy(stack_tid_inputs), volatile=volatile)
-        skip_connect = torch.from_numpy(skip_connect_inputs)
-        masks_d = Variable(torch.from_numpy(masks_d), volatile=volatile)
-        lengths_d = torch.from_numpy(lengths_d)
+        stacked_heads = torch.from_numpy(stack_hid_inputs).to(device)
+        children = torch.from_numpy(chid_inputs).to(device)
+        siblings = torch.from_numpy(ssid_inputs).to(device)
+        stacked_types = torch.from_numpy(stack_tid_inputs).to(device)
+        skip_connect = torch.from_numpy(skip_connect_inputs).to(device)
+        masks_d = torch.from_numpy(masks_d).to(device)
+        lengths_d = torch.from_numpy(lengths_d).to(device)
 
-        if use_gpu:
-            words = words.cuda()
-            chars = chars.cuda()
-            pos = pos.cuda()
-            heads = heads.cuda()
-            types = types.cuda()
-            masks_e = masks_e.cuda()
-            single = single.cuda()
-            lengths_e = lengths_e.cuda()
-            stacked_heads = stacked_heads.cuda()
-            children = children.cuda()
-            siblings = siblings.cuda()
-            stacked_types = stacked_types.cuda()
-            skip_connect = skip_connect.cuda()
-            masks_d = masks_d.cuda()
-            lengths_d = lengths_d.cuda()
-
-        data_variable.append(((words, chars, pos, heads, types, masks_e, single, lengths_e),
+        data_tensor.append(((words, chars, pos, heads, types, masks_e, single, lengths_e),
                               (stacked_heads, children, siblings, stacked_types, skip_connect, masks_d, lengths_d)))
 
-    return data_variable, bucket_sizes
+    return data_tensor, bucket_sizes
 
 
-def get_batch_stacked_variable(data, batch_size, unk_replace=0.):
-    data_variable, bucket_sizes = data
+def get_batch_stacked_tensor(data, batch_size, unk_replace=0.):
+    data_tensor, bucket_sizes = data
     total_size = float(sum(bucket_sizes))
     # A bucket scale is a list of increasing numbers from 0 to 1 that we'll use
     # to select a bucket. Length of [scale[i], scale[i+1]] is proportional to
@@ -257,19 +239,18 @@ def get_batch_stacked_variable(data, batch_size, unk_replace=0.):
     bucket_id = min([i for i in range(len(buckets_scale)) if buckets_scale[i] > random_number])
     bucket_length = _buckets[bucket_id]
 
-    data_encoder, data_decoder = data_variable[bucket_id]
+    data_encoder, data_decoder = data_tensor[bucket_id]
     words, chars, pos, heads, types, masks_e, single, lengths_e = data_encoder
     stacked_heads, children, siblings, stacked_types, skip_connect, masks_d, lengths_d = data_decoder
     bucket_size = bucket_sizes[bucket_id]
     batch_size = min(bucket_size, batch_size)
     index = torch.randperm(bucket_size).long()[:batch_size]
-    if words.is_cuda:
-        index = index.cuda()
+    index = index.to(words.device)
 
     words = words[index]
     if unk_replace:
-        ones = Variable(single.data.new(batch_size, bucket_length).fill_(1))
-        noise = Variable(masks_e.data.new(batch_size, bucket_length).bernoulli_(unk_replace).long())
+        ones = single.new_ones(batch_size, bucket_length)
+        noise = masks_e.new_empty(batch_size, bucket_length).bernoulli_(unk_replace).long()
         words = words * (ones - single[index] * noise)
 
     return (words, chars[index], pos[index], heads[index], types[index], masks_e[index], lengths_e[index]), \
@@ -277,7 +258,7 @@ def get_batch_stacked_variable(data, batch_size, unk_replace=0.):
 
 
 def iterate_batch_stacked_variable(data, batch_size, unk_replace=0., shuffle=False):
-    data_variable, bucket_sizes = data
+    data_tensor, bucket_sizes = data
 
     bucket_indices = np.arange(len(_buckets))
     if shuffle:
@@ -288,19 +269,18 @@ def iterate_batch_stacked_variable(data, batch_size, unk_replace=0., shuffle=Fal
         bucket_length = _buckets[bucket_id]
         if bucket_size == 0:
             continue
-        data_encoder, data_decoder = data_variable[bucket_id]
+        data_encoder, data_decoder = data_tensor[bucket_id]
         words, chars, pos, heads, types, masks_e, single, lengths_e = data_encoder
         stacked_heads, children, siblings, stacked_types, skip_connect, masks_d, lengths_d = data_decoder
         if unk_replace:
-            ones = Variable(single.data.new(bucket_size, bucket_length).fill_(1))
-            noise = Variable(masks_e.data.new(bucket_size, bucket_length).bernoulli_(unk_replace).long())
+            ones = single.new_ones(bucket_size, bucket_length)
+            noise = masks_e.new_empty(bucket_size, bucket_length).bernoulli_(unk_replace).long()
             words = words * (ones - single * noise)
 
         indices = None
         if shuffle:
             indices = torch.randperm(bucket_size).long()
-            if words.is_cuda:
-                indices = indices.cuda()
+            indices = indices.to(words.device)
         for start_idx in range(0, bucket_size, batch_size):
             if shuffle:
                 excerpt = indices[start_idx:start_idx + batch_size]
