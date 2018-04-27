@@ -327,13 +327,16 @@ def main():
             optim.step()
 
             with torch.no_grad():
-                train_err_arc_leaf += loss_arc_leaf * num_leaf
-                train_err_arc_non_leaf += loss_arc_non_leaf * num_non_leaf
+                num_leaf = num_leaf.cpu().numpy()
+                num_non_leaf = num_non_leaf.cpu().numpy()
 
-                train_err_type_leaf += loss_type_leaf * num_leaf
-                train_err_type_non_leaf += loss_type_non_leaf * num_non_leaf
+                train_err_arc_leaf += loss_arc_leaf.cpu().numpy() * num_leaf
+                train_err_arc_non_leaf += loss_arc_non_leaf.cpu().numpy() * num_non_leaf
 
-                train_err_cov += loss_cov * (num_leaf + num_non_leaf)
+                train_err_type_leaf += loss_type_leaf.cpu().numpy() * num_leaf
+                train_err_type_non_leaf += loss_type_non_leaf.cpu().numpy() * num_non_leaf
+
+                train_err_cov += loss_cov.cpu().numpy() * (num_leaf + num_non_leaf)
 
                 train_total_leaf += num_leaf
                 train_total_non_leaf += num_non_leaf
