@@ -455,15 +455,10 @@ class StackPtrNet(nn.Module):
     def _transform_decoder_init_state(self, hn):
         if isinstance(hn, tuple):
             hn, cn = hn
-            # take the last layers
-            # [2, batch, hidden_size]
-            cn = cn[-2:]
-            # hn [2, batch, hidden_size]
             _, batch, hidden_size = cn.size()
-            # first convert cn t0 [batch, 2, hidden_size]
-            cn = cn.transpose(0, 1).contiguous()
-            # then view to [batch, 1, 2 * hidden_size] --> [1, batch, 2 * hidden_size]
-            cn = cn.view(batch, 1, 2 * hidden_size).transpose(0, 1)
+            # take the last layers
+            # [batch, 2 * hidden_size] --> [1, batch, 2 * hidden_size]
+            cn = torch.cat([cn[-2], cn[-1]], dim=1).unsqueeze(0)
             # take hx_dense to [1, batch, hidden_size]
             cn = self.hx_dense(cn)
             # [decoder_layers, batch, hidden_size]
