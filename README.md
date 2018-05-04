@@ -14,6 +14,12 @@ This is the code we used in the following papers
 
 >IJCNLP 2017
 
+>[Stack-Pointer Networks for Dependency Parsing](https://arxiv.org/pdf/1805.01087.pdf)
+
+>Xuezhe Ma, Zecong Hu, Jingzhou Liu, Nanyun Peng, Graham Neubig and Eduard Hovy
+
+>ACL 2018
+
 It also includes the re-implementation of the Stanford Deep BiAffine Parser:
 >[Deep Biaffine Attention for Neural Dependency Parsing](https://arxiv.org/abs/1611.01734)
 
@@ -45,6 +51,11 @@ To train a NER model,
     ./example/run_ner_crf.sh
 
 ### Dependency Parsing
+To train a Stack-Pointer parser, simply run
+
+    ./example/run_stackPtrParser.sh
+Remeber to setup the paths for data and embeddings.
+
 To train a Deep BiAffine parser, simply run
 
     ./example/run_graphParser.sh
