@@ -50,6 +50,9 @@ To train a NER model,
 
     ./example/run_ner_crf.sh
 
+#### Note
+If you want to apply the sequence labeling model to other tasks or different datasets, please be sure to remove the corresponding folders storing the vocabularies located in ```data/alphabets/```. Otherwise, the old vocabularies will be loaded from disk.
+
 ### Dependency Parsing
 To train a Stack-Pointer parser, simply run
 
@@ -62,3 +65,4 @@ To train a Deep BiAffine parser, simply run
 Again, remember to setup the paths for data and embeddings.
 
 To train a Neural MST parser, run the same script, but change the argument ```objective``` from ```cross_entropy``` to ```crf``` (this part is still under development).
+ 
