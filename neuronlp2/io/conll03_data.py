@@ -56,8 +56,8 @@ def create_alphabets(alphabet_directory, train_path, data_paths=None, max_vocabu
                         vocab_list.append(word)
 
     logger = get_logger("Create Alphabets")
-    word_alphabet = Alphabet('word', defualt_value=True, singleton=True)
-    char_alphabet = Alphabet('character', defualt_value=True)
+    word_alphabet = Alphabet('word', use_default_value=True, singleton=True)
+    char_alphabet = Alphabet('character', use_default_value=True)
     pos_alphabet = Alphabet('pos')
     chunk_alphabet = Alphabet('chunk')
     ner_alphabet = Alphabet('ner')
@@ -70,7 +70,7 @@ def create_alphabets(alphabet_directory, train_path, data_paths=None, max_vocabu
         chunk_alphabet.add(PAD_CHUNK)
         ner_alphabet.add(PAD_NER)
 
-        vocab = dict()
+        vocab2count = dict()
         with open(train_path, 'r') as file:
             for line in file:
                 line = line.decode('utf-8')
@@ -91,23 +91,23 @@ def create_alphabets(alphabet_directory, train_path, data_paths=None, max_vocabu
                 chunk_alphabet.add(chunk)
                 ner_alphabet.add(ner)
 
-                if word in vocab:
-                    vocab[word] += 1
+                if word in vocab2count:
+                    vocab2count[word] += 1
                 else:
-                    vocab[word] = 1
+                    vocab2count[word] = 1
         # collect singletons
-        singletons = set([word for word, count in vocab.items() if count <= min_occurence])
+        singletons = set([word for word, count in vocab2count.items() if count <= min_occurence])
 
         # if a singleton is in pretrained embedding dict, set the count to min_occur + c
         if embedd_dict is not None:
-            for word in vocab.keys():
+            for word in vocab2count.keys():
                 if word in embedd_dict or word.lower() in embedd_dict:
-                    vocab[word] += min_occurence
+                    vocab2count[word] += min_occurence
 
-        vocab_list = _START_VOCAB + sorted(vocab, key=vocab.get, reverse=True)
+        vocab_list = _START_VOCAB + sorted(vocab2count, key=vocab2count.get, reverse=True)
         logger.info("Total Vocabulary Size: %d" % len(vocab_list))
         logger.info("Total Singleton Size:  %d" % len(singletons))
-        vocab_list = [word for word in vocab_list if word in _START_VOCAB or vocab[word] > min_occurence]
+        vocab_list = [word for word in vocab_list if word in _START_VOCAB or vocab2count[word] > min_occurence]
         logger.info("Total Vocabulary Size (w.o rare words): %d" % len(vocab_list))
 
         if len(vocab_list) > max_vocabulary_size:

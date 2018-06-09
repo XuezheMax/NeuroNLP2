@@ -64,8 +64,8 @@ def create_alphabets(alphabet_directory, train_path, data_paths=None, max_vocabu
                         vocab_list.append(word)
 
     logger = get_logger("Create Alphabets")
-    word_alphabet = Alphabet('word', defualt_value=True, singleton=True)
-    char_alphabet = Alphabet('character', defualt_value=True)
+    word_alphabet = Alphabet('word', use_default_value=True, singleton=True)
+    char_alphabet = Alphabet('character', use_default_value=True)
     pos_alphabet = Alphabet('pos')
     type_alphabet = Alphabet('type')
     if not os.path.isdir(alphabet_directory):
