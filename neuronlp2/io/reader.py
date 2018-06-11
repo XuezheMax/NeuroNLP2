@@ -134,7 +134,7 @@ class CoNLL03Reader(object):
         word_ids = []
         char_seqs = []
         char_id_seqs = []
-        postags = []
+        pos_tags = []
         pos_ids = []
         chunk_tags = []
         chunk_ids = []
@@ -161,7 +161,7 @@ class CoNLL03Reader(object):
             words.append(word)
             word_ids.append(self.__word_alphabet.get_index(word))
 
-            postags.append(pos)
+            pos_tags.append(pos)
             pos_ids.append(self.__pos_alphabet.get_index(pos))
 
             chunk_tags.append(chunk)
@@ -170,5 +170,5 @@ class CoNLL03Reader(object):
             ner_tags.append(ner)
             ner_ids.append(self.__ner_alphabet.get_index(ner))
 
-        return NERInstance(Sentence(words, word_ids, char_seqs, char_id_seqs), postags, pos_ids, chunk_tags, chunk_ids,
+        return NERInstance(Sentence(words, word_ids, char_seqs, char_id_seqs), pos_tags, pos_ids, chunk_tags, chunk_ids,
                            ner_tags, ner_ids)

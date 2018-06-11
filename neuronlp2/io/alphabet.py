@@ -7,19 +7,21 @@ import json
 import os
 from .logger import get_logger
 
+DEFAULT_VALUE = '<_UNK>'
+
 class Alphabet(object):
-    def __init__(self, name, defualt_value=False, keep_growing=True, singleton=False):
+    def __init__(self, name, use_default_value=False, keep_growing=True, singleton=False):
         self.__name = name
 
         self.instance2index = {}
         self.instances = []
-        self.default_value = defualt_value
-        self.offset = 1 if self.default_value else 0
+        self.use_default_value = use_default_value
+        self.offset = 1 if self.use_default_value else 0
         self.keep_growing = keep_growing
         self.singletons = set() if singleton else None
 
         # Index 0 is occupied by default, all else following.
-        self.default_index = 0 if self.default_value else None
+        self.default_index = 0 if self.use_default_value else None
 
         self.next_index = self.offset
 
@@ -58,15 +60,15 @@ class Alphabet(object):
                 self.add(instance)
                 return index
             else:
-                if self.default_value:
+                if self.use_default_value:
                     return self.default_index
                 else:
                     raise KeyError("instance not found: %s" % instance)
 
     def get_instance(self, index):
-        if self.default_value and index == self.default_index:
+        if self.use_default_value and index == self.default_index:
             # First index is occupied by the wildcard element.
-            return '<_UNK>'
+            return DEFAULT_VALUE
         else:
             try:
                 return self.instances[index - self.offset]

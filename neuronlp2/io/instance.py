@@ -26,9 +26,9 @@ class DependencyInstance(object):
 
 
 class NERInstance(object):
-    def __init__(self, sentence, postags, pos_ids, chunk_tags, chunk_ids, ner_tags, ner_ids):
+    def __init__(self, sentence, pos_tags, pos_ids, chunk_tags, chunk_ids, ner_tags, ner_ids):
         self.sentence = sentence
-        self.postags = postags
+        self.pos_tags = pos_tags
         self.pos_ids = pos_ids
         self.chunk_tags = chunk_tags
         self.chunk_ids = chunk_ids
