@@ -37,7 +37,7 @@ def main():
     args_parser.add_argument('--ordered', action='store_true', help='Using order constraints in decoding')
     args_parser.add_argument('--decode', choices=['mst', 'greedy'], default='mst', help='decoding algorithm')
     args_parser.add_argument('--display', action='store_true', help='Display wrong examples')
-    args_parser.add_argument('--gpu', action='store_true', help='Using GPU')
+    args_parser.add_argument('--cuda', action='store_true', default=True, help='using GPU')
 
     args = args_parser.parse_args()
 
@@ -53,19 +53,19 @@ def main():
         punct_set = set(punctuation)
         logger.info("punctuations(%d): %s" % (len(punct_set), ' '.join(punct_set)))
 
-    use_gpu = args.gpu
+    device = torch.device('cuda') if args.cuda else torch.device('cpu')
 
     parser = args.parser
 
     if parser == 'stackptr':
-        stackptr(model_path, model_name, test_path, punct_set, use_gpu, logger, args)
+        stackptr(model_path, model_name, test_path, punct_set, device, logger, args)
     elif parser == 'biaffine':
-        biaffine(model_path, model_name, test_path, punct_set, use_gpu, logger, args)
+        biaffine(model_path, model_name, test_path, punct_set, device, logger, args)
     else:
         raise ValueError('Unknown parser: %s' % parser)
 
 
-def biaffine(model_path, model_name, test_path, punct_set, use_gpu, logger, args):
+def biaffine(model_path, model_name, test_path, punct_set, device, logger, args):
     alphabet_path = os.path.join(model_path, 'alphabets/')
     model_name = os.path.join(model_path, model_name)
     word_alphabet, char_alphabet, pos_alphabet, \
@@ -83,10 +83,7 @@ def biaffine(model_path, model_name, test_path, punct_set, use_gpu, logger, args
 
     decoding = args.decode
 
-    logger.info('use gpu: %s, decoding: %s' % (use_gpu, decoding))
-
-    data_test = conllx_data.read_data_to_tensor(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
-                                                use_gpu=use_gpu, volatile=True, symbolic_root=True)
+    data_test = conllx_data.read_data_to_tensor(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, symbolic_root=True, device=device)
 
     pred_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
     gold_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
@@ -102,10 +99,7 @@ def biaffine(model_path, model_name, test_path, punct_set, use_gpu, logger, args
     network = BiRecurrentConvBiAffine(*args, **kwargs)
     network.load_state_dict(torch.load(model_name))
 
-    if use_gpu:
-        network.cuda()
-    else:
-        network.cpu()
+    network = network.to(device)
 
     network.eval()
 
@@ -137,43 +131,45 @@ def biaffine(model_path, model_name, test_path, punct_set, use_gpu, logger, args
     sent = 0
     start_time = time.time()
 
-    for batch in conllx_data.iterate_batch_tensor(data_test, 1):
-        sys.stdout.write('%d, ' % sent)
-        sys.stdout.flush()
-        sent += 1
+    with torch.no_grad():
+        for batch in conllx_data.iterate_batch_tensor(data_test, 1):
+            sys.stdout.write('%d, ' % sent)
+            sys.stdout.flush()
+            sent += 1
 
-        word, char, pos, heads, types, masks, lengths = batch
-        heads_pred, types_pred = decode(word, char, pos, mask=masks, length=lengths, leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
-        word = word.data.cpu().numpy()
-        pos = pos.data.cpu().numpy()
-        lengths = lengths.cpu().numpy()
-        heads = heads.data.cpu().numpy()
-        types = types.data.cpu().numpy()
+            word, char, pos, heads, types, masks, lengths = batch
+            heads_pred, types_pred = decode(word, char, pos, mask=masks, length=lengths,
+                                            leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
+            word = word.cpu().numpy()
+            pos = pos.cpu().numpy()
+            lengths = lengths.cpu().numpy()
+            heads = heads.cpu().numpy()
+            types = types.cpu().numpy()
 
-        pred_writer.write(word, pos, heads_pred, types_pred, lengths, symbolic_root=True)
-        gold_writer.write(word, pos, heads, types, lengths, symbolic_root=True)
+            pred_writer.write(word, pos, heads_pred, types_pred, lengths, symbolic_root=True)
+            gold_writer.write(word, pos, heads, types, lengths, symbolic_root=True)
 
-        stats, stats_nopunc, stats_root, num_inst = parser.eval(word, pos, heads_pred, types_pred, heads, types, word_alphabet, pos_alphabet, lengths, punct_set=punct_set, symbolic_root=True)
-        ucorr, lcorr, total, ucm, lcm = stats
-        ucorr_nopunc, lcorr_nopunc, total_nopunc, ucm_nopunc, lcm_nopunc = stats_nopunc
-        corr_root, total_root = stats_root
+            stats, stats_nopunc, stats_root, num_inst = parser.eval(word, pos, heads_pred, types_pred, heads, types, word_alphabet, pos_alphabet, lengths, punct_set=punct_set, symbolic_root=True)
+            ucorr, lcorr, total, ucm, lcm = stats
+            ucorr_nopunc, lcorr_nopunc, total_nopunc, ucm_nopunc, lcm_nopunc = stats_nopunc
+            corr_root, total_root = stats_root
 
-        test_ucorrect += ucorr
-        test_lcorrect += lcorr
-        test_total += total
-        test_ucomlpete_match += ucm
-        test_lcomplete_match += lcm
+            test_ucorrect += ucorr
+            test_lcorrect += lcorr
+            test_total += total
+            test_ucomlpete_match += ucm
+            test_lcomplete_match += lcm
 
-        test_ucorrect_nopunc += ucorr_nopunc
-        test_lcorrect_nopunc += lcorr_nopunc
-        test_total_nopunc += total_nopunc
-        test_ucomlpete_match_nopunc += ucm_nopunc
-        test_lcomplete_match_nopunc += lcm_nopunc
+            test_ucorrect_nopunc += ucorr_nopunc
+            test_lcorrect_nopunc += lcorr_nopunc
+            test_total_nopunc += total_nopunc
+            test_ucomlpete_match_nopunc += ucm_nopunc
+            test_lcomplete_match_nopunc += lcm_nopunc
 
-        test_root_correct += corr_root
-        test_total_root += total_root
+            test_root_correct += corr_root
+            test_total_root += total_root
 
-        test_total_inst += num_inst
+            test_total_inst += num_inst
 
     pred_writer.close()
     gold_writer.close()
@@ -190,7 +186,7 @@ def biaffine(model_path, model_name, test_path, punct_set, use_gpu, logger, args
         test_root_correct, test_total_root, test_root_correct * 100 / test_total_root))
 
 
-def stackptr(model_path, model_name, test_path, punct_set, use_gpu, logger, args):
+def stackptr(model_path, model_name, test_path, punct_set, device, logger, args):
     alphabet_path = os.path.join(model_path, 'alphabets/')
     model_name = os.path.join(model_path, model_name)
     word_alphabet, char_alphabet, pos_alphabet, \
@@ -218,10 +214,9 @@ def stackptr(model_path, model_name, test_path, punct_set, use_gpu, logger, args
     args, kwargs = load_model_arguments_from_json()
 
     prior_order = kwargs['prior_order']
-    logger.info('use gpu: %s, beam: %d, order: %s (%s)' % (use_gpu, beam, prior_order, ordered))
+    logger.info('beam: %d, order: %s (%s)' % (beam, prior_order, ordered))
 
-    data_test = conllx_stacked_data.read_stacked_data_to_tensor(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
-                                                                use_gpu=use_gpu, volatile=True, prior_order=prior_order)
+    data_test = conllx_stacked_data.read_stacked_data_to_tensor(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, prior_order=prior_order, device=device)
 
     pred_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
     gold_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
@@ -230,10 +225,7 @@ def stackptr(model_path, model_name, test_path, punct_set, use_gpu, logger, args
     network = StackPtrNet(*args, **kwargs)
     network.load_state_dict(torch.load(model_name))
 
-    if use_gpu:
-        network.cuda()
-    else:
-        network.cpu()
+    network = network.to(device)
 
     network.eval()
 
@@ -266,83 +258,82 @@ def stackptr(model_path, model_name, test_path, punct_set, use_gpu, logger, args
     gold_writer.start('tmp/analyze_gold_%s' % str(uid))
     sent = 0
     start_time = time.time()
-    for batch in conllx_stacked_data.iterate_batch_stacked_variable(data_test, 1):
-        sys.stdout.write('%d, ' % sent)
-        sys.stdout.flush()
-        sent += 1
+    with torch.no_grad():
+        for batch in conllx_stacked_data.iterate_batch_stacked_variable(data_test, 1):
+            sys.stdout.write('%d, ' % sent)
+            sys.stdout.flush()
+            sent += 1
 
-        input_encoder, input_decoder = batch
-        word, char, pos, heads, types, masks, lengths = input_encoder
-        stacked_heads, children, siblings, stacked_types, skip_connect, mask_d, lengths_d = input_decoder
-        heads_pred, types_pred, children_pred, stacked_types_pred = network.decode(word, char, pos, mask=masks, length=lengths, beam=beam, ordered=ordered,
-                                                                                   leading_symbolic=conllx_stacked_data.NUM_SYMBOLIC_TAGS)
+            input_encoder, input_decoder = batch
+            word, char, pos, heads, types, masks, lengths = input_encoder
+            stacked_heads, children, siblings, stacked_types, skip_connect, mask_d, lengths_d = input_decoder
+            heads_pred, types_pred, children_pred, stacked_types_pred = network.decode(word, char, pos, mask=masks,
+               length=lengths, beam=beam,
+               ordered=ordered,
+               leading_symbolic=conllx_stacked_data.NUM_SYMBOLIC_TAGS)
 
-        stacked_heads = stacked_heads.data
-        children = children.data
-        stacked_types = stacked_types.data
-        children_pred = torch.from_numpy(children_pred).long()
-        stacked_types_pred = torch.from_numpy(stacked_types_pred).long()
-        if use_gpu:
-            children_pred = children_pred.cuda()
-            stacked_types_pred = stacked_types_pred.cuda()
-        mask_d = mask_d.data
-        mask_leaf = torch.eq(children, stacked_heads).float()
-        mask_non_leaf = (1.0 - mask_leaf)
-        mask_leaf = mask_leaf * mask_d
-        mask_non_leaf = mask_non_leaf * mask_d
-        num_leaf = mask_leaf.sum()
-        num_non_leaf = mask_non_leaf.sum()
+            stacked_heads = stacked_heads.cpu().numpy()
+            children = children.cpu().numpy()
+            stacked_types = stacked_types.cpu().numpy()
 
-        ucorr_stack = torch.eq(children_pred, children).float()
-        lcorr_stack = ucorr_stack * torch.eq(stacked_types_pred, stacked_types).float()
-        ucorr_stack_leaf = (ucorr_stack * mask_leaf).sum()
-        ucorr_stack_non_leaf = (ucorr_stack * mask_non_leaf).sum()
+            mask_d = mask_d.data
+            mask_leaf = np.equal(children, stacked_heads)
+            mask_non_leaf = (1.0 - mask_leaf)
+            mask_leaf = mask_leaf * mask_d
+            mask_non_leaf = mask_non_leaf * mask_d
+            num_leaf = mask_leaf.sum()
+            num_non_leaf = mask_non_leaf.sum()
 
-        lcorr_stack_leaf = (lcorr_stack * mask_leaf).sum()
-        lcorr_stack_non_leaf = (lcorr_stack * mask_non_leaf).sum()
+            ucorr_stack = np.equal(children_pred, children)
+            lcorr_stack = ucorr_stack * np.equal(stacked_types_pred, stacked_types)
+            ucorr_stack_leaf = (ucorr_stack * mask_leaf).sum()
+            ucorr_stack_non_leaf = (ucorr_stack * mask_non_leaf).sum()
 
-        test_ucorrect_stack_leaf += ucorr_stack_leaf
-        test_ucorrect_stack_non_leaf += ucorr_stack_non_leaf
-        test_lcorrect_stack_leaf += lcorr_stack_leaf
-        test_lcorrect_stack_non_leaf += lcorr_stack_non_leaf
+            lcorr_stack_leaf = (lcorr_stack * mask_leaf).sum()
+            lcorr_stack_non_leaf = (lcorr_stack * mask_non_leaf).sum()
 
-        test_leaf += num_leaf
-        test_non_leaf += num_non_leaf
+            test_ucorrect_stack_leaf += ucorr_stack_leaf
+            test_ucorrect_stack_non_leaf += ucorr_stack_non_leaf
+            test_lcorrect_stack_leaf += lcorr_stack_leaf
+            test_lcorrect_stack_non_leaf += lcorr_stack_non_leaf
 
-        # ------------------------------------------------------------------------------------------------
+            test_leaf += num_leaf
+            test_non_leaf += num_non_leaf
 
-        word = word.data.cpu().numpy()
-        pos = pos.data.cpu().numpy()
-        lengths = lengths.cpu().numpy()
-        heads = heads.data.cpu().numpy()
-        types = types.data.cpu().numpy()
+            # ------------------------------------------------------------------------------------------------
 
-        pred_writer.write(word, pos, heads_pred, types_pred, lengths, symbolic_root=True)
-        gold_writer.write(word, pos, heads, types, lengths, symbolic_root=True)
+            word = word.cpu().numpy()
+            pos = pos.cpu().numpy()
+            lengths = lengths.cpu().numpy()
+            heads = heads.cpu().numpy()
+            types = types.cpu().numpy()
 
-        stats, stats_nopunc, stats_root, num_inst = parser.eval(word, pos, heads_pred, types_pred, heads, types,
-                                                                word_alphabet, pos_alphabet, lengths,
-                                                                punct_set=punct_set, symbolic_root=True)
-        ucorr, lcorr, total, ucm, lcm = stats
-        ucorr_nopunc, lcorr_nopunc, total_nopunc, ucm_nopunc, lcm_nopunc = stats_nopunc
-        corr_root, total_root = stats_root
+            pred_writer.write(word, pos, heads_pred, types_pred, lengths, symbolic_root=True)
+            gold_writer.write(word, pos, heads, types, lengths, symbolic_root=True)
 
-        test_ucorrect += ucorr
-        test_lcorrect += lcorr
-        test_total += total
-        test_ucomlpete_match += ucm
-        test_lcomplete_match += lcm
+            stats, stats_nopunc, stats_root, num_inst = parser.eval(word, pos, heads_pred, types_pred, heads, types,
+                                                                    word_alphabet, pos_alphabet, lengths,
+                                                                    punct_set=punct_set, symbolic_root=True)
+            ucorr, lcorr, total, ucm, lcm = stats
+            ucorr_nopunc, lcorr_nopunc, total_nopunc, ucm_nopunc, lcm_nopunc = stats_nopunc
+            corr_root, total_root = stats_root
 
-        test_ucorrect_nopunc += ucorr_nopunc
-        test_lcorrect_nopunc += lcorr_nopunc
-        test_total_nopunc += total_nopunc
-        test_ucomlpete_match_nopunc += ucm_nopunc
-        test_lcomplete_match_nopunc += lcm_nopunc
+            test_ucorrect += ucorr
+            test_lcorrect += lcorr
+            test_total += total
+            test_ucomlpete_match += ucm
+            test_lcomplete_match += lcm
 
-        test_root_correct += corr_root
-        test_total_root += total_root
+            test_ucorrect_nopunc += ucorr_nopunc
+            test_lcorrect_nopunc += lcorr_nopunc
+            test_total_nopunc += total_nopunc
+            test_ucomlpete_match_nopunc += ucm_nopunc
+            test_lcomplete_match_nopunc += lcm_nopunc
 
-        test_total_inst += num_inst
+            test_root_correct += corr_root
+            test_total_root += total_root
+
+            test_total_inst += num_inst
 
     pred_writer.close()
     gold_writer.close()
@@ -371,10 +362,14 @@ def stackptr(model_path, model_name, test_path, punct_set, use_gpu, logger, args
     def analyze():
         np.set_printoptions(linewidth=100000)
         pred_path = 'tmp/analyze_pred_%s' % str(uid)
-        data_gold = conllx_stacked_data.read_stacked_data_to_tensor(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
-                                                                    use_gpu=use_gpu, volatile=True, prior_order=prior_order)
-        data_pred = conllx_stacked_data.read_stacked_data_to_tensor(pred_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
-                                                                    use_gpu=use_gpu, volatile=True, prior_order=prior_order)
+
+        data_gold = conllx_stacked_data.read_stacked_data_to_tensor(test_path, word_alphabet, char_alphabet,
+                                                                    pos_alphabet, type_alphabet,
+                                                                    prior_order=prior_order, device=device)
+
+        data_pred = conllx_stacked_data.read_stacked_data_to_tensor(pred_path, word_alphabet, char_alphabet,
+                                                                    pos_alphabet, type_alphabet,
+                                                                    prior_order=prior_order, device=device)
 
         gold_iter = conllx_stacked_data.iterate_batch_stacked_variable(data_gold, 1)
         test_iter = conllx_stacked_data.iterate_batch_stacked_variable(data_pred, 1)
@@ -459,7 +454,7 @@ def calc_loss(network, word, char, pos, heads, stacked_heads, children, sibling,
     err_type_leaf = loss_type_leaf.data[0] * num_leaf
     err_type_non_leaf = loss_type_non_leaf.data[0] * num_non_leaf
 
-    err_cov = loss_cov.data[0] * (num_leaf + num_non_leaf)
+    #err_cov = loss_cov.data[0] * (num_leaf + num_non_leaf)
 
     err_arc = err_arc_leaf + err_arc_non_leaf
     err_type = err_type_leaf + err_type_non_leaf
