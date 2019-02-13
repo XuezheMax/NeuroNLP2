@@ -43,6 +43,7 @@ def evaluate(output_file):
 def main():
     parser = argparse.ArgumentParser(description='Tuning with bi-directional RNN-CNN-CRF')
     parser.add_argument('--mode', choices=['RNN', 'LSTM', 'GRU'], help='architecture of rnn', required=True)
+    parser.add_argument('--cuda', action='store_true', help='using GPU')
     parser.add_argument('--num_epochs', type=int, default=100, help='Number of training epochs')
     parser.add_argument('--batch_size', type=int, default=16, help='Number of sentences in each batch')
     parser.add_argument('--hidden_size', type=int, default=128, help='Number of hidden units in RNN')
@@ -105,14 +106,14 @@ def main():
     logger.info("NER Alphabet Size: %d" % ner_alphabet.size())
 
     logger.info("Reading Data")
-    use_gpu = torch.cuda.is_available()
+    device = torch.device('cuda') if args.cuda else torch.device('cpu')
 
-    data_train = conll03_data.read_data_to_variable(train_path, word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet, use_gpu=use_gpu)
+    data_train = conll03_data.read_data_to_tensor(train_path, word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet, device=device)
     num_data = sum(data_train[1])
     num_labels = ner_alphabet.size()
 
-    data_dev = conll03_data.read_data_to_variable(dev_path, word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet, use_gpu=use_gpu, volatile=True)
-    data_test = conll03_data.read_data_to_variable(test_path, word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet, use_gpu=use_gpu, volatile=True)
+    data_dev = conll03_data.read_data_to_tensor(dev_path, word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet, device=device)
+    data_test = conll03_data.read_data_to_tensor(test_path, word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet, device=device)
 
     writer = CoNLL03Writer(word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet)
 
@@ -140,7 +141,7 @@ def main():
     window = 3
     num_layers = args.num_layers
     tag_space = args.tag_space
-    initializer = nn.init.xavier_uniform
+    initializer = nn.init.xavier_uniform_
     if args.dropout == 'std':
         network = BiRecurrentConvCRF(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), num_filters, window, mode, hidden_size, num_layers, num_labels,
                                      tag_space=tag_space, embedd_word=word_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn, bigram=bigram, initializer=initializer)
@@ -148,8 +149,7 @@ def main():
         network = BiVarRecurrentConvCRF(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), num_filters, window, mode, hidden_size, num_layers, num_labels,
                                         tag_space=tag_space, embedd_word=word_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn, bigram=bigram, initializer=initializer)
 
-    if use_gpu:
-        network.cuda()
+    network = network.to(device)
 
     lr = learning_rate
     optim = SGD(network.parameters(), lr=lr, momentum=momentum, weight_decay=gamma, nesterov=True)
@@ -176,16 +176,17 @@ def main():
         num_back = 0
         network.train()
         for batch in range(1, num_batches + 1):
-            word, char, _, _, labels, masks, lengths = conll03_data.get_batch_variable(data_train, batch_size, unk_replace=unk_replace)
+            word, char, _, _, labels, masks, lengths = conll03_data.get_batch_tensor(data_train, batch_size, unk_replace=unk_replace)
 
             optim.zero_grad()
             loss = network.loss(word, char, labels, mask=masks)
             loss.backward()
             optim.step()
 
-            num_inst = word.size(0)
-            train_err += loss.data[0] * num_inst
-            train_total += num_inst
+            with torch.no_grad():
+                num_inst = word.size(0)
+                train_err += loss * num_inst
+                train_total += num_inst
 
             time_ave = (time.time() - start_time) / batch
             time_left = (num_batches - batch) * time_ave
@@ -206,38 +207,39 @@ def main():
         print('train: %d loss: %.4f, time: %.2fs' % (num_batches, train_err / train_total, time.time() - start_time))
 
         # evaluate performance on dev data
-        network.eval()
-        tmp_filename = 'tmp/%s_dev%d' % (str(uid), epoch)
-        writer.start(tmp_filename)
-
-        for batch in conll03_data.iterate_batch_variable(data_dev, batch_size):
-            word, char, pos, chunk, labels, masks, lengths = batch
-            preds, _ = network.decode(word, char, target=labels, mask=masks, leading_symbolic=conll03_data.NUM_SYMBOLIC_TAGS)
-            writer.write(word.data.cpu().numpy(), pos.data.cpu().numpy(), chunk.data.cpu().numpy(), preds.cpu().numpy(), labels.data.cpu().numpy(), lengths.cpu().numpy())
-        writer.close()
-        acc, precision, recall, f1 = evaluate(tmp_filename)
-        print('dev acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%%' % (acc, precision, recall, f1))
-
-        if dev_f1 < f1:
-            dev_f1 = f1
-            dev_acc = acc
-            dev_precision = precision
-            dev_recall = recall
-            best_epoch = epoch
-
-            # evaluate on test data when better performance detected
-            tmp_filename = 'tmp/%s_test%d' % (str(uid), epoch)
+        with torch.no_grad():
+            network.eval()
+            tmp_filename = 'tmp/%s_dev%d' % (str(uid), epoch)
             writer.start(tmp_filename)
 
-            for batch in conll03_data.iterate_batch_variable(data_test, batch_size):
+            for batch in conll03_data.iterate_batch_tensor(data_dev, batch_size):
                 word, char, pos, chunk, labels, masks, lengths = batch
                 preds, _ = network.decode(word, char, target=labels, mask=masks, leading_symbolic=conll03_data.NUM_SYMBOLIC_TAGS)
-                writer.write(word.data.cpu().numpy(), pos.data.cpu().numpy(), chunk.data.cpu().numpy(), preds.cpu().numpy(), labels.data.cpu().numpy(), lengths.cpu().numpy())
+                writer.write(word.cpu().numpy(), pos.cpu().numpy(), chunk.cpu().numpy(), preds.cpu().numpy(), labels.cpu().numpy(), lengths.cpu().numpy())
             writer.close()
-            test_acc, test_precision, test_recall, test_f1 = evaluate(tmp_filename)
+            acc, precision, recall, f1 = evaluate(tmp_filename)
+            print('dev acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%%' % (acc, precision, recall, f1))
 
-        print("best dev  acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%% (epoch: %d)" % (dev_acc, dev_precision, dev_recall, dev_f1, best_epoch))
-        print("best test acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%% (epoch: %d)" % (test_acc, test_precision, test_recall, test_f1, best_epoch))
+            if dev_f1 < f1:
+                dev_f1 = f1
+                dev_acc = acc
+                dev_precision = precision
+                dev_recall = recall
+                best_epoch = epoch
+
+                # evaluate on test data when better performance detected
+                tmp_filename = 'tmp/%s_test%d' % (str(uid), epoch)
+                writer.start(tmp_filename)
+
+                for batch in conll03_data.iterate_batch_tensor(data_test, batch_size):
+                    word, char, pos, chunk, labels, masks, lengths = batch
+                    preds, _ = network.decode(word, char, target=labels, mask=masks, leading_symbolic=conll03_data.NUM_SYMBOLIC_TAGS)
+                    writer.write(word.cpu().numpy(), pos.cpu().numpy(), chunk.cpu().numpy(), preds.cpu().numpy(), labels.cpu().numpy(), lengths.cpu().numpy())
+                writer.close()
+                test_acc, test_precision, test_recall, test_f1 = evaluate(tmp_filename)
+
+            print("best dev  acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%% (epoch: %d)" % (dev_acc, dev_precision, dev_recall, dev_f1, best_epoch))
+            print("best test acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%% (epoch: %d)" % (test_acc, test_precision, test_recall, test_f1, best_epoch))
 
         if epoch % schedule == 0:
             lr = learning_rate / (1.0 + epoch * decay_rate)

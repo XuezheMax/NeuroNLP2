@@ -1,6 +1,5 @@
 __author__ = 'max'
 
-import math
 import numpy as np
 import torch
 import torch.nn as nn
@@ -39,10 +38,10 @@ class BiLinear(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        nn.init.xavier_uniform(self.W_l)
-        nn.init.xavier_uniform(self.W_r)
-        nn.init.constant(self.bias, 0.)
-        nn.init.xavier_uniform(self.U)
+        nn.init.xavier_uniform_(self.W_l)
+        nn.init.xavier_uniform_(self.W_r)
+        nn.init.constant_(self.bias, 0.)
+        nn.init.xavier_uniform_(self.U)
 
     def forward(self, input_left, input_right):
         '''

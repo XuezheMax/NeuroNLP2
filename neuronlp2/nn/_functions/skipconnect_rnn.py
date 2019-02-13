@@ -1,7 +1,6 @@
 __author__ = 'max'
 
 import torch
-from torch.autograd import Variable
 from torch.nn._functions.thnn import rnnFusedPointwise as fusedBackend
 from torch.nn import functional as F
 
@@ -132,7 +131,7 @@ def SkipConnectRecurrent(reverse=False):
         # hack to handle LSTM
         h0 = hidden[0] if isinstance(hidden, tuple) else hidden
         # [length + 1, batch, hidden_size]
-        output = Variable(input.data.new(input.size(0) + 1, *h0.size()).zero_()) + h0
+        output = input.new_zeros(input.size(0) + 1, *h0.size()) + h0
         steps = range(input.size(0) - 1, -1, -1) if reverse else range(input.size(0))
         # create batch index
         batch_index = torch.arange(0, h0.size(0)).type_as(skip_connect)

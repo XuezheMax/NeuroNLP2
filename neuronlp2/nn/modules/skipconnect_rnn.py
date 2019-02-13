@@ -1,10 +1,8 @@
 __author__ = 'max'
 
-import math
 import torch
 import torch.nn as nn
 from torch.nn.parameter import Parameter
-from torch.autograd import Variable
 from .._functions import skipconnect_rnn as rnn_F
 from .variational_rnn import VarRNNCellBase, default_initializer
 
@@ -46,7 +44,7 @@ class SkipConnectRNNBase(nn.Module):
         batch_size = input.size(0) if self.batch_first else input.size(1)
         if hx is None:
             num_directions = 2 if self.bidirectional else 1
-            hx = torch.autograd.Variable(input.data.new(self.num_layers * num_directions, batch_size, self.hidden_size).zero_())
+            hx = input.new_zeros(self.num_layers * num_directions, batch_size, self.hidden_size)
             if self.lstm:
                 hx = (hx, hx)
 
@@ -75,11 +73,11 @@ class SkipConnectRNNBase(nn.Module):
         assert not self.bidirectional, "step only cannot be applied to bidirectional RNN."
         batch_size = input.size(0)
         if hx is None:
-            hx = torch.autograd.Variable(input.data.new(self.num_layers, batch_size, self.hidden_size).zero_())
+            hx = input.new_zeros(self.num_layers, batch_size, self.hidden_size)
             if self.lstm:
                 hx = (hx, hx)
         if hs is None:
-            hs = torch.autograd.Variable(input.data.new(self.num_layers, batch_size, self.hidden_size).zero_())
+            hs = input.new_zeros(self.num_layers, batch_size, self.hidden_size)
 
         func = rnn_F.AutogradSkipConnectStep(num_layers=self.num_layers, lstm=self.lstm)
 
@@ -447,21 +445,21 @@ class SkipConnectRNNCell(VarRNNCellBase):
     def reset_parameters(self):
         for weight in self.parameters():
             if weight.dim() == 1:
-                weight.data.zero_()
+                nn.init.constant_(weight, 0.)
             else:
-                self.initializer(weight.data)
+                self.initializer(weight)
 
     def reset_noise(self, batch_size):
         if self.training:
             if self.p_in:
-                noise = self.weight_ih.data.new(batch_size, self.input_size)
-                self.noise_in = Variable(noise.bernoulli_(1.0 - self.p_in) / (1.0 - self.p_in))
+                noise = self.weight_ih.new_empty(batch_size, self.input_size)
+                self.noise_in = noise.bernoulli_(1.0 - self.p_in) / (1.0 - self.p_in)
             else:
                 self.noise_in = None
 
             if self.p_hidden:
-                noise = self.weight_hh.data.new(batch_size, self.hidden_size * 2)
-                self.noise_hidden = Variable(noise.bernoulli_(1.0 - self.p_hidden) / (1.0 - self.p_hidden))
+                noise = self.weight_hh.new_empty(batch_size, self.hidden_size * 2)
+                self.noise_hidden = noise.bernoulli_(1.0 - self.p_hidden) / (1.0 - self.p_hidden)
             else:
                 self.noise_hidden = None
         else:
@@ -562,21 +560,21 @@ class SkipConnectFastLSTMCell(VarRNNCellBase):
     def reset_parameters(self):
         for weight in self.parameters():
             if weight.dim() == 1:
-                weight.data.zero_()
+                nn.init.constant_(weight, 0.)
             else:
-                self.initializer(weight.data)
+                self.initializer(weight)
 
     def reset_noise(self, batch_size):
         if self.training:
             if self.p_in:
-                noise = self.weight_ih.data.new(batch_size, self.input_size)
-                self.noise_in = Variable(noise.bernoulli_(1.0 - self.p_in) / (1.0 - self.p_in))
+                noise = self.weight_ih.new_empty(batch_size, self.input_size)
+                self.noise_in = noise.bernoulli_(1.0 - self.p_in) / (1.0 - self.p_in)
             else:
                 self.noise_in = None
 
             if self.p_hidden:
-                noise = self.weight_hh.data.new(batch_size, self.hidden_size * 2)
-                self.noise_hidden = Variable(noise.bernoulli_(1.0 - self.p_hidden) / (1.0 - self.p_hidden))
+                noise = self.weight_hh.new_empty(batch_size, self.hidden_size * 2)
+                self.noise_hidden = noise.bernoulli_(1.0 - self.p_hidden) / (1.0 - self.p_hidden)
             else:
                 self.noise_hidden = None
         else:
@@ -669,21 +667,21 @@ class SkipConnectLSTMCell(VarRNNCellBase):
     def reset_parameters(self):
         for weight in self.parameters():
             if weight.dim() == 2:
-                weight.data.zero_()
+                nn.init.constant_(weight, 0.)
             else:
-                self.initializer(weight.data)
+                self.initializer(weight)
 
     def reset_noise(self, batch_size):
         if self.training:
             if self.p_in:
-                noise = self.weight_ih.data.new(4, batch_size, self.input_size)
-                self.noise_in = Variable(noise.bernoulli_(1.0 - self.p_in) / (1.0 - self.p_in))
+                noise = self.weight_ih.new_empty(4, batch_size, self.input_size)
+                self.noise_in = noise.bernoulli_(1.0 - self.p_in) / (1.0 - self.p_in)
             else:
                 self.noise_in = None
 
             if self.p_hidden:
-                noise = self.weight_hh.data.new(4, batch_size, self.hidden_size * 2)
-                self.noise_hidden = Variable(noise.bernoulli_(1.0 - self.p_hidden) / (1.0 - self.p_hidden))
+                noise = self.weight_hh.new_empty(4, batch_size, self.hidden_size * 2)
+                self.noise_hidden = noise.bernoulli_(1.0 - self.p_hidden) / (1.0 - self.p_hidden)
             else:
                 self.noise_hidden = None
         else:
@@ -769,21 +767,21 @@ class SkipConnectFastGRUCell(VarRNNCellBase):
     def reset_parameters(self):
         for weight in self.parameters():
             if weight.dim() == 1:
-                weight.data.zero_()
+                nn.init.constant_(weight, 0.)
             else:
-                self.initializer(weight.data)
+                self.initializer(weight)
 
     def reset_noise(self, batch_size):
         if self.training:
             if self.p_in:
-                noise = self.weight_ih.data.new(batch_size, self.input_size)
-                self.noise_in = Variable(noise.bernoulli_(1.0 - self.p_in) / (1.0 - self.p_in))
+                noise = self.weight_ih.new_empty(batch_size, self.input_size)
+                self.noise_in = noise.bernoulli_(1.0 - self.p_in) / (1.0 - self.p_in)
             else:
                 self.noise_in = None
 
             if self.p_hidden:
-                noise = self.weight_hh.data.new(batch_size, self.hidden_size * 2)
-                self.noise_hidden = Variable(noise.bernoulli_(1.0 - self.p_hidden) / (1.0 - self.p_hidden))
+                noise = self.weight_hh.new_empty(batch_size, self.hidden_size * 2)
+                self.noise_hidden = noise.bernoulli_(1.0 - self.p_hidden) / (1.0 - self.p_hidden)
             else:
                 self.noise_hidden = None
         else:
@@ -869,21 +867,21 @@ class SkipConnectGRUCell(VarRNNCellBase):
     def reset_parameters(self):
         for weight in self.parameters():
             if weight.dim() == 2:
-                weight.data.zero_()
+                nn.init.constant_(weight, 0.)
             else:
-                self.initializer(weight.data)
+                self.initializer(weight)
 
     def reset_noise(self, batch_size):
         if self.training:
             if self.p_in:
-                noise = self.weight_ih.data.new(3, batch_size, self.input_size)
-                self.noise_in = Variable(noise.bernoulli_(1.0 - self.p_in) / (1.0 - self.p_in))
+                noise = self.weight_ih.new_empty(3, batch_size, self.input_size)
+                self.noise_in = noise.bernoulli_(1.0 - self.p_in) / (1.0 - self.p_in)
             else:
                 self.noise_in = None
 
             if self.p_hidden:
-                noise = self.weight_hh.data.new(3, batch_size, self.hidden_size * 2)
-                self.noise_hidden = Variable(noise.bernoulli_(1.0 - self.p_hidden) / (1.0 - self.p_hidden))
+                noise = self.weight_hh.new_empty(3, batch_size, self.hidden_size * 2)
+                self.noise_hidden = noise.bernoulli_(1.0 - self.p_hidden) / (1.0 - self.p_hidden)
             else:
                 self.noise_hidden = None
         else:

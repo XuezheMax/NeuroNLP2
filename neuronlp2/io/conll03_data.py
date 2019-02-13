@@ -8,7 +8,6 @@ from .alphabet import Alphabet
 from .logger import get_logger
 from . import utils
 import torch
-from torch.autograd import Variable
 
 # Special vocabulary symbols - we always put them at the start.
 PAD = b"_PAD"
@@ -306,19 +305,19 @@ def iterate_batch(data, batch_size, word_alphabet=None, unk_replace=0., shuffle=
                   nid_inputs[excerpt], masks[excerpt]
 
 
-def read_data_to_variable(source_path, word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet,
-                          max_size=None, normalize_digits=True, use_gpu=False, volatile=False):
+def read_data_to_tensor(source_path, word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet,
+                        max_size=None, normalize_digits=True, device=torch.device('cpu')):
     data, max_char_length = read_data(source_path, word_alphabet, char_alphabet, pos_alphabet,
                                       chunk_alphabet, ner_alphabet,
                                       max_size=max_size, normalize_digits=normalize_digits)
     bucket_sizes = [len(data[b]) for b in range(len(_buckets))]
 
-    data_variable = []
+    data_tensor = []
 
     for bucket_id in range(len(_buckets)):
         bucket_size = bucket_sizes[bucket_id]
         if bucket_size == 0:
-            data_variable.append((1, 1))
+            data_tensor.append((1, 1))
             continue
 
         bucket_length = _buckets[bucket_id]
@@ -360,31 +359,22 @@ def read_data_to_variable(source_path, word_alphabet, char_alphabet, pos_alphabe
                 if word_alphabet.is_singleton(wid):
                     single[i, j] = 1
 
-        words = Variable(torch.from_numpy(wid_inputs), volatile=volatile)
-        chars = Variable(torch.from_numpy(cid_inputs), volatile=volatile)
-        pos = Variable(torch.from_numpy(pid_inputs), volatile=volatile)
-        chunks = Variable(torch.from_numpy(chid_inputs), volatile=volatile)
-        ners = Variable(torch.from_numpy(nid_inputs), volatile=volatile)
-        masks = Variable(torch.from_numpy(masks), volatile=volatile)
-        single = Variable(torch.from_numpy(single), volatile=volatile)
-        lengths = torch.from_numpy(lengths)
-        if use_gpu:
-            words = words.cuda()
-            chars = chars.cuda()
-            pos = pos.cuda()
-            chunks = chunks.cuda()
-            ners = ners.cuda()
-            masks = masks.cuda()
-            single = single.cuda()
-            lengths = lengths.cuda()
+        words = torch.from_numpy(wid_inputs).to(device)
+        chars = torch.from_numpy(cid_inputs).to(device)
+        pos = torch.from_numpy(pid_inputs).to(device)
+        chunks = torch.from_numpy(chid_inputs).to(device)
+        ners = torch.from_numpy(nid_inputs).to(device)
+        masks = torch.from_numpy(masks).to(device)
+        single = torch.from_numpy(single).to(device)
+        lengths = torch.from_numpy(lengths).to(device)
 
-        data_variable.append((words, chars, pos, chunks, ners, masks, single, lengths))
+        data_tensor.append((words, chars, pos, chunks, ners, masks, single, lengths))
 
-    return data_variable, bucket_sizes
+    return data_tensor, bucket_sizes
 
 
-def get_batch_variable(data, batch_size, unk_replace=0.):
-    data_variable, bucket_sizes = data
+def get_batch_tensor(data, batch_size, unk_replace=0.):
+    data_tensor, bucket_sizes = data
     total_size = float(sum(bucket_sizes))
     # A bucket scale is a list of increasing numbers from 0 to 1 that we'll use
     # to select a bucket. Length of [scale[i], scale[i+1]] is proportional to
@@ -397,24 +387,23 @@ def get_batch_variable(data, batch_size, unk_replace=0.):
     bucket_id = min([i for i in range(len(buckets_scale)) if buckets_scale[i] > random_number])
     bucket_length = _buckets[bucket_id]
 
-    words, chars, pos, chunks, ners, masks, single, lengths = data_variable[bucket_id]
+    words, chars, pos, chunks, ners, masks, single, lengths = data_tensor[bucket_id]
     bucket_size = bucket_sizes[bucket_id]
     batch_size = min(bucket_size, batch_size)
     index = torch.randperm(bucket_size).long()[:batch_size]
-    if words.is_cuda:
-        index = index.cuda()
+    index = index.to(words.device)
 
     words = words[index]
     if unk_replace:
-        ones = Variable(single.data.new(batch_size, bucket_length).fill_(1))
-        noise = Variable(masks.data.new(batch_size, bucket_length).bernoulli_(unk_replace).long())
+        ones = single.new_ones(batch_size, bucket_length)
+        noise = masks.new_empty(batch_size, bucket_length).bernoulli_(unk_replace).long()
         words = words * (ones - single[index] * noise)
 
     return words, chars[index], pos[index], chunks[index], ners[index], masks[index], lengths[index]
 
 
-def iterate_batch_variable(data, batch_size, unk_replace=0., shuffle=False):
-    data_variable, bucket_sizes = data
+def iterate_batch_tensor(data, batch_size, unk_replace=0., shuffle=False):
+    data_tensor, bucket_sizes = data
 
     bucket_indices = np.arange(len(_buckets))
     if shuffle:
@@ -426,17 +415,16 @@ def iterate_batch_variable(data, batch_size, unk_replace=0., shuffle=False):
         if bucket_size == 0:
             continue
 
-        words, chars, pos, chunks, ners, masks, single, lengths = data_variable[bucket_id]
+        words, chars, pos, chunks, ners, masks, single, lengths = data_tensor[bucket_id]
         if unk_replace:
-            ones = Variable(single.data.new(bucket_size, bucket_length).fill_(1))
-            noise = Variable(masks.data.new(bucket_size, bucket_length).bernoulli_(unk_replace).long())
+            ones = single.new_ones(bucket_size, bucket_length)
+            noise = masks.new_empty(bucket_size, bucket_length).bernoulli_(unk_replace).long()
             words = words * (ones - single * noise)
 
         indices = None
         if shuffle:
             indices = torch.randperm(bucket_size).long()
-            if words.is_cuda:
-                indices = indices.cuda()
+            indices = indices.to(words.device)
         for start_idx in range(0, bucket_size, batch_size):
             if shuffle:
                 excerpt = indices[start_idx:start_idx + batch_size]
