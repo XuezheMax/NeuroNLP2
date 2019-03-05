@@ -1,5 +1,7 @@
 __author__ = 'max'
 
+__all__ = ['Sentence', 'DependencyInstance', 'NERInstance']
+
 
 class Sentence(object):
     def __init__(self, words, word_ids, char_seqs, char_id_seqs):

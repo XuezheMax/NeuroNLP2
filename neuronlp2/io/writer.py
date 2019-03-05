@@ -20,11 +20,11 @@ class CoNLL03Writer(object):
         batch_size, _ = word.shape
         for i in range(batch_size):
             for j in range(lengths[i]):
-                w = self.__word_alphabet.get_instance(word[i, j]).encode('utf-8')
-                p = self.__pos_alphabet.get_instance(pos[i, j]).encode('utf-8')
-                ch = self.__chunk_alphabet.get_instance(chunk[i, j]).encode('utf-8')
-                tgt = self.__ner_alphabet.get_instance(targets[i, j]).encode('utf-8')
-                pred = self.__ner_alphabet.get_instance(predictions[i, j]).encode('utf-8')
+                w = self.__word_alphabet.get_instance(word[i, j])
+                p = self.__pos_alphabet.get_instance(pos[i, j])
+                ch = self.__chunk_alphabet.get_instance(chunk[i, j])
+                tgt = self.__ner_alphabet.get_instance(targets[i, j])
+                pred = self.__ner_alphabet.get_instance(predictions[i, j])
                 self.__source_file.write('%d %s %s %s %s %s\n' % (j + 1, w, p, ch, tgt, pred))
             self.__source_file.write('\n')
 
@@ -49,9 +49,9 @@ class CoNLLXWriter(object):
         end = 1 if symbolic_end else 0
         for i in range(batch_size):
             for j in range(start, lengths[i] - end):
-                w = self.__word_alphabet.get_instance(word[i, j]).encode('utf-8')
-                p = self.__pos_alphabet.get_instance(pos[i, j]).encode('utf-8')
-                t = self.__type_alphabet.get_instance(type[i, j]).encode('utf-8')
+                w = self.__word_alphabet.get_instance(word[i, j])
+                p = self.__pos_alphabet.get_instance(pos[i, j])
+                t = self.__type_alphabet.get_instance(type[i, j])
                 h = head[i, j]
                 self.__source_file.write('%d\t%s\t_\t_\t%s\t_\t%d\t%s\n' % (j, w, p, h, t))
             self.__source_file.write('\n')

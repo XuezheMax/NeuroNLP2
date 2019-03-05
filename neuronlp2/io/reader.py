@@ -1,9 +1,9 @@
 __author__ = 'max'
 
-from .instance import DependencyInstance, NERInstance
-from .instance import Sentence
-from .conllx_data import ROOT, ROOT_POS, ROOT_CHAR, ROOT_TYPE, END, END_POS, END_CHAR, END_TYPE
-from . import utils
+from neuronlp2.io.instance import DependencyInstance, NERInstance
+from neuronlp2.io.instance import Sentence
+from neuronlp2.io.conllx_data import ROOT, ROOT_POS, ROOT_CHAR, ROOT_TYPE, END, END_POS, END_CHAR, END_TYPE
+import neuronlp2.io.utils as utils
 
 
 class CoNLLXReader(object):
@@ -28,7 +28,6 @@ class CoNLLXReader(object):
         lines = []
         while len(line.strip()) > 0:
             line = line.strip()
-            line = line.decode('utf-8')
             lines.append(line.split('\t'))
             line = self.__source_file.readline()
 
@@ -69,7 +68,7 @@ class CoNLLXReader(object):
             char_seqs.append(chars)
             char_id_seqs.append(char_ids)
 
-            word = utils.DIGIT_RE.sub(b"0", tokens[1]) if normalize_digits else tokens[1]
+            word = utils.DIGIT_RE.sub(r"0", tokens[1]) if normalize_digits else tokens[1]
             pos = tokens[4]
             head = int(tokens[6])
             type = tokens[7]
@@ -122,7 +121,6 @@ class CoNLL03Reader(object):
         lines = []
         while len(line.strip()) > 0:
             line = line.strip()
-            line = line.decode('utf-8')
             lines.append(line.split(' '))
             line = self.__source_file.readline()
 
@@ -153,7 +151,7 @@ class CoNLL03Reader(object):
             char_seqs.append(chars)
             char_id_seqs.append(char_ids)
 
-            word = utils.DIGIT_RE.sub(b"0", tokens[1]) if normalize_digits else tokens[1]
+            word = utils.DIGIT_RE.sub(r"0", tokens[1]) if normalize_digits else tokens[1]
             pos = tokens[2]
             chunk = tokens[3]
             ner = tokens[4]
