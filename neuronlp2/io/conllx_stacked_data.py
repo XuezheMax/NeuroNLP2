@@ -203,8 +203,10 @@ def read_data(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alph
     masks_d = torch.from_numpy(masks_d).to(device)
     lengths_d = torch.from_numpy(lengths_d).to(device)
 
-    data_tensor = (words, chars, pos, heads, types, masks_e, single, lengths_e,
-                   stacked_heads, children, siblings, stacked_types, skip_connect, masks_d, lengths_d)
+    data_tensor = {'WORD': words, 'CHAR': chars, 'POS': pos, 'HEAD': heads, 'TYPE': types, 'MASK_ENC': masks_e,
+                   'SINGLE': single, 'LENGTH_ENC': lengths_e, 'STACK_HEAD': stacked_heads, 'CHILD': children,
+                   'SIBLING': siblings, 'STACK_TYPE': stacked_types, 'SKIP_CONNECT': skip_connect, 'MASK_DEC': masks_d,
+                   'LENGTH_DEC': lengths_d}
     return data_tensor, data_size
 
 
@@ -237,11 +239,11 @@ def read_bucketed_data(source_path, word_alphabet, char_alphabet, pos_alphabet, 
     print("Total number of data: %d" % counter)
 
     bucket_sizes = [len(data[b]) for b in range(len(_buckets))]
-    data_tensor = []
+    data_tensors = []
     for bucket_id in range(len(_buckets)):
         bucket_size = bucket_sizes[bucket_id]
         if bucket_size == 0:
-            data_tensor.append((1, 1))
+            data_tensors.append((1, 1))
             continue
 
         bucket_length = _buckets[bucket_id]
@@ -328,14 +330,17 @@ def read_bucketed_data(source_path, word_alphabet, char_alphabet, pos_alphabet, 
         masks_d = torch.from_numpy(masks_d).to(device)
         lengths_d = torch.from_numpy(lengths_d).to(device)
 
-        data_tensor.append((words, chars, pos, heads, types, masks_e, single, lengths_e,
-                            stacked_heads, children, siblings, stacked_types, skip_connect, masks_d, lengths_d))
+        data_tensor = {'WORD': words, 'CHAR': chars, 'POS': pos, 'HEAD': heads, 'TYPE': types, 'MASK_ENC': masks_e,
+                       'SINGLE': single, 'LENGTH_ENC': lengths_e, 'STACK_HEAD': stacked_heads, 'CHILD': children,
+                       'SIBLING': siblings, 'STACK_TYPE': stacked_types, 'SKIP_CONNECT': skip_connect, 'MASK_DEC': masks_d,
+                       'LENGTH_DEC': lengths_d}
+        data_tensors.append(data_tensor)
 
-    return data_tensor, bucket_sizes
+    return data_tensors, bucket_sizes
 
 
 def iterate_batch(data, batch_size, bucketed=False, unk_replace=0., shuffle=False):
     if bucketed:
-        return utils.iterate_bucketed_batch(data, batch_size, 0, 6, unk_replace==unk_replace, shuffle=shuffle)
+        return utils.iterate_bucketed_batch(data, batch_size, unk_replace==unk_replace, shuffle=shuffle)
     else:
-        return utils.iterate_batch(data, batch_size, 0, 6, unk_replace==unk_replace, shuffle=shuffle)
+        return utils.iterate_batch(data, batch_size, unk_replace==unk_replace, shuffle=shuffle)

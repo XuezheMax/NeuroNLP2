@@ -41,10 +41,7 @@ def eval(words, postags, heads_pred, types_pred, heads, types, word_alphabet, po
         lcm_nopunc = 1.
         for j in range(start, lengths[i] - end):
             word = word_alphabet.get_instance(words[i, j])
-            word = word.encode('utf8')
-
             pos = pos_alphabet.get_instance(postags[i, j])
-            pos = pos.encode('utf8')
 
             total += 1
             if heads[i, j] == heads_pred[i, j]:

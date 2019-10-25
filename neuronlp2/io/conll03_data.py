@@ -1,7 +1,6 @@
 __author__ = 'max'
 
 import os.path
-import random
 import numpy as np
 from collections import defaultdict, OrderedDict
 from neuronlp2.io.reader import CoNLL03Reader
@@ -28,7 +27,7 @@ NUM_SYMBOLIC_TAGS = 1
 _buckets = [5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100, 140]
 
 
-def create_alphabets(alphabet_directory, train_path, data_paths=None, max_vocabulary_size=50000, embedd_dict=None,
+def create_alphabets(alphabet_directory, train_path, data_paths=None, max_vocabulary_size=100000, embedd_dict=None,
                      min_occurrence=1, normalize_digits=True):
 
     def expand_vocab():
@@ -54,14 +53,6 @@ def create_alphabets(alphabet_directory, train_path, data_paths=None, max_vocabu
                     if word not in vocab_set and (word in embedd_dict or word.lower() in embedd_dict):
                         vocab_set.add(word)
                         vocab_list.append(word)
-
-        if len(vocab_list) < max_vocabulary_size:
-            for word in embedd_dict:
-                if word not in vocab_set:
-                    vocab_set.add(word)
-                    vocab_list.append(word)
-                if len(vocab_list) >= max_vocabulary_size:
-                    break
 
     logger = get_logger("Create Alphabets")
     word_alphabet = Alphabet('word', defualt_value=True, singleton=True)
@@ -226,7 +217,8 @@ def read_data(source_path: str, word_alphabet: Alphabet, char_alphabet: Alphabet
     single = torch.from_numpy(single).to(device)
     lengths = torch.from_numpy(lengths).to(device)
 
-    data_tensor = (words, chars, pos, chunks, ners, masks, single, lengths)
+    data_tensor = {'WORD': words, 'CHAR': chars, 'POS': pos, 'CHUNK': chunks,
+                   'NER': ners, 'MASK': masks, 'SINGLE': single, 'LENGTH': lengths}
     return data_tensor, data_size
 
 
@@ -259,11 +251,11 @@ def read_bucketed_data(source_path: str, word_alphabet: Alphabet, char_alphabet:
     print("Total number of data: %d" % counter)
 
     bucket_sizes = [len(data[b]) for b in range(len(_buckets))]
-    data_tensor = []
+    data_tensors = []
     for bucket_id in range(len(_buckets)):
         bucket_size = bucket_sizes[bucket_id]
         if bucket_size == 0:
-            data_tensor.append((1, 1))
+            data_tensors.append((1, 1))
             continue
 
         bucket_length = _buckets[bucket_id]
@@ -313,12 +305,14 @@ def read_bucketed_data(source_path: str, word_alphabet: Alphabet, char_alphabet:
         single = torch.from_numpy(single).to(device)
         lengths = torch.from_numpy(lengths).to(device)
 
-        data_tensor.append((words, chars, pos, chunks, ners, masks, single, lengths))
-    return data_tensor, bucket_sizes
+        data_tensor = {'WORD': words, 'CHAR': chars, 'POS': pos, 'CHUNK': chunks,
+                       'NER': ners, 'MASK': masks, 'SINGLE': single, 'LENGTH': lengths}
+        data_tensors.append(data_tensor)
+    return data_tensors, bucket_sizes
 
 
 def iterate_batch(data, batch_size, bucketed=False, unk_replace=0., shuffle=False):
     if bucketed:
-        return utils.iterate_bucketed_batch(data, batch_size, 0, 6, unk_replace==unk_replace, shuffle=shuffle)
+        return utils.iterate_bucketed_batch(data, batch_size, unk_replace==unk_replace, shuffle=shuffle)
     else:
-        return utils.iterate_batch(data, batch_size, 0, 6, unk_replace==unk_replace, shuffle=shuffle)
+        return utils.iterate_batch(data, batch_size, unk_replace==unk_replace, shuffle=shuffle)

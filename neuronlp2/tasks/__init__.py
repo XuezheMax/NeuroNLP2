@@ -1,3 +1,3 @@
 __author__ = 'max'
 
-from .parser import *
+from neuronlp2.tasks.parser import *
