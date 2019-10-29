@@ -294,6 +294,7 @@ def main():
 
             print("Best dev  acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%% (epoch: %d)" % (best_acc, best_precision, best_recall, best_f1, best_epoch))
             print("Best test acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%% (epoch: %d)" % (test_acc, test_precision, test_recall, test_f1, best_epoch))
+            print('=' * 100)
 
 
 if __name__ == '__main__':
