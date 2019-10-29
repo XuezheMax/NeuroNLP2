@@ -47,19 +47,19 @@ def get_optimizer(parameters, optim, learning_rate, lr_decay, amsgrad, weight_de
     return optimizer, scheduler
 
 
-def eval(data, network, writer, outfile, scorefile):
+def eval(data, network, writer, outfile, scorefile, device):
     network.eval()
     writer.start(outfile)
     for data in iterate_data(data, 256):
-        words = data['WORD']
-        chars = data['CHAR']
-        labels = data['NER'].cpu()
-        masks = data['MASK']
-        postags = data['POS'].cpu()
-        chunks = data['CHUNK'].cpu()
-        lengths = data['LENGTH'].cpu()
+        words = data['WORD'].to(device)
+        chars = data['CHAR'].to(device)
+        labels = data['NER'].numpy()
+        masks = data['MASK'].to(device)
+        postags = data['POS'].numpy()
+        chunks = data['CHUNK'].numpy()
+        lengths = data['LENGTH'].numpy()
         preds = network.decode(words, chars, mask=masks, leading_symbolic=conll03_data.NUM_SYMBOLIC_TAGS)
-        writer.write(words.cpu().numpy(), postags.numpy(), chunks.numpy(), preds.cpu().numpy(), labels.numpy(), lengths.numpy())
+        writer.write(words.cpu().numpy(), postags, chunks, preds.cpu().numpy(), labels, lengths)
     writer.close()
     acc, precision, recall, f1 = evaluate(outfile, scorefile)
     return acc, precision, recall, f1
@@ -275,7 +275,7 @@ def main():
         with torch.no_grad():
             outfile = os.path.join(result_path, 'pred_dev%d' % epoch)
             scorefile = os.path.join(result_path, "score_dev%d" % epoch)
-            acc, precision, recall, f1 = eval(data_dev, network, writer, outfile, scorefile)
+            acc, precision, recall, f1 = eval(data_dev, network, writer, outfile, scorefile, device)
             print('Dev  acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%%' % (acc, precision, recall, f1))
             if best_f1 < f1:
                 best_f1 = f1
@@ -287,7 +287,7 @@ def main():
                 # evaluate on test data when better performance detected
                 outfile = os.path.join(result_path, 'pred_test%d' % epoch)
                 scorefile = os.path.join(result_path, "score_test%d" % epoch)
-                test_acc, test_precision, test_recall, test_f1 = eval(data_test, network, writer, outfile, scorefile)
+                test_acc, test_precision, test_recall, test_f1 = eval(data_test, network, writer, outfile, scorefile, device)
                 print('test acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%%' % (test_acc, test_precision, test_recall, test_f1))
             print('-' * 100)
 
