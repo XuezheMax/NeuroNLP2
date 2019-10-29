@@ -130,6 +130,8 @@ def main():
     embedding = args.embedding
     embedding_path = args.embedding_dict
 
+    print(args)
+
     embedd_dict, embedd_dim = utils.load_embedding_dict(embedding, embedding_path)
 
     logger.info("Creating Alphabets")
@@ -196,7 +198,7 @@ def main():
     model = "{}-CNN{}".format(mode, "CRF" if crf else "")
     logger.info("Network: %s, num_layer=%d, hidden=%d" % (model, num_layers, hidden_size))
     logger.info("training: l2: %f, (#training data: %d, batch: %d, unk replace: %.2f)" % (weight_decay, num_data, batch_size, unk_replace))
-    logger.info("dropout(in, out, rnn): (%.2f, %.2f, %s)" % (p_in, p_out, p_rnn))
+    logger.info("dropout(in, out, rnn): %s(%.2f, %.2f, %s)" % (args.dropout, p_in, p_out, p_rnn))
 
     best_f1 = 0.0
     best_acc = 0.0
@@ -219,12 +221,12 @@ def main():
         num_back = 0
         network.train()
         lr = scheduler.get_lr()[0]
-        print('Epoch %d (%s(%s), lr=%.6f, lr decay=%.6f, amsgrad=%s, l2=%.1e): ' % (epoch, optim, args.dropout, lr, lr_decay, amsgrad, weight_decay))
+        print('Epoch %d (%s, lr=%.6f, lr decay=%.6f, amsgrad=%s, l2=%.1e): ' % (epoch, optim, lr, lr_decay, amsgrad, weight_decay))
         if args.cuda:
             torch.cuda.empty_cache()
         gc.collect()
         for step, data in enumerate(iterate_data(data_train, batch_size, bucketed=True, unk_replace=unk_replace, shuffle=True)):
-            optim.zero_grad()
+            optimizer.zero_grad()
             words = data['WORD'].to(device)
             chars = data['CHAR'].to(device)
             labels = data['NER'].to(device)
