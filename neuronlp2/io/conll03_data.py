@@ -8,7 +8,7 @@ import torch
 from neuronlp2.io.reader import CoNLL03Reader
 from neuronlp2.io.alphabet import Alphabet
 from neuronlp2.io.logger import get_logger
-from neuronlp2.io.common import DIGIT_RE, MAX_CHAR_LENGTH
+from neuronlp2.io.common import DIGIT_RE, MAX_CHAR_LENGTH, UNK_ID
 from neuronlp2.io.common import PAD_CHAR, PAD, PAD_CHUNK, PAD_POS, PAD_NER, PAD_ID_CHAR, PAD_ID_TAG, PAD_ID_WORD
 
 # Special vocabulary symbols - we always put them at the start.
