@@ -2,11 +2,11 @@ __author__ = 'max'
 
 import numpy as np
 import torch
-from neuronlp2.io.conllx_data import _buckets, PAD_ID_WORD, PAD_ID_CHAR, PAD_ID_TAG, UNK_ID
-from neuronlp2.io.conllx_data import NUM_SYMBOLIC_TAGS
-from neuronlp2.io.conllx_data import create_alphabets
-from neuronlp2.io import utils
-from neuronlp2.io.reader import CoNLLXReader
+from neuronlp2.data.conllx_data import _buckets, PAD_ID_WORD, PAD_ID_CHAR, PAD_ID_TAG, UNK_ID
+from neuronlp2.data.conllx_data import NUM_SYMBOLIC_TAGS
+from neuronlp2.data.conllx_data import create_alphabets
+from neuronlp2.data import utils
+from neuronlp2.data.reader import CoNLLXReader
 
 
 def _obtain_child_index_for_left2right(heads):

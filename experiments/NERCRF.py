@@ -19,7 +19,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.optim import Adam, SGD
-from neuronlp2.io import get_logger, conll03_data, CoNLL03Writer
+from neuronlp2.data import get_logger, conll03_data, CoNLL03Writer
 from neuronlp2.models import BiRecurrentConvCRF, BiVarRecurrentConvCRF
 from neuronlp2 import utils
 

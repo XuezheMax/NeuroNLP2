@@ -18,8 +18,8 @@ import json
 
 import numpy as np
 import torch
-from neuronlp2.io import get_logger, conllx_stacked_data, conllx_data
-from neuronlp2.io import CoNLLXWriter
+from neuronlp2.data import get_logger, conllx_stacked_data, conllx_data
+from neuronlp2.data import CoNLLXWriter
 from neuronlp2.tasks import parser
 from neuronlp2.models import StackPtrNet, BiRecurrentConvBiAffine
 

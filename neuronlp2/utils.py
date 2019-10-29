@@ -5,7 +5,7 @@ import numpy as np
 from gensim.models.word2vec import Word2Vec
 import gzip
 
-from neuronlp2.io import utils
+from neuronlp2.data import utils
 
 
 def load_embedding_dict(embedding, embedding_path, normalize_digits=True):

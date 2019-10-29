@@ -1,9 +1,9 @@
 __author__ = 'max'
 
-from neuronlp2.io.instance import DependencyInstance, NERInstance
-from neuronlp2.io.instance import Sentence
-from neuronlp2.io.conllx_data import ROOT, ROOT_POS, ROOT_CHAR, ROOT_TYPE, END, END_POS, END_CHAR, END_TYPE
-import neuronlp2.io.utils as utils
+from neuronlp2.data.instance import DependencyInstance, NERInstance
+from neuronlp2.data.instance import Sentence
+from neuronlp2.data.conllx_data import ROOT, ROOT_POS, ROOT_CHAR, ROOT_TYPE, END, END_POS, END_CHAR, END_TYPE
+import neuronlp2.data.utils as utils
 
 
 class CoNLLXReader(object):

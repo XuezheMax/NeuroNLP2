@@ -5,7 +5,7 @@ Alphabet maps objects to integer ids. It provides two way mapping from the index
 """
 import json
 import os
-from neuronlp2.io.logger import get_logger
+from neuronlp2.data.logger import get_logger
 
 class Alphabet(object):
     def __init__(self, name, defualt_value=False, keep_growing=True, singleton=False):
