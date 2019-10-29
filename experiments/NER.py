@@ -25,7 +25,8 @@ from neuronlp2 import utils
 
 
 def evaluate(output_file, scorefile):
-    os.system("examples/eval/conll03eval.v2 < %s > %s" % (output_file, scorefile))
+    script = os.path.join(current_path, 'eval/conll03eval.v2')
+    os.system("perl %s < %s > %s" % (script, output_file, scorefile))
     with open(scorefile, 'r') as fin:
         fin.readline()
         line = fin.readline()
