@@ -36,11 +36,14 @@ class BiRecurrentConv(nn.Module):
         self.readout = nn.Linear(hidden_size, num_labels)
         self.criterion = nn.CrossEntropyLoss(reduction='none')
 
-        self.reset_parameters()
 
-    def reset_parameters(self):
-        nn.init.uniform_(self.word_embed.weight, -0.1, 0.1)
-        nn.init.uniform_(self.char_embed.weight, -0.1, 0.1)
+        self.reset_parameters(embedd_word, embedd_char)
+
+    def reset_parameters(self, embedd_word, embedd_char):
+        if embedd_word is None:
+            nn.init.uniform_(self.word_embed.weight, -0.1, 0.1)
+        if embedd_char is None:
+            nn.init.uniform_(self.char_embed.weight, -0.1, 0.1)
         with torch.no_grad():
             self.word_embed.weight[self.word_embed.padding_idx].fill_(0)
             self.char_embed.weight[self.char_embed.padding_idx].fill_(0)
