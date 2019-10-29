@@ -105,7 +105,7 @@ class BiRecurrentConv(nn.Module):
         _, preds = torch.max(logits[:, leading_symbolic:], dim=1)
         preds += leading_symbolic
         if mask is not None:
-            preds = preds * mask
+            preds = preds * mask.long()
         return preds
 
 
@@ -180,7 +180,7 @@ class BiRecurrentConvCRF(BiRecurrentConv):
         # [batch, length]
         preds = self.crf.decode(output, mask=mask, leading_symbolic=leading_symbolic)
         if mask is not None:
-            preds = preds * mask
+            preds = preds * mask.long()
         return preds
 
 
@@ -211,5 +211,5 @@ class BiVarRecurrentConvCRF(BiVarRecurrentConv):
         output = self._get_rnn_output(input_word, input_char, mask=mask)
         preds = self.crf.decode(output, mask=mask, leading_symbolic=leading_symbolic)
         if mask is not None:
-            preds = preds * mask
+            preds = preds * mask.long()
         return preds
