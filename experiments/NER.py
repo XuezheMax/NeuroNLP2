@@ -58,7 +58,7 @@ def eval(data, network, writer, outfile, scorefile):
         postags = data['POS'].cpu()
         chunks = data['CHUNK'].cpu()
         lengths = data['LENGTH'].cpu()
-        preds = network.decode(words, chars, labels, mask=masks, leading_symbolic=conll03_data.NUM_SYMBOLIC_TAGS)
+        preds = network.decode(words, chars, mask=masks, leading_symbolic=conll03_data.NUM_SYMBOLIC_TAGS)
         writer.write(words.numpy(), postags.numpy(), chunks.numpy(), preds.cpu().numpy(), labels.numpy(), lengths.numpy())
     writer.close()
     acc, precision, recall, f1 = evaluate(outfile, scorefile)
