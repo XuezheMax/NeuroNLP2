@@ -101,16 +101,13 @@ ENV/
 .mypy_cache/
 
 # data dir
-/data/
+/experiments/data/
 
 # model dir
-/models/
+/experiments/models/
 
 # log dir
-/log/
-
-# tmp dir
-/tmp/
+/experiments/log/
 
 # test dir
 /tests/
