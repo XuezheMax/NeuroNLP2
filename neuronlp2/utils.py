@@ -1,5 +1,6 @@
 __author__ = 'max'
 
+from collections import OrderedDict
 import pickle
 import numpy as np
 from gensim.models.word2vec import Word2Vec
@@ -24,7 +25,7 @@ def load_embedding_dict(embedding, embedding_path, normalize_digits=True):
     elif embedding == 'glove':
         # loading GloVe
         embedd_dim = -1
-        embedd_dict = dict()
+        embedd_dict = OrderedDict()
         with gzip.open(embedding_path, 'rt') as file:
             for line in file:
                 line = line.strip()
@@ -44,7 +45,7 @@ def load_embedding_dict(embedding, embedding_path, normalize_digits=True):
     elif embedding == 'senna':
         # loading Senna
         embedd_dim = -1
-        embedd_dict = dict()
+        embedd_dict = OrderedDict()
         with gzip.open(embedding_path, 'rt') as file:
             for line in file:
                 line = line.strip()
@@ -63,7 +64,7 @@ def load_embedding_dict(embedding, embedding_path, normalize_digits=True):
         return embedd_dict, embedd_dim
     elif embedding == 'sskip':
         embedd_dim = -1
-        embedd_dict = dict()
+        embedd_dict = OrderedDict()
         with gzip.open(embedding_path, 'rt') as file:
             # skip the first line
             file.readline()
@@ -92,7 +93,7 @@ def load_embedding_dict(embedding, embedding_path, normalize_digits=True):
     elif embedding == 'polyglot':
         words, embeddings = pickle.load(open(embedding_path, 'rb'), encoding='latin1')
         _, embedd_dim = embeddings.shape
-        embedd_dict = dict()
+        embedd_dict = OrderedDict()
         for i, word in enumerate(words):
             embedd = np.empty([1, embedd_dim], dtype=np.float32)
             embedd[:] = embeddings[i, :]
