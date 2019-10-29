@@ -77,7 +77,6 @@ class BiRecurrentConv(nn.Module):
         else:
             output, _ = self.rnn(enc)
 
-        output = self.dropout_out(output)
         # [batch, length, hidden_size]
         output = self.dropout_out(F.elu(self.fc(output)))
         return output
