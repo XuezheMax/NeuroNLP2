@@ -1,9 +1,9 @@
 __author__ = 'max'
 
-from neuronlp2.data.instance import DependencyInstance, NERInstance
-from neuronlp2.data.instance import Sentence
-from neuronlp2.data.conllx_data import ROOT, ROOT_POS, ROOT_CHAR, ROOT_TYPE, END, END_POS, END_CHAR, END_TYPE
-import neuronlp2.data.utils as utils
+from neuronlp2.io.instance import DependencyInstance, NERInstance
+from neuronlp2.io.instance import Sentence
+from neuronlp2.io.common import ROOT, ROOT_POS, ROOT_CHAR, ROOT_TYPE, END, END_POS, END_CHAR, END_TYPE
+from neuronlp2.io.common import DIGIT_RE, MAX_CHAR_LENGTH
 
 
 class CoNLLXReader(object):
@@ -62,13 +62,13 @@ class CoNLLXReader(object):
             for char in tokens[1]:
                 chars.append(char)
                 char_ids.append(self.__char_alphabet.get_index(char))
-            if len(chars) > utils.MAX_CHAR_LENGTH:
-                chars = chars[:utils.MAX_CHAR_LENGTH]
-                char_ids = char_ids[:utils.MAX_CHAR_LENGTH]
+            if len(chars) > MAX_CHAR_LENGTH:
+                chars = chars[:MAX_CHAR_LENGTH]
+                char_ids = char_ids[:MAX_CHAR_LENGTH]
             char_seqs.append(chars)
             char_id_seqs.append(char_ids)
 
-            word = utils.DIGIT_RE.sub("0", tokens[1]) if normalize_digits else tokens[1]
+            word = DIGIT_RE.sub("0", tokens[1]) if normalize_digits else tokens[1]
             pos = tokens[4]
             head = int(tokens[6])
             type = tokens[7]
@@ -145,13 +145,13 @@ class CoNLL03Reader(object):
             for char in tokens[1]:
                 chars.append(char)
                 char_ids.append(self.__char_alphabet.get_index(char))
-            if len(chars) > utils.MAX_CHAR_LENGTH:
-                chars = chars[:utils.MAX_CHAR_LENGTH]
-                char_ids = char_ids[:utils.MAX_CHAR_LENGTH]
+            if len(chars) > MAX_CHAR_LENGTH:
+                chars = chars[:MAX_CHAR_LENGTH]
+                char_ids = char_ids[:MAX_CHAR_LENGTH]
             char_seqs.append(chars)
             char_id_seqs.append(char_ids)
 
-            word = utils.DIGIT_RE.sub("0", tokens[1]) if normalize_digits else tokens[1]
+            word = DIGIT_RE.sub("0", tokens[1]) if normalize_digits else tokens[1]
             pos = tokens[2]
             chunk = tokens[3]
             ner = tokens[4]
@@ -168,5 +168,5 @@ class CoNLL03Reader(object):
             ner_tags.append(ner)
             ner_ids.append(self.__ner_alphabet.get_index(ner))
 
-        return NERInstance(Sentence(words, word_ids, char_seqs, char_id_seqs), postags, pos_ids, chunk_tags, chunk_ids,
-                           ner_tags, ner_ids)
+        return NERInstance(Sentence(words, word_ids, char_seqs, char_id_seqs),
+                           postags, pos_ids, chunk_tags, chunk_ids, ner_tags, ner_ids)

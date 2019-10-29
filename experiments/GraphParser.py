@@ -20,10 +20,10 @@ import numpy as np
 import torch
 from torch.nn.utils import clip_grad_norm_
 from torch.optim import Adam, SGD, Adamax
-from neuronlp2.data import get_logger, conllx_data
+from neuronlp2.io import get_logger, conllx_data
 from neuronlp2.models import BiRecurrentConvBiAffine
 from neuronlp2 import utils
-from neuronlp2.data import CoNLLXWriter
+from neuronlp2.io import CoNLLXWriter
 from neuronlp2.tasks import parser
 from neuronlp2.nn.utils import freeze_embedding
 

@@ -2,11 +2,11 @@ __author__ = 'max'
 
 import numpy as np
 import torch
-from neuronlp2.data.conllx_data import _buckets, PAD_ID_WORD, PAD_ID_CHAR, PAD_ID_TAG, UNK_ID
-from neuronlp2.data.conllx_data import NUM_SYMBOLIC_TAGS
-from neuronlp2.data.conllx_data import create_alphabets
-from neuronlp2.data import utils
-from neuronlp2.data.reader import CoNLLXReader
+from neuronlp2.io.reader import CoNLLXReader
+from neuronlp2.io.conllx_data import _buckets, NUM_SYMBOLIC_TAGS, create_alphabets
+from neuronlp2.io.common import DIGIT_RE, MAX_CHAR_LENGTH
+from neuronlp2.io.common import PAD_CHAR, PAD, PAD_POS, PAD_TYPE, PAD_ID_CHAR, PAD_ID_TAG, PAD_ID_WORD
+from neuronlp2.io.common import ROOT, END, ROOT_CHAR, ROOT_POS, ROOT_TYPE, END_CHAR, END_POS, END_TYPE
 
 
 def _obtain_child_index_for_left2right(heads):
@@ -120,7 +120,7 @@ def read_data(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alph
     print("Total number of data: %d" % counter)
 
     data_size = len(data)
-    char_length = min(utils.MAX_CHAR_LENGTH, max_char_length)
+    char_length = min(MAX_CHAR_LENGTH, max_char_length)
     wid_inputs = np.empty([data_size, max_length], dtype=np.int64)
     cid_inputs = np.empty([data_size, max_length, char_length], dtype=np.int64)
     pid_inputs = np.empty([data_size, max_length], dtype=np.int64)
@@ -247,7 +247,7 @@ def read_bucketed_data(source_path, word_alphabet, char_alphabet, pos_alphabet, 
             continue
 
         bucket_length = _buckets[bucket_id]
-        char_length = min(utils.MAX_CHAR_LENGTH, max_char_length[bucket_id])
+        char_length = min(MAX_CHAR_LENGTH, max_char_length[bucket_id])
         wid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int64)
         cid_inputs = np.empty([bucket_size, bucket_length, char_length], dtype=np.int64)
         pid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int64)

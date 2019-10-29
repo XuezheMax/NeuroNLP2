@@ -1,12 +1,7 @@
 __author__ = 'max'
 
-import re
 import numpy as np
 import torch
-MAX_CHAR_LENGTH = 45
-
-# Regular expressions used to normalize digits.
-DIGIT_RE = re.compile(r"\d")
 
 
 def get_batch(data, batch_size, unk_replace=0.):

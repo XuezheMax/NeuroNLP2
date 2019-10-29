@@ -18,7 +18,7 @@ import torch
 from torch.optim.adamw import AdamW
 from torch.optim import SGD
 from torch.nn.utils import clip_grad_norm_
-from neuronlp2.data import get_logger, conll03_data, CoNLL03Writer, iterate_data
+from neuronlp2.io import get_logger, conll03_data, CoNLL03Writer, iterate_data
 from neuronlp2.models import BiRecurrentConv, BiVarRecurrentConv, BiRecurrentConvCRF, BiVarRecurrentConvCRF
 from neuronlp2.optim import ExponentialScheduler
 from neuronlp2 import utils
