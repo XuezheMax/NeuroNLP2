@@ -68,7 +68,7 @@ class CoNLLXReader(object):
             char_seqs.append(chars)
             char_id_seqs.append(char_ids)
 
-            word = utils.DIGIT_RE.sub(r"0", tokens[1]) if normalize_digits else tokens[1]
+            word = utils.DIGIT_RE.sub("0", tokens[1]) if normalize_digits else tokens[1]
             pos = tokens[4]
             head = int(tokens[6])
             type = tokens[7]
@@ -151,7 +151,7 @@ class CoNLL03Reader(object):
             char_seqs.append(chars)
             char_id_seqs.append(char_ids)
 
-            word = utils.DIGIT_RE.sub(r"0", tokens[1]) if normalize_digits else tokens[1]
+            word = utils.DIGIT_RE.sub("0", tokens[1]) if normalize_digits else tokens[1]
             pos = tokens[2]
             chunk = tokens[3]
             ner = tokens[4]

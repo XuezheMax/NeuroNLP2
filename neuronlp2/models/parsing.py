@@ -842,7 +842,7 @@ class StackPtrNet(nn.Module):
         self.decoder.reset_noise(0)
 
         # output from encoder [batch, length_encoder, tag_space]
-        # output_enc [batch, length, input_size]
+        # output_enc [batch, length, model_dim]
         # arc_c [batch, length, arc_space]
         # type_c [batch, length, type_space]
         # hn [num_direction, batch, hidden_size]

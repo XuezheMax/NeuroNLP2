@@ -94,7 +94,7 @@ def _generate_stack_inputs(heads, types, prior_order):
 
 
 def read_data(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
-              max_size=None, normalize_digits=True, prior_order='inside_out', device=torch.device('cpu')):
+              max_size=None, normalize_digits=True, prior_order='inside_out'):
     data = []
     max_length = 0
     max_char_length = 0
@@ -186,22 +186,22 @@ def read_data(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alph
         # masks_d
         masks_d[i, :inst_size_decoder] = 1.0
 
-    words = torch.from_numpy(wid_inputs).to(device)
-    chars = torch.from_numpy(cid_inputs).to(device)
-    pos = torch.from_numpy(pid_inputs).to(device)
-    heads = torch.from_numpy(hid_inputs).to(device)
-    types = torch.from_numpy(tid_inputs).to(device)
-    masks_e = torch.from_numpy(masks_e).to(device)
-    single = torch.from_numpy(single).to(device)
-    lengths_e = torch.from_numpy(lengths_e).to(device)
+    words = torch.from_numpy(wid_inputs)
+    chars = torch.from_numpy(cid_inputs)
+    pos = torch.from_numpy(pid_inputs)
+    heads = torch.from_numpy(hid_inputs)
+    types = torch.from_numpy(tid_inputs)
+    masks_e = torch.from_numpy(masks_e)
+    single = torch.from_numpy(single)
+    lengths_e = torch.from_numpy(lengths_e)
 
-    stacked_heads = torch.from_numpy(stack_hid_inputs).to(device)
-    children = torch.from_numpy(chid_inputs).to(device)
-    siblings = torch.from_numpy(ssid_inputs).to(device)
-    stacked_types = torch.from_numpy(stack_tid_inputs).to(device)
-    skip_connect = torch.from_numpy(skip_connect_inputs).to(device)
-    masks_d = torch.from_numpy(masks_d).to(device)
-    lengths_d = torch.from_numpy(lengths_d).to(device)
+    stacked_heads = torch.from_numpy(stack_hid_inputs)
+    children = torch.from_numpy(chid_inputs)
+    siblings = torch.from_numpy(ssid_inputs)
+    stacked_types = torch.from_numpy(stack_tid_inputs)
+    skip_connect = torch.from_numpy(skip_connect_inputs)
+    masks_d = torch.from_numpy(masks_d)
+    lengths_d = torch.from_numpy(lengths_d)
 
     data_tensor = {'WORD': words, 'CHAR': chars, 'POS': pos, 'HEAD': heads, 'TYPE': types, 'MASK_ENC': masks_e,
                    'SINGLE': single, 'LENGTH_ENC': lengths_e, 'STACK_HEAD': stacked_heads, 'CHILD': children,
@@ -211,7 +211,7 @@ def read_data(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alph
 
 
 def read_bucketed_data(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet,
-                       max_size=None, normalize_digits=True, prior_order='inside_out', device=torch.device('cpu')):
+                       max_size=None, normalize_digits=True, prior_order='inside_out'):
     data = [[] for _ in _buckets]
     max_char_length = [0 for _ in _buckets]
     print('Reading data from %s' % source_path)
@@ -313,22 +313,22 @@ def read_bucketed_data(source_path, word_alphabet, char_alphabet, pos_alphabet, 
             # masks_d
             masks_d[i, :inst_size_decoder] = 1.0
 
-        words = torch.from_numpy(wid_inputs).to(device)
-        chars = torch.from_numpy(cid_inputs).to(device)
-        pos = torch.from_numpy(pid_inputs).to(device)
-        heads = torch.from_numpy(hid_inputs).to(device)
-        types = torch.from_numpy(tid_inputs).to(device)
-        masks_e = torch.from_numpy(masks_e).to(device)
-        single = torch.from_numpy(single).to(device)
-        lengths_e = torch.from_numpy(lengths_e).to(device)
+        words = torch.from_numpy(wid_inputs)
+        chars = torch.from_numpy(cid_inputs)
+        pos = torch.from_numpy(pid_inputs)
+        heads = torch.from_numpy(hid_inputs)
+        types = torch.from_numpy(tid_inputs)
+        masks_e = torch.from_numpy(masks_e)
+        single = torch.from_numpy(single)
+        lengths_e = torch.from_numpy(lengths_e)
 
-        stacked_heads = torch.from_numpy(stack_hid_inputs).to(device)
-        children = torch.from_numpy(chid_inputs).to(device)
-        siblings = torch.from_numpy(ssid_inputs).to(device)
-        stacked_types = torch.from_numpy(stack_tid_inputs).to(device)
-        skip_connect = torch.from_numpy(skip_connect_inputs).to(device)
-        masks_d = torch.from_numpy(masks_d).to(device)
-        lengths_d = torch.from_numpy(lengths_d).to(device)
+        stacked_heads = torch.from_numpy(stack_hid_inputs)
+        children = torch.from_numpy(chid_inputs)
+        siblings = torch.from_numpy(ssid_inputs)
+        stacked_types = torch.from_numpy(stack_tid_inputs)
+        skip_connect = torch.from_numpy(skip_connect_inputs)
+        masks_d = torch.from_numpy(masks_d)
+        lengths_d = torch.from_numpy(lengths_d)
 
         data_tensor = {'WORD': words, 'CHAR': chars, 'POS': pos, 'HEAD': heads, 'TYPE': types, 'MASK_ENC': masks_e,
                        'SINGLE': single, 'LENGTH_ENC': lengths_e, 'STACK_HEAD': stacked_heads, 'CHILD': children,
@@ -337,10 +337,3 @@ def read_bucketed_data(source_path, word_alphabet, char_alphabet, pos_alphabet, 
         data_tensors.append(data_tensor)
 
     return data_tensors, bucket_sizes
-
-
-def iterate_batch(data, batch_size, bucketed=False, unk_replace=0., shuffle=False):
-    if bucketed:
-        return utils.iterate_bucketed_batch(data, batch_size, unk_replace==unk_replace, shuffle=shuffle)
-    else:
-        return utils.iterate_batch(data, batch_size, unk_replace==unk_replace, shuffle=shuffle)

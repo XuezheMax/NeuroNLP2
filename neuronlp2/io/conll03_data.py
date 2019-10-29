@@ -10,11 +10,11 @@ import neuronlp2.io.utils as utils
 import torch
 
 # Special vocabulary symbols - we always put them at the start.
-PAD = r"_PAD"
-PAD_POS = r"_PAD_POS"
-PAD_CHUNK = r"_PAD_CHUNK"
-PAD_NER = r"_PAD_NER"
-PAD_CHAR = r"_PAD_CHAR"
+PAD = "_PAD"
+PAD_POS = "_PAD_POS"
+PAD_CHUNK = "_PAD_CHUNK"
+PAD_NER = "_PAD_NER"
+PAD_CHAR = "_PAD_CHAR"
 _START_VOCAB = [PAD,]
 
 UNK_ID = 0
@@ -41,7 +41,7 @@ def create_alphabets(alphabet_directory, train_path, data_paths=None, max_vocabu
                         continue
 
                     tokens = line.split(' ')
-                    word = utils.DIGIT_RE.sub(r"0", tokens[1]) if normalize_digits else tokens[1]
+                    word = utils.DIGIT_RE.sub("0", tokens[1]) if normalize_digits else tokens[1]
                     pos = tokens[2]
                     chunk = tokens[3]
                     ner = tokens[4]
@@ -80,7 +80,7 @@ def create_alphabets(alphabet_directory, train_path, data_paths=None, max_vocabu
                 for char in tokens[1]:
                     char_alphabet.add(char)
 
-                word = utils.DIGIT_RE.sub(r"0", tokens[1]) if normalize_digits else tokens[1]
+                word = utils.DIGIT_RE.sub("0", tokens[1]) if normalize_digits else tokens[1]
                 vocab[word] += 1
 
                 pos = tokens[2]
@@ -146,7 +146,7 @@ def create_alphabets(alphabet_directory, train_path, data_paths=None, max_vocabu
 
 def read_data(source_path: str, word_alphabet: Alphabet, char_alphabet: Alphabet,
               pos_alphabet: Alphabet, chunk_alphabet: Alphabet, ner_alphabet: Alphabet,
-              max_size=None, normalize_digits=True, device=torch.device('cpu')):
+              max_size=None, normalize_digits=True):
     data = []
     max_length = 0
     max_char_length = 0
@@ -208,14 +208,14 @@ def read_data(source_path: str, word_alphabet: Alphabet, char_alphabet: Alphabet
             if word_alphabet.is_singleton(wid):
                 single[i, j] = 1
 
-    words = torch.from_numpy(wid_inputs).to(device)
-    chars = torch.from_numpy(cid_inputs).to(device)
-    pos = torch.from_numpy(pid_inputs).to(device)
-    chunks = torch.from_numpy(chid_inputs).to(device)
-    ners = torch.from_numpy(nid_inputs).to(device)
-    masks = torch.from_numpy(masks).to(device)
-    single = torch.from_numpy(single).to(device)
-    lengths = torch.from_numpy(lengths).to(device)
+    words = torch.from_numpy(wid_inputs)
+    chars = torch.from_numpy(cid_inputs)
+    pos = torch.from_numpy(pid_inputs)
+    chunks = torch.from_numpy(chid_inputs)
+    ners = torch.from_numpy(nid_inputs)
+    masks = torch.from_numpy(masks)
+    single = torch.from_numpy(single)
+    lengths = torch.from_numpy(lengths)
 
     data_tensor = {'WORD': words, 'CHAR': chars, 'POS': pos, 'CHUNK': chunks,
                    'NER': ners, 'MASK': masks, 'SINGLE': single, 'LENGTH': lengths}
@@ -224,7 +224,7 @@ def read_data(source_path: str, word_alphabet: Alphabet, char_alphabet: Alphabet
 
 def read_bucketed_data(source_path: str, word_alphabet: Alphabet, char_alphabet: Alphabet,
                        pos_alphabet: Alphabet, chunk_alphabet: Alphabet, ner_alphabet: Alphabet,
-                       max_size=None, normalize_digits=True, device=torch.device('cpu')):
+                       max_size=None, normalize_digits=True):
     data = [[] for _ in _buckets]
     max_char_length = [0 for _ in _buckets]
     print('Reading data from %s' % source_path)
@@ -296,23 +296,16 @@ def read_bucketed_data(source_path: str, word_alphabet: Alphabet, char_alphabet:
                 if word_alphabet.is_singleton(wid):
                     single[i, j] = 1
 
-        words = torch.from_numpy(wid_inputs).to(device)
-        chars = torch.from_numpy(cid_inputs).to(device)
-        pos = torch.from_numpy(pid_inputs).to(device)
-        chunks = torch.from_numpy(chid_inputs).to(device)
-        ners = torch.from_numpy(nid_inputs).to(device)
-        masks = torch.from_numpy(masks).to(device)
-        single = torch.from_numpy(single).to(device)
-        lengths = torch.from_numpy(lengths).to(device)
+        words = torch.from_numpy(wid_inputs)
+        chars = torch.from_numpy(cid_inputs)
+        pos = torch.from_numpy(pid_inputs)
+        chunks = torch.from_numpy(chid_inputs)
+        ners = torch.from_numpy(nid_inputs)
+        masks = torch.from_numpy(masks)
+        single = torch.from_numpy(single)
+        lengths = torch.from_numpy(lengths)
 
         data_tensor = {'WORD': words, 'CHAR': chars, 'POS': pos, 'CHUNK': chunks,
                        'NER': ners, 'MASK': masks, 'SINGLE': single, 'LENGTH': lengths}
         data_tensors.append(data_tensor)
     return data_tensors, bucket_sizes
-
-
-def iterate_batch(data, batch_size, bucketed=False, unk_replace=0., shuffle=False):
-    if bucketed:
-        return utils.iterate_bucketed_batch(data, batch_size, unk_replace==unk_replace, shuffle=shuffle)
-    else:
-        return utils.iterate_batch(data, batch_size, unk_replace==unk_replace, shuffle=shuffle)

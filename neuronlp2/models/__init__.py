@@ -1,5 +1,4 @@
 __author__ = 'max'
 
-from .sequence_labeling import *
-from .parsing import *
-
+from neuronlp2.models.sequence_labeling import *
+# from .parsing import *

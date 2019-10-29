@@ -1,26 +1,18 @@
 __author__ = 'max'
 
-import math
 import torch
 import torch.nn as nn
 from torch.nn.parameter import Parameter
-from .._functions import variational_rnn as rnn_F
+from neuronlp2.nn._functions import skipconnect_rnn as rnn_F
+from neuronlp2.nn.variational_rnn import VarRNNCellBase, default_initializer
 
 
-def default_initializer(hidden_size):
-    stdv = 1.0 / math.sqrt(hidden_size)
-    def forward(tensor):
-        nn.init.uniform_(tensor, -stdv, stdv)
-
-    return forward
-
-
-class VarMaskedRNNBase(nn.Module):
+class SkipConnectRNNBase(nn.Module):
     def __init__(self, Cell, input_size, hidden_size,
                  num_layers=1, bias=True, batch_first=False,
                  dropout=(0, 0), bidirectional=False, initializer=None, **kwargs):
 
-        super(VarMaskedRNNBase, self).__init__()
+        super(SkipConnectRNNBase, self).__init__()
         self.Cell = Cell
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -48,7 +40,7 @@ class VarMaskedRNNBase(nn.Module):
         for cell in self.all_cells:
             cell.reset_noise(batch_size)
 
-    def forward(self, input, mask=None, hx=None):
+    def forward(self, input, skip_connect, mask=None, hx=None):
         batch_size = input.size(0) if self.batch_first else input.size(1)
         if hx is None:
             num_directions = 2 if self.bidirectional else 1
@@ -56,22 +48,22 @@ class VarMaskedRNNBase(nn.Module):
             if self.lstm:
                 hx = (hx, hx)
 
-        func = rnn_F.AutogradVarMaskedRNN(num_layers=self.num_layers,
-                                          batch_first=self.batch_first,
-                                          bidirectional=self.bidirectional,
-                                          lstm=self.lstm)
-
+        func = rnn_F.AutogradSkipConnectRNN(num_layers=self.num_layers,
+                                            batch_first=self.batch_first,
+                                            bidirectional=self.bidirectional,
+                                            lstm=self.lstm)
         self.reset_noise(batch_size)
 
-        output, hidden = func(input, self.all_cells, hx, None if mask is None else mask.view(mask.size() + (1,)))
+        output, hidden = func(input, skip_connect, self.all_cells, hx, None if mask is None else mask.view(mask.size() + (1,)))
         return output, hidden
 
-    def step(self, input, hx=None, mask=None):
+    def step(self, input, hx=None, hs=None, mask=None):
         '''
         execute one step forward (only for one-directional RNN).
         Args:
-            input (batch, input_size): input tensor of this step.
+            input (batch, model_dim): input tensor of this step.
             hx (num_layers, batch, hidden_size): the hidden state of last step.
+            hs (batch. hidden_size): tensor containing the skip connection state for each element in the batch.
             mask (batch): the mask tensor of this step.
 
         Returns:
@@ -84,14 +76,16 @@ class VarMaskedRNNBase(nn.Module):
             hx = input.new_zeros(self.num_layers, batch_size, self.hidden_size)
             if self.lstm:
                 hx = (hx, hx)
+        if hs is None:
+            hs = input.new_zeros(self.num_layers, batch_size, self.hidden_size)
 
-        func = rnn_F.AutogradVarMaskedStep(num_layers=self.num_layers, lstm=self.lstm)
+        func = rnn_F.AutogradSkipConnectStep(num_layers=self.num_layers, lstm=self.lstm)
 
-        output, hidden = func(input, self.all_cells, hx, mask)
+        output, hidden = func(input, self.all_cells, hx, hs, mask)
         return output, hidden
 
 
-class VarMaskedRNN(VarMaskedRNNBase):
+class SkipConnectRNN(SkipConnectRNNBase):
     r"""Applies a multi-layer Elman RNN with costomized non-linearity to an
     input sequence.
 
@@ -122,9 +116,10 @@ class VarMaskedRNN(VarMaskedRNNBase):
             RNN layer with dropout rate dropout_in and dropout_hidden, resp.
         bidirectional: If True, becomes a bidirectional RNN. Default: False
 
-    Inputs: input, mask, h_0
-        - **input** (seq_len, batch, input_size): tensor containing the features
+    Inputs: input, skip_connect, mask, h_0
+        - **input** (seq_len, batch, model_dim): tensor containing the features
           of the input sequence.
+        - **skip_connect** (seq_len, batch): long tensor containing the index of skip connections for each step.
           **mask** (seq_len, batch): 0-1 tensor containing the mask of the input sequence.
         - **h_0** (num_layers * num_directions, batch, hidden_size): tensor
           containing the initial hidden state for each element in the batch.
@@ -139,10 +134,10 @@ class VarMaskedRNN(VarMaskedRNNBase):
     """
 
     def __init__(self, *args, **kwargs):
-        super(VarMaskedRNN, self).__init__(VarRNNCell, *args, **kwargs)
+        super(SkipConnectRNN, self).__init__(SkipConnectRNNCell, *args, **kwargs)
 
 
-class VarMaskedLSTM(VarMaskedRNNBase):
+class SkipConnectFastLSTM(SkipConnectRNNBase):
     r"""Applies a multi-layer long short-term memory (LSTM) RNN to an input
     sequence.
 
@@ -180,10 +175,11 @@ class VarMaskedLSTM(VarMaskedRNNBase):
             RNN layer with dropout rate dropout_in and dropout_hidden, resp.
         bidirectional: If True, becomes a bidirectional RNN. Default: False
 
-    Inputs: input, mask, (h_0, c_0)
-        - **input** (seq_len, batch, input_size): tensor containing the features
+    Inputs: input, skip_connect, mask, (h_0, c_0)
+        - **input** (seq_len, batch, model_dim): tensor containing the features
           of the input sequence.
-          **mask** (seq_len, batch): 0-1 tensor containing the mask of the input sequence.
+        - **skip_connect** (seq_len, batch): long tensor containing the index of skip connections for each step.
+        - **mask** (seq_len, batch): 0-1 tensor containing the mask of the input sequence.
         - **h_0** (num_layers \* num_directions, batch, hidden_size): tensor
           containing the initial hidden state for each element in the batch.
         - **c_0** (num_layers \* num_directions, batch, hidden_size): tensor
@@ -201,11 +197,11 @@ class VarMaskedLSTM(VarMaskedRNNBase):
     """
 
     def __init__(self, *args, **kwargs):
-        super(VarMaskedLSTM, self).__init__(VarLSTMCell, *args, **kwargs)
+        super(SkipConnectFastLSTM, self).__init__(SkipConnectFastLSTMCell, *args, **kwargs)
         self.lstm = True
 
 
-class VarMaskedFastLSTM(VarMaskedRNNBase):
+class SkipConnectLSTM(SkipConnectRNNBase):
     r"""Applies a multi-layer long short-term memory (LSTM) RNN to an input
     sequence.
 
@@ -243,15 +239,15 @@ class VarMaskedFastLSTM(VarMaskedRNNBase):
             RNN layer with dropout rate dropout_in and dropout_hidden, resp.
         bidirectional: If True, becomes a bidirectional RNN. Default: False
 
-    Inputs: input, mask, (h_0, c_0)
-        - **input** (seq_len, batch, input_size): tensor containing the features
+    Inputs: input, skip_connect, mask, (h_0, c_0)
+        - **input** (seq_len, batch, model_dim): tensor containing the features
           of the input sequence.
-          **mask** (seq_len, batch): 0-1 tensor containing the mask of the input sequence.
+        - **skip_connect** (seq_len, batch): long tensor containing the index of skip connections for each step.
+        - **mask** (seq_len, batch): 0-1 tensor containing the mask of the input sequence.
         - **h_0** (num_layers \* num_directions, batch, hidden_size): tensor
           containing the initial hidden state for each element in the batch.
         - **c_0** (num_layers \* num_directions, batch, hidden_size): tensor
           containing the initial cell state for each element in the batch.
-
 
     Outputs: output, (h_n, c_n)
         - **output** (seq_len, batch, hidden_size * num_directions): tensor
@@ -265,11 +261,11 @@ class VarMaskedFastLSTM(VarMaskedRNNBase):
     """
 
     def __init__(self, *args, **kwargs):
-        super(VarMaskedFastLSTM, self).__init__(VarFastLSTMCell, *args, **kwargs)
+        super(SkipConnectLSTM, self).__init__(SkipConnectLSTMCell, *args, **kwargs)
         self.lstm = True
 
 
-class VarMaskedGRU(VarMaskedRNNBase):
+class SkipConnectFastGRU(SkipConnectRNNBase):
     r"""Applies a multi-layer gated recurrent unit (GRU) RNN to an input sequence.
 
 
@@ -304,9 +300,10 @@ class VarMaskedGRU(VarMaskedRNNBase):
             RNN layer with dropout rate dropout_in and dropout_hidden, resp.
         bidirectional: If True, becomes a bidirectional RNN. Default: False
 
-    Inputs: input, mask, h_0
-        - **input** (seq_len, batch, input_size): tensor containing the features
+    Inputs: input, skip_connect, mask, h_0
+        - **input** (seq_len, batch, model_dim): tensor containing the features
           of the input sequence.
+        - **skip_connect** (seq_len, batch): long tensor containing the index of skip connections for each step.
           **mask** (seq_len, batch): 0-1 tensor containing the mask of the input sequence.
         - **h_0** (num_layers * num_directions, batch, hidden_size): tensor
           containing the initial hidden state for each element in the batch.
@@ -321,10 +318,10 @@ class VarMaskedGRU(VarMaskedRNNBase):
     """
 
     def __init__(self, *args, **kwargs):
-        super(VarMaskedGRU, self).__init__(VarGRUCell, *args, **kwargs)
+        super(SkipConnectFastGRU, self).__init__(SkipConnectFastGRUCell, *args, **kwargs)
 
 
-class VarMaskedFastGRU(VarMaskedRNNBase):
+class SkipConnectGRU(SkipConnectRNNBase):
     r"""Applies a multi-layer gated recurrent unit (GRU) RNN to an input sequence.
 
 
@@ -359,9 +356,10 @@ class VarMaskedFastGRU(VarMaskedRNNBase):
             RNN layer with dropout rate dropout_in and dropout_hidden, resp.
         bidirectional: If True, becomes a bidirectional RNN. Default: False
 
-    Inputs: input, mask, h_0
-        - **input** (seq_len, batch, input_size): tensor containing the features
+    Inputs: input, skip_connect, mask, h_0
+        - **input** (seq_len, batch, model_dim): tensor containing the features
           of the input sequence.
+        - **skip_connect** (seq_len, batch): long tensor containing the index of skip connections for each step.
           **mask** (seq_len, batch): 0-1 tensor containing the mask of the input sequence.
         - **h_0** (num_layers * num_directions, batch, hidden_size): tensor
           containing the initial hidden state for each element in the batch.
@@ -376,29 +374,10 @@ class VarMaskedFastGRU(VarMaskedRNNBase):
     """
 
     def __init__(self, *args, **kwargs):
-        super(VarMaskedFastGRU, self).__init__(VarFastGRUCell, *args, **kwargs)
+        super(SkipConnectGRU, self).__init__(SkipConnectGRUCell, *args, **kwargs)
 
 
-class VarRNNCellBase(nn.Module):
-    def __repr__(self):
-        s = '{name}({input_size}, {hidden_size}'
-        if 'bias' in self.__dict__ and self.bias is not True:
-            s += ', bias={bias}'
-        if 'nonlinearity' in self.__dict__ and self.nonlinearity != "tanh":
-            s += ', nonlinearity={nonlinearity}'
-        s += ')'
-        return s.format(name=self.__class__.__name__, **self.__dict__)
-
-    def reset_noise(self, batch_size):
-        """
-        Should be overriden by all subclasses.
-        Args:
-            batch_size: (int) batch size of input.
-        """
-        raise NotImplementedError
-
-
-class VarRNNCell(VarRNNCellBase):
+class SkipConnectRNNCell(VarRNNCellBase):
     r"""An Elman RNN cell with tanh non-linearity and variational dropout.
 
     .. math::
@@ -413,10 +392,12 @@ class VarRNNCell(VarRNNCellBase):
         nonlinearity: The non-linearity to use ['tanh'|'relu']. Default: 'tanh'
         p: (p_in, p_hidden) (tuple, optional): the drop probability for input and hidden. Default: (0.5, 0.5)
 
-    Inputs: input, hidden
-        - **input** (batch, input_size): tensor containing input features
+    Inputs: input, hidden, h_s
+        - **input** (batch, model_dim): tensor containing input features
         - **hidden** (batch, hidden_size): tensor containing the initial hidden
           state for each element in the batch.
+        - **h_s** (batch. hidden_size): tensor containing the skip connection state
+          for each element in the batch.
 
     Outputs: h'
         - **h'** (batch, hidden_size): tensor containing the next hidden state
@@ -424,22 +405,22 @@ class VarRNNCell(VarRNNCellBase):
 
     Attributes:
         weight_ih: the learnable input-hidden weights, of shape
-            `(input_size x hidden_size)`
+            `(model_dim x hidden_size)`
         weight_hh: the learnable hidden-hidden weights, of shape
-            `(hidden_size x hidden_size)`
+            `(hidden_size x 2*hidden_size)`
         bias_ih: the learnable input-hidden bias, of shape `(hidden_size)`
         bias_hh: the learnable hidden-hidden bias, of shape `(hidden_size)`
 
     """
 
     def __init__(self, input_size, hidden_size, bias=True, nonlinearity="tanh", p=(0.5, 0.5), initializer=None):
-        super(VarRNNCell, self).__init__()
+        super(SkipConnectRNNCell, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.bias = bias
         self.nonlinearity = nonlinearity
         self.weight_ih = Parameter(torch.Tensor(hidden_size, input_size))
-        self.weight_hh = Parameter(torch.Tensor(hidden_size, hidden_size))
+        self.weight_hh = Parameter(torch.Tensor(hidden_size, hidden_size * 2))
         if bias:
             self.bias_ih = Parameter(torch.Tensor(hidden_size))
             self.bias_hh = Parameter(torch.Tensor(hidden_size))
@@ -477,7 +458,7 @@ class VarRNNCell(VarRNNCellBase):
                 self.noise_in = None
 
             if self.p_hidden:
-                noise = self.weight_hh.new_empty(batch_size, self.hidden_size)
+                noise = self.weight_hh.new_empty(batch_size, self.hidden_size * 2)
                 self.noise_hidden = noise.bernoulli_(1.0 - self.p_hidden) / (1.0 - self.p_hidden)
             else:
                 self.noise_hidden = None
@@ -485,26 +466,26 @@ class VarRNNCell(VarRNNCellBase):
             self.noise_in = None
             self.noise_hidden = None
 
-    def forward(self, input, hx):
+    def forward(self, input, hx, hs):
         if self.nonlinearity == "tanh":
-            func = rnn_F.VarRNNTanhCell
+            func = rnn_F.SkipConnectRNNTanhCell
         elif self.nonlinearity == "relu":
-            func = rnn_F.VarRNNReLUCell
+            func = rnn_F.SkipConnectRNNReLUCell
         else:
             raise RuntimeError(
                 "Unknown nonlinearity: {}".format(self.nonlinearity))
 
         return func(
-            input, hx,
+            input, hx, hs,
             self.weight_ih, self.weight_hh,
             self.bias_ih, self.bias_hh,
             self.noise_in, self.noise_hidden,
         )
 
 
-class VarLSTMCell(VarRNNCellBase):
+class SkipConnectFastLSTMCell(VarRNNCellBase):
     """
-    A long short-term memory (LSTM) cell with variational dropout.
+    A long short-term memory (LSTM) cell with skip connections and variational dropout.
 
     .. math::
 
@@ -524,11 +505,13 @@ class VarLSTMCell(VarRNNCellBase):
             `b_hh`. Default: True
         p: (p_in, p_hidden) (tuple, optional): the drop probability for input and hidden. Default: (0.5, 0.5)
 
-    Inputs: input, (h_0, c_0)
-        - **input** (batch, input_size): tensor containing input features
+    Inputs: input, (h_0, c_0), h_s
+        - **input** (batch, model_dim): tensor containing input features
         - **h_0** (batch, hidden_size): tensor containing the initial hidden
           state for each element in the batch.
         - **c_0** (batch. hidden_size): tensor containing the initial cell state
+          for each element in the batch.
+        - **h_s** (batch. hidden_size): tensor containing the skip connection state
           for each element in the batch.
 
     Outputs: h_1, c_1
@@ -539,223 +522,20 @@ class VarLSTMCell(VarRNNCellBase):
 
     Attributes:
         weight_ih: the learnable input-hidden weights, of shape
-            `(4 x input_size x hidden_size)`
+            `(4*hidden_size x model_dim)`
         weight_hh: the learnable hidden-hidden weights, of shape
-            `(4 x hidden_size x hidden_size)`
-        bias_ih: the learnable input-hidden bias, of shape `(4 x hidden_size)`
-        bias_hh: the learnable hidden-hidden bias, of shape `(4 x hidden_size)`
-    """
-
-    def __init__(self, input_size, hidden_size, bias=True, p=(0.5, 0.5), initializer=None):
-        super(VarLSTMCell, self).__init__()
-        self.input_size = input_size
-        self.hidden_size = hidden_size
-        self.bias = bias
-        self.weight_ih = Parameter(torch.Tensor(4, input_size, hidden_size))
-        self.weight_hh = Parameter(torch.Tensor(4, hidden_size, hidden_size))
-        if bias:
-            self.bias_ih = Parameter(torch.Tensor(4, hidden_size))
-            self.bias_hh = Parameter(torch.Tensor(4, hidden_size))
-        else:
-            self.register_parameter('bias_ih', None)
-            self.register_parameter('bias_hh', None)
-
-        self.initializer = default_initializer(self.hidden_size) if initializer is None else initializer
-        self.reset_parameters()
-        p_in, p_hidden = p
-        if p_in < 0 or p_in > 1:
-            raise ValueError("input dropout probability has to be between 0 and 1, "
-                             "but got {}".format(p_in))
-        if p_hidden < 0 or p_hidden > 1:
-            raise ValueError("hidden state dropout probability has to be between 0 and 1, "
-                             "but got {}".format(p_hidden))
-        self.p_in = p_in
-        self.p_hidden = p_hidden
-        self.noise_in = None
-        self.noise_hidden = None
-
-    def reset_parameters(self):
-        for weight in self.parameters():
-            if weight.dim() == 2:
-                nn.init.constant_(weight, 0.)
-            else:
-                self.initializer(weight)
-
-    def reset_noise(self, batch_size):
-        if self.training:
-            if self.p_in:
-                noise = self.weight_ih.new_empty(4, batch_size, self.input_size)
-                self.noise_in = noise.bernoulli_(1.0 - self.p_in) / (1.0 - self.p_in)
-            else:
-                self.noise_in = None
-
-            if self.p_hidden:
-                noise = self.weight_hh.new_empty(4, batch_size, self.hidden_size)
-                self.noise_hidden = noise.bernoulli_(1.0 - self.p_hidden) / (1.0 - self.p_hidden)
-            else:
-                self.noise_hidden = None
-        else:
-            self.noise_in = None
-            self.noise_hidden = None
-
-    def forward(self, input, hx):
-        return rnn_F.VarLSTMCell(
-            input, hx,
-            self.weight_ih, self.weight_hh,
-            self.bias_ih, self.bias_hh,
-            self.noise_in, self.noise_hidden,
-        )
-
-
-class VarGRUCell(VarRNNCellBase):
-    """A gated recurrent unit (GRU) cell with variational dropout.
-
-    .. math::
-
-        \begin{array}{ll}
-        r = \mathrm{sigmoid}(W_{ir} x + b_{ir} + W_{hr} h + b_{hr}) \\
-        z = \mathrm{sigmoid}(W_{iz} x + b_{iz} + W_{hz} h + b_{hz}) \\
-        n = \tanh(W_{in} x + b_{in} + r * (W_{hn} h + b_{hn})) \\
-        h' = (1 - z) * n + z * h
-        \end{array}
-
-    Args:
-        input_size: The number of expected features in the input x
-        hidden_size: The number of features in the hidden state h
-        bias: If `False`, then the layer does not use bias weights `b_ih` and
-            `b_hh`. Default: `True`
-        p: (p_in, p_hidden) (tuple, optional): the drop probability for input and hidden. Default: (0.5, 0.5)
-
-    Inputs: input, hidden
-        - **input** (batch, input_size): tensor containing input features
-        - **hidden** (batch, hidden_size): tensor containing the initial hidden
-          state for each element in the batch.
-
-    Outputs: h'
-        - **h'**: (batch, hidden_size): tensor containing the next hidden state
-          for each element in the batch
-
-    Attributes:
-        weight_ih: the learnable input-hidden weights, of shape
-            `(3 x input_size x hidden_size)`
-        weight_hh: the learnable hidden-hidden weights, of shape
-            `(3x hidden_size x hidden_size)`
-        bias_ih: the learnable input-hidden bias, of shape `(3 x hidden_size)`
-        bias_hh: the learnable hidden-hidden bias, of shape `(3 x hidden_size)`
-    """
-
-    def __init__(self, input_size, hidden_size, bias=True, p=(0.5, 0.5), initializer=None):
-        super(VarGRUCell, self).__init__()
-        self.input_size = input_size
-        self.hidden_size = hidden_size
-        self.bias = bias
-        self.weight_ih = Parameter(torch.Tensor(3, input_size, hidden_size))
-        self.weight_hh = Parameter(torch.Tensor(3, hidden_size, hidden_size))
-        if bias:
-            self.bias_ih = Parameter(torch.Tensor(3, hidden_size))
-            self.bias_hh = Parameter(torch.Tensor(3, hidden_size))
-        else:
-            self.register_parameter('bias_ih', None)
-            self.register_parameter('bias_hh', None)
-
-        self.initializer = default_initializer(self.hidden_size) if initializer is None else initializer
-        self.reset_parameters()
-        p_in, p_hidden = p
-        if p_in < 0 or p_in > 1:
-            raise ValueError("input dropout probability has to be between 0 and 1, "
-                             "but got {}".format(p_in))
-        if p_hidden < 0 or p_hidden > 1:
-            raise ValueError("hidden state dropout probability has to be between 0 and 1, "
-                             "but got {}".format(p_hidden))
-        self.p_in = p_in
-        self.p_hidden = p_hidden
-        self.noise_in = None
-        self.noise_hidden = None
-
-    def reset_parameters(self):
-        for weight in self.parameters():
-            if weight.dim() == 2:
-                nn.init.constant_(weight, 0.)
-            else:
-                self.initializer(weight)
-
-    def reset_noise(self, batch_size):
-        if self.training:
-            if self.p_in:
-                noise = self.weight_ih.new_empty(3, batch_size, self.input_size)
-                self.noise_in = noise.bernoulli_(1.0 - self.p_in) / (1.0 - self.p_in)
-            else:
-                self.noise_in = None
-
-            if self.p_hidden:
-                noise = self.weight_hh.new_empty(3, batch_size, self.hidden_size)
-                self.noise_hidden = noise.bernoulli_(1.0 - self.p_hidden) / (1.0 - self.p_hidden)
-            else:
-                self.noise_hidden = None
-        else:
-            self.noise_in = None
-            self.noise_hidden = None
-
-    def forward(self, input, hx):
-        return rnn_F.VarGRUCell(
-            input, hx,
-            self.weight_ih, self.weight_hh,
-            self.bias_ih, self.bias_hh,
-            self.noise_in, self.noise_hidden,
-        )
-
-
-class VarFastLSTMCell(VarRNNCellBase):
-    """
-    A long short-term memory (LSTM) cell with variational dropout.
-
-    .. math::
-
-        \begin{array}{ll}
-        i = \mathrm{sigmoid}(W_{ii} x + b_{ii} + W_{hi} h + b_{hi}) \\
-        f = \mathrm{sigmoid}(W_{if} x + b_{if} + W_{hf} h + b_{hf}) \\
-        g = \tanh(W_{ig} x + b_{ig} + W_{hc} h + b_{hg}) \\
-        o = \mathrm{sigmoid}(W_{io} x + b_{io} + W_{ho} h + b_{ho}) \\
-        c' = f * c + i * g \\
-        h' = o * \tanh(c') \\
-        \end{array}
-
-    Args:
-        input_size: The number of expected features in the input x
-        hidden_size: The number of features in the hidden state h
-        bias: If `False`, then the layer does not use bias weights `b_ih` and
-            `b_hh`. Default: True
-        p: (p_in, p_hidden) (tuple, optional): the drop probability for input and hidden. Default: (0.5, 0.5)
-
-    Inputs: input, (h_0, c_0)
-        - **input** (batch, input_size): tensor containing input features
-        - **h_0** (batch, hidden_size): tensor containing the initial hidden
-          state for each element in the batch.
-        - **c_0** (batch. hidden_size): tensor containing the initial cell state
-          for each element in the batch.
-
-    Outputs: h_1, c_1
-        - **h_1** (batch, hidden_size): tensor containing the next hidden state
-          for each element in the batch
-        - **c_1** (batch, hidden_size): tensor containing the next cell state
-          for each element in the batch
-
-    Attributes:
-        weight_ih: the learnable input-hidden weights, of shape
-            `(4*hidden_size x input_size)`
-        weight_hh: the learnable hidden-hidden weights, of shape
-            `(4*hidden_size x hidden_size)`
+            `(4*hidden_size x 2*hidden_size)`
         bias_ih: the learnable input-hidden bias, of shape `(4*hidden_size)`
         bias_hh: the learnable hidden-hidden bias, of shape `(4*hidden_size)`
     """
 
     def __init__(self, input_size, hidden_size, bias=True, p=(0.5, 0.5), initializer=None):
-        super(VarFastLSTMCell, self).__init__()
+        super(SkipConnectFastLSTMCell, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.bias = bias
         self.weight_ih = Parameter(torch.Tensor(4 * hidden_size, input_size))
-        self.weight_hh = Parameter(torch.Tensor(4 * hidden_size, hidden_size))
+        self.weight_hh = Parameter(torch.Tensor(4 * hidden_size, 2 * hidden_size))
         if bias:
             self.bias_ih = Parameter(torch.Tensor(4 * hidden_size))
             self.bias_hh = Parameter(torch.Tensor(4 * hidden_size))
@@ -793,7 +573,7 @@ class VarFastLSTMCell(VarRNNCellBase):
                 self.noise_in = None
 
             if self.p_hidden:
-                noise = self.weight_hh.new_empty(batch_size, self.hidden_size)
+                noise = self.weight_hh.new_empty(batch_size, self.hidden_size * 2)
                 self.noise_hidden = noise.bernoulli_(1.0 - self.p_hidden) / (1.0 - self.p_hidden)
             else:
                 self.noise_hidden = None
@@ -801,17 +581,124 @@ class VarFastLSTMCell(VarRNNCellBase):
             self.noise_in = None
             self.noise_hidden = None
 
-    def forward(self, input, hx):
-        return rnn_F.VarFastLSTMCell(
-            input, hx,
+    def forward(self, input, hx, hs):
+        return rnn_F.SkipConnectFastLSTMCell(
+            input, hx, hs,
             self.weight_ih, self.weight_hh,
             self.bias_ih, self.bias_hh,
             self.noise_in, self.noise_hidden,
         )
 
 
-class VarFastGRUCell(VarRNNCellBase):
-    """A gated recurrent unit (GRU) cell with variational dropout.
+class SkipConnectLSTMCell(VarRNNCellBase):
+    """
+    A long short-term memory (LSTM) cell with skip connections and variational dropout.
+
+    .. math::
+
+        \begin{array}{ll}
+        i = \mathrm{sigmoid}(W_{ii} x + b_{ii} + W_{hi} h + b_{hi}) \\
+        f = \mathrm{sigmoid}(W_{if} x + b_{if} + W_{hf} h + b_{hf}) \\
+        g = \tanh(W_{ig} x + b_{ig} + W_{hc} h + b_{hg}) \\
+        o = \mathrm{sigmoid}(W_{io} x + b_{io} + W_{ho} h + b_{ho}) \\
+        c' = f * c + i * g \\
+        h' = o * \tanh(c') \\
+        \end{array}
+
+    Args:
+        input_size: The number of expected features in the input x
+        hidden_size: The number of features in the hidden state h
+        bias: If `False`, then the layer does not use bias weights `b_ih` and
+            `b_hh`. Default: True
+        p: (p_in, p_hidden) (tuple, optional): the drop probability for input and hidden. Default: (0.5, 0.5)
+
+    Inputs: input, (h_0, c_0), h_s
+        - **input** (batch, model_dim): tensor containing input features
+        - **h_0** (batch, hidden_size): tensor containing the initial hidden
+          state for each element in the batch.
+        - **c_0** (batch. hidden_size): tensor containing the initial cell state
+          for each element in the batch.
+           **h_s** (batch. hidden_size): tensor containing the skip connection state
+          for each element in the batch.
+
+    Outputs: h_1, c_1
+        - **h_1** (batch, hidden_size): tensor containing the next hidden state
+          for each element in the batch
+        - **c_1** (batch, hidden_size): tensor containing the next cell state
+          for each element in the batch
+
+    Attributes:
+        weight_ih: the learnable input-hidden weights, of shape
+            `(4 x model_dim x hidden_size)`
+        weight_hh: the learnable hidden-hidden weights, of shape
+            `(4 x 2*hidden_size x hidden_size)`
+        bias_ih: the learnable input-hidden bias, of shape `(4 x hidden_size)`
+        bias_hh: the learnable hidden-hidden bias, of shape `(4 x hidden_size)`
+    """
+
+    def __init__(self, input_size, hidden_size, bias=True, p=(0.5, 0.5), initializer=None):
+        super(SkipConnectLSTMCell, self).__init__()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.bias = bias
+        self.weight_ih = Parameter(torch.Tensor(4, input_size, hidden_size))
+        self.weight_hh = Parameter(torch.Tensor(4, 2 * hidden_size, hidden_size))
+        if bias:
+            self.bias_ih = Parameter(torch.Tensor(4, hidden_size))
+            self.bias_hh = Parameter(torch.Tensor(4, hidden_size))
+        else:
+            self.register_parameter('bias_ih', None)
+            self.register_parameter('bias_hh', None)
+
+        self.initializer = default_initializer(self.hidden_size) if initializer is None else initializer
+        self.reset_parameters()
+        p_in, p_hidden = p
+        if p_in < 0 or p_in > 1:
+            raise ValueError("input dropout probability has to be between 0 and 1, "
+                             "but got {}".format(p_in))
+        if p_hidden < 0 or p_hidden > 1:
+            raise ValueError("hidden state dropout probability has to be between 0 and 1, "
+                             "but got {}".format(p_hidden))
+        self.p_in = p_in
+        self.p_hidden = p_hidden
+        self.noise_in = None
+        self.noise_hidden = None
+
+    def reset_parameters(self):
+        for weight in self.parameters():
+            if weight.dim() == 2:
+                nn.init.constant_(weight, 0.)
+            else:
+                self.initializer(weight)
+
+    def reset_noise(self, batch_size):
+        if self.training:
+            if self.p_in:
+                noise = self.weight_ih.new_empty(4, batch_size, self.input_size)
+                self.noise_in = noise.bernoulli_(1.0 - self.p_in) / (1.0 - self.p_in)
+            else:
+                self.noise_in = None
+
+            if self.p_hidden:
+                noise = self.weight_hh.new_empty(4, batch_size, self.hidden_size * 2)
+                self.noise_hidden = noise.bernoulli_(1.0 - self.p_hidden) / (1.0 - self.p_hidden)
+            else:
+                self.noise_hidden = None
+        else:
+            self.noise_in = None
+            self.noise_hidden = None
+
+    def forward(self, input, hx, hs):
+        return rnn_F.SkipConnectLSTMCell(
+            input, hx, hs,
+            self.weight_ih, self.weight_hh,
+            self.bias_ih, self.bias_hh,
+            self.noise_in, self.noise_hidden,
+        )
+
+
+class SkipConnectFastGRUCell(VarRNNCellBase):
+    """A gated recurrent unit (GRU) cell with skip connections and variational dropout.
 
     .. math::
 
@@ -829,10 +716,12 @@ class VarFastGRUCell(VarRNNCellBase):
             `b_hh`. Default: True
         p: (p_in, p_hidden) (tuple, optional): the drop probability for input and hidden. Default: (0.5, 0.5)
 
-    Inputs: input, hidden
-        - **input** (batch, input_size): tensor containing input features
+    Inputs: input, hidden, h_s
+        - **input** (batch, model_dim): tensor containing input features
         - **hidden** (batch, hidden_size): tensor containing the initial hidden
           state for each element in the batch.
+        - **h_s** (batch. hidden_size): tensor containing the skip connection state
+          for each element in the batch.
 
     Outputs: h'
         - **h'**: (batch, hidden_size): tensor containing the next hidden state
@@ -840,20 +729,20 @@ class VarFastGRUCell(VarRNNCellBase):
 
     Attributes:
         weight_ih: the learnable input-hidden weights, of shape
-            `(3*hidden_size x input_size)`
+            `(3*hidden_size x model_dim)`
         weight_hh: the learnable hidden-hidden weights, of shape
-            `(3*hidden_size x hidden_size)`
+            `(3*hidden_size x 2*hidden_size)`
         bias_ih: the learnable input-hidden bias, of shape `(3*hidden_size)`
         bias_hh: the learnable hidden-hidden bias, of shape `(3*hidden_size)`
     """
 
     def __init__(self, input_size, hidden_size, bias=True, p=(0.5, 0.5), initializer=None):
-        super(VarFastGRUCell, self).__init__()
+        super(SkipConnectFastGRUCell, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.bias = bias
         self.weight_ih = Parameter(torch.Tensor(3 * hidden_size, input_size))
-        self.weight_hh = Parameter(torch.Tensor(3 * hidden_size, hidden_size))
+        self.weight_hh = Parameter(torch.Tensor(3 * hidden_size, hidden_size * 2))
         if bias:
             self.bias_ih = Parameter(torch.Tensor(3 * hidden_size))
             self.bias_hh = Parameter(torch.Tensor(3 * hidden_size))
@@ -891,7 +780,7 @@ class VarFastGRUCell(VarRNNCellBase):
                 self.noise_in = None
 
             if self.p_hidden:
-                noise = self.weight_hh.new_empty(batch_size, self.hidden_size)
+                noise = self.weight_hh.new_empty(batch_size, self.hidden_size * 2)
                 self.noise_hidden = noise.bernoulli_(1.0 - self.p_hidden) / (1.0 - self.p_hidden)
             else:
                 self.noise_hidden = None
@@ -899,9 +788,109 @@ class VarFastGRUCell(VarRNNCellBase):
             self.noise_in = None
             self.noise_hidden = None
 
-    def forward(self, input, hx):
-        return rnn_F.VarFastGRUCell(
-            input, hx,
+    def forward(self, input, hx, hs):
+        return rnn_F.SkipConnectFastGRUCell(
+            input, hx, hs,
+            self.weight_ih, self.weight_hh,
+            self.bias_ih, self.bias_hh,
+            self.noise_in, self.noise_hidden,
+        )
+
+
+class SkipConnectGRUCell(VarRNNCellBase):
+    """A gated recurrent unit (GRU) cell with skip connections and variational dropout.
+
+    .. math::
+
+        \begin{array}{ll}
+        r = \mathrm{sigmoid}(W_{ir} x + b_{ir} + W_{hr} h + b_{hr}) \\
+        z = \mathrm{sigmoid}(W_{iz} x + b_{iz} + W_{hz} h + b_{hz}) \\
+        n = \tanh(W_{in} x + b_{in} + r * (W_{hn} h + b_{hn})) \\
+        h' = (1 - z) * n + z * h
+        \end{array}
+
+    Args:
+        input_size: The number of expected features in the input x
+        hidden_size: The number of features in the hidden state h
+        bias: If `False`, then the layer does not use bias weights `b_ih` and
+            `b_hh`. Default: `True`
+        p: (p_in, p_hidden) (tuple, optional): the drop probability for input and hidden. Default: (0.5, 0.5)
+
+    Inputs: input, hidden, h_s
+        - **input** (batch, model_dim): tensor containing input features
+        - **hidden** (batch, hidden_size): tensor containing the initial hidden
+          state for each element in the batch.
+        - **h_s** (batch. hidden_size): tensor containing the skip connection state
+          for each element in the batch.
+
+    Outputs: h'
+        - **h'**: (batch, hidden_size): tensor containing the next hidden state
+          for each element in the batch
+
+    Attributes:
+        weight_ih: the learnable input-hidden weights, of shape
+            `(3 x model_dim x hidden_size)`
+        weight_hh: the learnable hidden-hidden weights, of shape
+            `(3x 2*hidden_size x hidden_size)`
+        bias_ih: the learnable input-hidden bias, of shape `(3 x hidden_size)`
+        bias_hh: the learnable hidden-hidden bias, of shape `(3 x hidden_size)`
+    """
+
+    def __init__(self, input_size, hidden_size, bias=True, p=(0.5, 0.5), initializer=None):
+        super(SkipConnectGRUCell, self).__init__()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.bias = bias
+        self.weight_ih = Parameter(torch.Tensor(3, input_size, hidden_size))
+        self.weight_hh = Parameter(torch.Tensor(3, hidden_size * 2, hidden_size))
+        if bias:
+            self.bias_ih = Parameter(torch.Tensor(3, hidden_size))
+            self.bias_hh = Parameter(torch.Tensor(3, hidden_size))
+        else:
+            self.register_parameter('bias_ih', None)
+            self.register_parameter('bias_hh', None)
+
+        self.initializer = default_initializer(self.hidden_size) if initializer is None else initializer
+        self.reset_parameters()
+        p_in, p_hidden = p
+        if p_in < 0 or p_in > 1:
+            raise ValueError("input dropout probability has to be between 0 and 1, "
+                             "but got {}".format(p_in))
+        if p_hidden < 0 or p_hidden > 1:
+            raise ValueError("hidden state dropout probability has to be between 0 and 1, "
+                             "but got {}".format(p_hidden))
+        self.p_in = p_in
+        self.p_hidden = p_hidden
+        self.noise_in = None
+        self.noise_hidden = None
+
+    def reset_parameters(self):
+        for weight in self.parameters():
+            if weight.dim() == 2:
+                nn.init.constant_(weight, 0.)
+            else:
+                self.initializer(weight)
+
+    def reset_noise(self, batch_size):
+        if self.training:
+            if self.p_in:
+                noise = self.weight_ih.new_empty(3, batch_size, self.input_size)
+                self.noise_in = noise.bernoulli_(1.0 - self.p_in) / (1.0 - self.p_in)
+            else:
+                self.noise_in = None
+
+            if self.p_hidden:
+                noise = self.weight_hh.new_empty(3, batch_size, self.hidden_size * 2)
+                self.noise_hidden = noise.bernoulli_(1.0 - self.p_hidden) / (1.0 - self.p_hidden)
+            else:
+                self.noise_hidden = None
+        else:
+            self.noise_in = None
+            self.noise_hidden = None
+
+    def forward(self, input, hx, hs):
+        return rnn_F.SkipConnectGRUCell(
+            input, hx, hs,
             self.weight_ih, self.weight_hh,
             self.bias_ih, self.bias_hh,
             self.noise_in, self.noise_hidden,

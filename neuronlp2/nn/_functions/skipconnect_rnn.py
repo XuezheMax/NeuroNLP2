@@ -1,8 +1,9 @@
 __author__ = 'max'
 
 import torch
-from torch.nn._functions.thnn import rnnFusedPointwise as fusedBackend
 from torch.nn import functional as F
+
+from neuronlp2.nn._functions import rnnFusedBackend as fusedBackend
 
 
 def SkipConnectRNNReLUCell(input, hidden, hidden_skip, w_ih, w_hh, b_ih=None, b_hh=None, noise_in=None, noise_hidden=None, noise_skip=None):
