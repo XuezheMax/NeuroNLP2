@@ -51,15 +51,15 @@ def eval(data, network, writer, outfile, scorefile):
     network.eval()
     writer.start(outfile)
     for data in iterate_data(data, 256):
-        words = data['WORD'].cpu()
-        chars = data['CHAR'].cpu()
+        words = data['WORD']
+        chars = data['CHAR']
         labels = data['NER'].cpu()
-        masks = data['MASK'].cpu()
+        masks = data['MASK']
         postags = data['POS'].cpu()
         chunks = data['CHUNK'].cpu()
         lengths = data['LENGTH'].cpu()
         preds = network.decode(words, chars, mask=masks, leading_symbolic=conll03_data.NUM_SYMBOLIC_TAGS)
-        writer.write(words.numpy(), postags.numpy(), chunks.numpy(), preds.cpu().numpy(), labels.numpy(), lengths.numpy())
+        writer.write(words.cpu().numpy(), postags.numpy(), chunks.numpy(), preds.cpu().numpy(), labels.numpy(), lengths.numpy())
     writer.close()
     acc, precision, recall, f1 = evaluate(outfile, scorefile)
     return acc, precision, recall, f1
