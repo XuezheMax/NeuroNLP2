@@ -165,7 +165,7 @@ class BiRecurrentConvCRF(BiRecurrentConv):
         super(BiRecurrentConvCRF, self).__init__(word_dim, num_words, char_dim, num_chars, rnn_mode, hidden_size, out_features, num_layers,
                                                  num_labels, embedd_word=embedd_word, embedd_char=embedd_char, p_in=p_in, p_out=p_out, p_rnn=p_rnn)
 
-        self.crf = ChainCRF(hidden_size, num_labels, bigram=bigram)
+        self.crf = ChainCRF(out_features, num_labels, bigram=bigram)
         self.readout = None
         self.criterion = None
 
@@ -197,7 +197,7 @@ class BiVarRecurrentConvCRF(BiVarRecurrentConv):
         super(BiVarRecurrentConvCRF, self).__init__(word_dim, num_words, char_dim, num_chars, rnn_mode, hidden_size, out_features, num_layers,
                                                     num_labels, embedd_word=embedd_word, embedd_char=embedd_char, p_in=p_in, p_out=p_out, p_rnn=p_rnn)
 
-        self.crf = ChainCRF(hidden_size, num_labels, bigram=bigram)
+        self.crf = ChainCRF(out_features, num_labels, bigram=bigram)
         self.readout = None
         self.criterion = None
 
