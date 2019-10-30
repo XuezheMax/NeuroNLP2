@@ -108,7 +108,8 @@ class CharCNN(nn.Module):
         # first transform to [batch * sent_length, char_length, in_channels]
         # then transpose to [batch * sent_length, in_channels, char_length]
         char = char.view(-1, char_size[2], char_size[3]).transpose(1, 2)
-        char = F.elu(self.conv1(char), inplace=True)
+        # char = F.elu(self.conv1(char), inplace=True)
+        char = torch.tanh_(self.conv1(char))
         # [batch * sent_length, in_channels, char_length]
         char = self.conv2(char).max(dim=2)[0]
         # [batch, sent_length, in_channels]
