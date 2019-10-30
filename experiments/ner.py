@@ -77,6 +77,7 @@ def main():
     parser.add_argument('--learning_rate', type=float, default=0.1, help='Learning rate')
     parser.add_argument('--lr_decay', type=float, default=0.999995, help='Decay rate of learning rate')
     parser.add_argument('--amsgrad', action='store_true', help='AMS Grad')
+    parser.add_argument('--grad_clip', type=float, default=0, help='max norm for gradient clip (default 0: no clip')
     parser.add_argument('--warmup_steps', type=int, default=0, metavar='N', help='number of steps to warm up (default: 0)')
     parser.add_argument('--weight_decay', type=float, default=0.0, help='weight for l2 norm decay')
     parser.add_argument('--unk_replace', type=float, default=0., help='The rate to replace a singleton word with UNK')
@@ -105,6 +106,7 @@ def main():
     amsgrad = args.amsgrad
     warmup_steps = args.warmup_steps
     weight_decay = args.weight_decay
+    grad_clip = args.grad_clip
 
     loss_ty_token = args.loss_type == 'token'
     unk_replace = args.unk_replace
@@ -242,7 +244,8 @@ def main():
             else:
                 loss = loss_total.div(nbatch)
             loss.backward()
-            clip_grad_norm_(network.parameters(), 5.0)
+            if grad_clip > 0:
+                clip_grad_norm_(network.parameters(), grad_clip)
             optimizer.step()
             scheduler.step()
 
