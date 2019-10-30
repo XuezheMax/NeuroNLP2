@@ -182,15 +182,15 @@ def main():
             network = BiRecurrentConvCRF(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), mode, hidden_size, out_features,
                                          num_layers, num_labels, embedd_word=word_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn, bigram=bigram)
         else:
-            network = BiRecurrentConv(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), mode, hidden_size,
+            network = BiRecurrentConv(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), mode, hidden_size, out_features,
                                       num_layers, num_labels, embedd_word=word_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn)
     else:
         if crf:
-            network = BiVarRecurrentConvCRF(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), mode, hidden_size,
+            network = BiVarRecurrentConvCRF(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), mode, hidden_size, out_features,
                                             num_layers, num_labels, embedd_word=word_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn, bigram=bigram)
         else:
-            network = BiVarRecurrentConv(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), mode, hidden_size, num_layers, num_labels,
-                                         embedd_word=word_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn)
+            network = BiVarRecurrentConv(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), mode, hidden_size, out_features,
+                                         num_layers, num_labels, embedd_word=word_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn)
 
     network = network.to(device)
 
@@ -199,6 +199,7 @@ def main():
     logger.info("Network: %s, num_layer=%d, hidden=%d" % (model, num_layers, hidden_size))
     logger.info("training: l2: %f, (#training data: %d, batch: %d, unk replace: %.2f)" % (weight_decay, num_data, batch_size, unk_replace))
     logger.info("dropout(in, out, rnn): %s(%.2f, %.2f, %s)" % (dropout, p_in, p_out, p_rnn))
+    print('# of Parameters: %d' % (sum([param.numel() for param in network.parameters()])))
 
     best_f1 = 0.0
     best_acc = 0.0
