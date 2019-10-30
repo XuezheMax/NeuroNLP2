@@ -171,6 +171,7 @@ def main():
     char_dim = hyps['char_dim']
     mode = hyps['rnn_mode']
     hidden_size = hyps['hidden_size']
+    out_features = hyps['out_features']
     num_layers = hyps['num_layers']
     p_in = hyps['p_in']
     p_out = hyps['p_out']
@@ -178,7 +179,7 @@ def main():
 
     if dropout == 'std':
         if crf:
-            network = BiRecurrentConvCRF(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), mode, hidden_size,
+            network = BiRecurrentConvCRF(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), mode, hidden_size, out_features,
                                          num_layers, num_labels, embedd_word=word_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn, bigram=bigram)
         else:
             network = BiRecurrentConv(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), mode, hidden_size,
