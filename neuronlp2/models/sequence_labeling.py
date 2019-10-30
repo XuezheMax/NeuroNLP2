@@ -77,6 +77,7 @@ class BiRecurrentConv(nn.Module):
         else:
             output, _ = self.rnn(enc)
 
+        output = self.dropout_out(output)
         # [batch, length, hidden_size]
         output = self.dropout_out(F.elu(self.fc(output)))
         return output
@@ -148,6 +149,9 @@ class BiVarRecurrentConv(BiRecurrentConv):
         # output from rnn [batch, length, 2 * hidden_size]
         output, _ = self.rnn(enc, mask)
 
+        # apply dropout for the output of rnn
+        # [batch, length, hidden_size] --> [batch, hidden_size, length] --> [batch, length, hidden_size]
+        output = self.dropout_out(output.transpose(1, 2)).transpose(1, 2)
         # [batch, length, hidden_size]
         output = F.elu(self.fc(output))
         # [batch, length, hidden_size] --> [batch, hidden_size, length] --> [batch, length, tag_space]
