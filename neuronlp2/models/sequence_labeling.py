@@ -14,7 +14,7 @@ class BiRecurrentConv(nn.Module):
 
         self.word_embed = nn.Embedding(num_words, word_dim, _weight=embedd_word, padding_idx=1)
         self.char_embed = nn.Embedding(num_chars, char_dim, _weight=embedd_char, padding_idx=1)
-        self.char_cnn = CharCNN(char_dim, char_dim * 4)
+        self.char_cnn = CharCNN(char_dim, char_dim * 2)
         # dropout word
         self.dropout_in = nn.Dropout2d(p=p_in)
         # standard dropout
