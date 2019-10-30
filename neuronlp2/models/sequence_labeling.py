@@ -53,6 +53,9 @@ class BiRecurrentConv(nn.Module):
             else:
                 nn.init.xavier_uniform_(param)
 
+        nn.init.xavier_uniform_(self.fc.weight)
+        nn.init.constant_(self.fc.bias, 0.)
+
         nn.init.uniform_(self.readout.weight, -0.1, 0.1)
         nn.init.constant_(self.readout.bias, 0.)
 
