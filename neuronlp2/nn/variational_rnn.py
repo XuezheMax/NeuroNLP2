@@ -1,26 +1,17 @@
 __author__ = 'max'
 
-import math
 import torch
 import torch.nn as nn
 from torch.nn.parameter import Parameter
 from neuronlp2.nn._functions import variational_rnn as rnn_F
 
 
-def default_initializer(hidden_size):
-    stdv = 1.0 / math.sqrt(hidden_size)
-    def forward(tensor):
-        nn.init.uniform_(tensor, -stdv, stdv)
-
-    return forward
-
-
-class VarMaskedRNNBase(nn.Module):
+class VarRNNBase(nn.Module):
     def __init__(self, Cell, input_size, hidden_size,
                  num_layers=1, bias=True, batch_first=False,
-                 dropout=(0, 0), bidirectional=False, initializer=None, **kwargs):
+                 dropout=(0, 0), bidirectional=False, **kwargs):
 
-        super(VarMaskedRNNBase, self).__init__()
+        super(VarRNNBase, self).__init__()
         self.Cell = Cell
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -36,7 +27,7 @@ class VarMaskedRNNBase(nn.Module):
             for direction in range(num_directions):
                 layer_input_size = input_size if layer == 0 else hidden_size * num_directions
 
-                cell = self.Cell(layer_input_size, hidden_size, self.bias, p=dropout, initializer=initializer, **kwargs)
+                cell = self.Cell(layer_input_size, hidden_size, self.bias, p=dropout, **kwargs)
                 self.all_cells.append(cell)
                 self.add_module('cell%d' % (layer * num_directions + direction), cell)
 
@@ -91,7 +82,7 @@ class VarMaskedRNNBase(nn.Module):
         return output, hidden
 
 
-class VarMaskedRNN(VarMaskedRNNBase):
+class VarRNN(VarRNNBase):
     r"""Applies a multi-layer Elman RNN with costomized non-linearity to an
     input sequence.
 
@@ -139,10 +130,10 @@ class VarMaskedRNN(VarMaskedRNNBase):
     """
 
     def __init__(self, *args, **kwargs):
-        super(VarMaskedRNN, self).__init__(VarRNNCell, *args, **kwargs)
+        super(VarRNN, self).__init__(VarRNNCell, *args, **kwargs)
 
 
-class VarMaskedLSTM(VarMaskedRNNBase):
+class VarLSTM(VarRNNBase):
     r"""Applies a multi-layer long short-term memory (LSTM) RNN to an input
     sequence.
 
@@ -201,11 +192,11 @@ class VarMaskedLSTM(VarMaskedRNNBase):
     """
 
     def __init__(self, *args, **kwargs):
-        super(VarMaskedLSTM, self).__init__(VarLSTMCell, *args, **kwargs)
+        super(VarLSTM, self).__init__(VarLSTMCell, *args, **kwargs)
         self.lstm = True
 
 
-class VarMaskedFastLSTM(VarMaskedRNNBase):
+class VarFastLSTM(VarRNNBase):
     r"""Applies a multi-layer long short-term memory (LSTM) RNN to an input
     sequence.
 
@@ -265,11 +256,11 @@ class VarMaskedFastLSTM(VarMaskedRNNBase):
     """
 
     def __init__(self, *args, **kwargs):
-        super(VarMaskedFastLSTM, self).__init__(VarFastLSTMCell, *args, **kwargs)
+        super(VarFastLSTM, self).__init__(VarFastLSTMCell, *args, **kwargs)
         self.lstm = True
 
 
-class VarMaskedGRU(VarMaskedRNNBase):
+class VarGRU(VarRNNBase):
     r"""Applies a multi-layer gated recurrent unit (GRU) RNN to an input sequence.
 
 
@@ -321,10 +312,10 @@ class VarMaskedGRU(VarMaskedRNNBase):
     """
 
     def __init__(self, *args, **kwargs):
-        super(VarMaskedGRU, self).__init__(VarGRUCell, *args, **kwargs)
+        super(VarGRU, self).__init__(VarGRUCell, *args, **kwargs)
 
 
-class VarMaskedFastGRU(VarMaskedRNNBase):
+class VarFastGRU(VarRNNBase):
     r"""Applies a multi-layer gated recurrent unit (GRU) RNN to an input sequence.
 
 
@@ -376,7 +367,7 @@ class VarMaskedFastGRU(VarMaskedRNNBase):
     """
 
     def __init__(self, *args, **kwargs):
-        super(VarMaskedFastGRU, self).__init__(VarFastGRUCell, *args, **kwargs)
+        super(VarFastGRU, self).__init__(VarFastGRUCell, *args, **kwargs)
 
 
 class VarRNNCellBase(nn.Module):
@@ -432,7 +423,7 @@ class VarRNNCell(VarRNNCellBase):
 
     """
 
-    def __init__(self, input_size, hidden_size, bias=True, nonlinearity="tanh", p=(0.5, 0.5), initializer=None):
+    def __init__(self, input_size, hidden_size, bias=True, nonlinearity="tanh", p=(0.5, 0.5)):
         super(VarRNNCell, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -447,7 +438,6 @@ class VarRNNCell(VarRNNCellBase):
             self.register_parameter('bias_ih', None)
             self.register_parameter('bias_hh', None)
 
-        self.initializer = default_initializer(self.hidden_size) if initializer is None else initializer
         self.reset_parameters()
         p_in, p_hidden = p
         if p_in < 0 or p_in > 1:
@@ -462,11 +452,11 @@ class VarRNNCell(VarRNNCellBase):
         self.noise_hidden = None
 
     def reset_parameters(self):
-        for weight in self.parameters():
-            if weight.dim() == 1:
-                nn.init.constant_(weight, 0.)
-            else:
-                self.initializer(weight)
+        nn.init.xavier_uniform_(self.weight_hh)
+        nn.init.xavier_uniform_(self.weight_ih)
+        if self.bias:
+            nn.init.constant_(self.bias_hh, 0.)
+            nn.init.constant_(self.bias_ih, 0.)
 
     def reset_noise(self, batch_size):
         if self.training:
@@ -546,7 +536,7 @@ class VarLSTMCell(VarRNNCellBase):
         bias_hh: the learnable hidden-hidden bias, of shape `(4 x hidden_size)`
     """
 
-    def __init__(self, input_size, hidden_size, bias=True, p=(0.5, 0.5), initializer=None):
+    def __init__(self, input_size, hidden_size, bias=True, p=(0.5, 0.5)):
         super(VarLSTMCell, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -560,7 +550,6 @@ class VarLSTMCell(VarRNNCellBase):
             self.register_parameter('bias_ih', None)
             self.register_parameter('bias_hh', None)
 
-        self.initializer = default_initializer(self.hidden_size) if initializer is None else initializer
         self.reset_parameters()
         p_in, p_hidden = p
         if p_in < 0 or p_in > 1:
@@ -575,11 +564,11 @@ class VarLSTMCell(VarRNNCellBase):
         self.noise_hidden = None
 
     def reset_parameters(self):
-        for weight in self.parameters():
-            if weight.dim() == 2:
-                nn.init.constant_(weight, 0.)
-            else:
-                self.initializer(weight)
+        nn.init.xavier_uniform_(self.weight_hh)
+        nn.init.xavier_uniform_(self.weight_ih)
+        if self.bias:
+            nn.init.constant_(self.bias_hh, 0.)
+            nn.init.constant_(self.bias_ih, 0.)
 
     def reset_noise(self, batch_size):
         if self.training:
@@ -644,7 +633,7 @@ class VarGRUCell(VarRNNCellBase):
         bias_hh: the learnable hidden-hidden bias, of shape `(3 x hidden_size)`
     """
 
-    def __init__(self, input_size, hidden_size, bias=True, p=(0.5, 0.5), initializer=None):
+    def __init__(self, input_size, hidden_size, bias=True, p=(0.5, 0.5)):
         super(VarGRUCell, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -658,7 +647,6 @@ class VarGRUCell(VarRNNCellBase):
             self.register_parameter('bias_ih', None)
             self.register_parameter('bias_hh', None)
 
-        self.initializer = default_initializer(self.hidden_size) if initializer is None else initializer
         self.reset_parameters()
         p_in, p_hidden = p
         if p_in < 0 or p_in > 1:
@@ -673,11 +661,11 @@ class VarGRUCell(VarRNNCellBase):
         self.noise_hidden = None
 
     def reset_parameters(self):
-        for weight in self.parameters():
-            if weight.dim() == 2:
-                nn.init.constant_(weight, 0.)
-            else:
-                self.initializer(weight)
+        nn.init.xavier_uniform_(self.weight_hh)
+        nn.init.xavier_uniform_(self.weight_ih)
+        if self.bias:
+            nn.init.constant_(self.bias_hh, 0.)
+            nn.init.constant_(self.bias_ih, 0.)
 
     def reset_noise(self, batch_size):
         if self.training:
@@ -749,7 +737,7 @@ class VarFastLSTMCell(VarRNNCellBase):
         bias_hh: the learnable hidden-hidden bias, of shape `(4*hidden_size)`
     """
 
-    def __init__(self, input_size, hidden_size, bias=True, p=(0.5, 0.5), initializer=None):
+    def __init__(self, input_size, hidden_size, bias=True, p=(0.5, 0.5)):
         super(VarFastLSTMCell, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -763,7 +751,6 @@ class VarFastLSTMCell(VarRNNCellBase):
             self.register_parameter('bias_ih', None)
             self.register_parameter('bias_hh', None)
 
-        self.initializer = default_initializer(self.hidden_size) if initializer is None else initializer
         self.reset_parameters()
         p_in, p_hidden = p
         if p_in < 0 or p_in > 1:
@@ -778,11 +765,11 @@ class VarFastLSTMCell(VarRNNCellBase):
         self.noise_hidden = None
 
     def reset_parameters(self):
-        for weight in self.parameters():
-            if weight.dim() == 1:
-                nn.init.constant_(weight, 0.)
-            else:
-                self.initializer(weight)
+        nn.init.xavier_uniform_(self.weight_hh)
+        nn.init.xavier_uniform_(self.weight_ih)
+        if self.bias:
+            nn.init.constant_(self.bias_hh, 0.)
+            nn.init.constant_(self.bias_ih, 0.)
 
     def reset_noise(self, batch_size):
         if self.training:
@@ -847,7 +834,7 @@ class VarFastGRUCell(VarRNNCellBase):
         bias_hh: the learnable hidden-hidden bias, of shape `(3*hidden_size)`
     """
 
-    def __init__(self, input_size, hidden_size, bias=True, p=(0.5, 0.5), initializer=None):
+    def __init__(self, input_size, hidden_size, bias=True, p=(0.5, 0.5)):
         super(VarFastGRUCell, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -861,7 +848,6 @@ class VarFastGRUCell(VarRNNCellBase):
             self.register_parameter('bias_ih', None)
             self.register_parameter('bias_hh', None)
 
-        self.initializer = default_initializer(self.hidden_size) if initializer is None else initializer
         self.reset_parameters()
         p_in, p_hidden = p
         if p_in < 0 or p_in > 1:
@@ -876,11 +862,11 @@ class VarFastGRUCell(VarRNNCellBase):
         self.noise_hidden = None
 
     def reset_parameters(self):
-        for weight in self.parameters():
-            if weight.dim() == 1:
-                nn.init.constant_(weight, 0.)
-            else:
-                self.initializer(weight)
+        nn.init.xavier_uniform_(self.weight_hh)
+        nn.init.xavier_uniform_(self.weight_ih)
+        if self.bias:
+            nn.init.constant_(self.bias_hh, 0.)
+            nn.init.constant_(self.bias_ih, 0.)
 
     def reset_noise(self, batch_size):
         if self.training:

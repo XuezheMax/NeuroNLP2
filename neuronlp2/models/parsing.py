@@ -6,7 +6,7 @@ from enum import Enum
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from ..nn import TreeCRF, VarMaskedGRU, VarMaskedRNN, VarMaskedLSTM, VarMaskedFastLSTM
+from ..nn import TreeCRF, VarGRU, VarRNN, VarLSTM, VarFastLSTM
 from ..nn import SkipConnectFastLSTM, SkipConnectGRU, SkipConnectLSTM, SkipConnectRNN
 from ..nn import BiAAttention, BiLinear
 from neuronlp2.tasks import parser
@@ -34,13 +34,13 @@ class BiRecurrentConvBiAffine(nn.Module):
         self.char = char
 
         if rnn_mode == 'RNN':
-            RNN = VarMaskedRNN
+            RNN = VarRNN
         elif rnn_mode == 'LSTM':
-            RNN = VarMaskedLSTM
+            RNN = VarLSTM
         elif rnn_mode == 'FastLSTM':
-            RNN = VarMaskedFastLSTM
+            RNN = VarFastLSTM
         elif rnn_mode == 'GRU':
-            RNN = VarMaskedGRU
+            RNN = VarGRU
         else:
             raise ValueError('Unknown RNN mode: %s' % rnn_mode)
 
@@ -302,17 +302,17 @@ class StackPtrNet(nn.Module):
         self.sibling = sibling
 
         if rnn_mode == 'RNN':
-            RNN_ENCODER = VarMaskedRNN
-            RNN_DECODER = SkipConnectRNN if skipConnect else VarMaskedRNN
+            RNN_ENCODER = VarRNN
+            RNN_DECODER = SkipConnectRNN if skipConnect else VarRNN
         elif rnn_mode == 'LSTM':
-            RNN_ENCODER = VarMaskedLSTM
-            RNN_DECODER = SkipConnectLSTM if skipConnect else VarMaskedLSTM
+            RNN_ENCODER = VarLSTM
+            RNN_DECODER = SkipConnectLSTM if skipConnect else VarLSTM
         elif rnn_mode == 'FastLSTM':
-            RNN_ENCODER = VarMaskedFastLSTM
-            RNN_DECODER = SkipConnectFastLSTM if skipConnect else VarMaskedFastLSTM
+            RNN_ENCODER = VarFastLSTM
+            RNN_DECODER = SkipConnectFastLSTM if skipConnect else VarFastLSTM
         elif rnn_mode == 'GRU':
-            RNN_ENCODER = VarMaskedGRU
-            RNN_DECODER = SkipConnectGRU if skipConnect else VarMaskedGRU
+            RNN_ENCODER = VarGRU
+            RNN_DECODER = SkipConnectGRU if skipConnect else VarGRU
         else:
             raise ValueError('Unknown RNN mode: %s' % rnn_mode)
 

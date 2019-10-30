@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
-from neuronlp2.nn import ChainCRF, VarMaskedGRU, VarMaskedRNN, VarMaskedLSTM, CharCNN
+from neuronlp2.nn import ChainCRF, VarGRU, VarRNN, VarLSTM, VarFastLSTM, CharCNN
 
 
 class BiRecurrentConv(nn.Module):
@@ -36,7 +36,6 @@ class BiRecurrentConv(nn.Module):
         self.readout = nn.Linear(out_features, num_labels)
         self.criterion = nn.CrossEntropyLoss(reduction='none')
 
-
         self.reset_parameters(embedd_word, embedd_char)
 
     def reset_parameters(self, embedd_word, embedd_char):
@@ -47,6 +46,12 @@ class BiRecurrentConv(nn.Module):
         with torch.no_grad():
             self.word_embed.weight[self.word_embed.padding_idx].fill_(0)
             self.char_embed.weight[self.char_embed.padding_idx].fill_(0)
+
+        for param in self.rnn.parameters():
+            if param.dim() == 1:
+                nn.init.constant_(param, 0)
+            else:
+                nn.init.xavier_uniform_(param)
 
         nn.init.uniform_(self.readout.weight, -0.1, 0.1)
         nn.init.constant_(self.readout.bias, 0.)
@@ -123,15 +128,17 @@ class BiVarRecurrentConv(BiRecurrentConv):
         self.dropout_out = nn.Dropout2d(p_out)
 
         if rnn_mode == 'RNN':
-            RNN = VarMaskedRNN
+            RNN = VarRNN
         elif rnn_mode == 'LSTM':
-            RNN = VarMaskedLSTM
+            RNN = VarLSTM
+        elif rnn_mode == 'FastLSTM':
+            RNN = VarFastLSTM
         elif rnn_mode == 'GRU':
-            RNN = VarMaskedGRU
+            RNN = VarGRU
         else:
             raise ValueError('Unknown RNN mode: %s' % rnn_mode)
 
-        self.rnn = RNN(word_dim + char_dim, hidden_size, num_layers=num_layers, batch_first=True, bidirectional=True, dropout=p_rnn, initializer=self.initializer)
+        self.rnn = RNN(word_dim + char_dim, hidden_size, num_layers=num_layers, batch_first=True, bidirectional=True, dropout=p_rnn)
 
     def _get_rnn_output(self, input_word, input_char, mask=None):
         # [batch, length, word_dim]
