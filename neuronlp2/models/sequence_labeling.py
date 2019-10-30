@@ -95,7 +95,7 @@ class BiRecurrentConv(nn.Module):
         output = self._get_rnn_output(input_word, input_char, mask=mask)
         return output
 
-    def loss(self, input_word, input_char, target, mask=None, leading_symbolic=0):
+    def loss(self, input_word, input_char, target, mask=None):
         # [batch, length, out_features]
         output = self(input_word, input_char, mask=mask)
         # [batch, length, num_labels] -> [batch, num_labels, length]
@@ -185,7 +185,7 @@ class BiRecurrentConvCRF(BiRecurrentConv):
         # [batch, length, num_label, num_label]
         return self.crf(output, mask=mask)
 
-    def loss(self, input_word, input_char, target, mask=None, leading_symbolic=0):
+    def loss(self, input_word, input_char, target, mask=None):
         # output from rnn [batch, length, hidden_size]
         output = self._get_rnn_output(input_word, input_char, mask=mask)
         # [batch]
@@ -217,7 +217,7 @@ class BiVarRecurrentConvCRF(BiVarRecurrentConv):
         # [batch, length, num_label,  num_label]
         return self.crf(output, mask=mask)
 
-    def loss(self, input_word, input_char, target, mask=None, leading_symbolic=0):
+    def loss(self, input_word, input_char, target, mask=None):
         # output from rnn [batch, length, hidden_size]
         output = self._get_rnn_output(input_word, input_char, mask=mask)
         # [batch]

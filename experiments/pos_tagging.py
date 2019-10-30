@@ -1,5 +1,5 @@
 """
-Implementation of Bi-directional LSTM-CNNs-CRF model for NER.
+Implementation of Bi-directional LSTM-CNNs-CRF model for POS Tagging.
 """
 
 import os
@@ -19,24 +19,10 @@ import torch
 from torch.optim.adamw import AdamW
 from torch.optim import SGD
 from torch.nn.utils import clip_grad_norm_
-from neuronlp2.io import get_logger, conll03_data, CoNLL03Writer, iterate_data
+from neuronlp2.io import get_logger, conllx_data, iterate_data
 from neuronlp2.models import BiRecurrentConv, BiVarRecurrentConv, BiRecurrentConvCRF, BiVarRecurrentConvCRF
 from neuronlp2.optim import ExponentialScheduler
 from neuronlp2 import utils
-
-
-def evaluate(output_file, scorefile):
-    script = os.path.join(current_path, 'eval/conll03eval.v2')
-    os.system("perl %s < %s > %s" % (script, output_file, scorefile))
-    with open(scorefile, 'r') as fin:
-        fin.readline()
-        line = fin.readline()
-        fields = line.split(";")
-        acc = float(fields[0].split(":")[1].strip()[:-1])
-        precision = float(fields[1].split(":")[1].strip()[:-1])
-        recall = float(fields[2].split(":")[1].strip()[:-1])
-        f1 = float(fields[3].split(":")[1].strip())
-    return acc, precision, recall, f1
 
 
 def get_optimizer(parameters, optim, learning_rate, lr_decay, amsgrad, weight_decay, warmup_steps):
@@ -49,22 +35,19 @@ def get_optimizer(parameters, optim, learning_rate, lr_decay, amsgrad, weight_de
     return optimizer, scheduler
 
 
-def eval(data, network, writer, outfile, scorefile, device):
+def eval(data, network, device):
     network.eval()
-    writer.start(outfile)
+    corr = 0
+    total = 0
     for data in iterate_data(data, 256):
         words = data['WORD'].to(device)
         chars = data['CHAR'].to(device)
-        labels = data['NER'].numpy()
         masks = data['MASK'].to(device)
-        postags = data['POS'].numpy()
-        chunks = data['CHUNK'].numpy()
-        lengths = data['LENGTH'].numpy()
-        preds = network.decode(words, chars, mask=masks, leading_symbolic=conll03_data.NUM_SYMBOLIC_TAGS)
-        writer.write(words.cpu().numpy(), postags, chunks, preds.cpu().numpy(), labels, lengths)
-    writer.close()
-    acc, precision, recall, f1 = evaluate(outfile, scorefile)
-    return acc, precision, recall, f1
+        postags = data['POS'].to(device)
+        preds = network.decode(words, chars, mask=masks, leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
+        corr += torch.eq(preds, postags).float().mul(masks).sum().item()
+        total += masks.sum().item()
+    return corr, total
 
 
 def main():
@@ -90,7 +73,7 @@ def main():
 
     args = parser.parse_args()
 
-    logger = get_logger("NER")
+    logger = get_logger("POS")
 
     args.cuda = torch.cuda.is_available()
     device = torch.device('cuda', 0) if args.cuda else torch.device('cpu')
@@ -122,31 +105,27 @@ def main():
 
     logger.info("Creating Alphabets")
     alphabet_path = os.path.join(model_path, 'alphabets')
-    word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet = conll03_data.create_alphabets(alphabet_path, train_path,
-                                                                                                             data_paths=[dev_path, test_path],
-                                                                                                             embedd_dict=embedd_dict, max_vocabulary_size=50000)
+    word_alphabet, char_alphabet, pos_alphabet, type_alphabet = conllx_data.create_alphabets(alphabet_path, train_path,
+                                                                                             data_paths=[dev_path, test_path],
+                                                                                             embedd_dict=embedd_dict, max_vocabulary_size=50000)
 
     logger.info("Word Alphabet Size: %d" % word_alphabet.size())
     logger.info("Character Alphabet Size: %d" % char_alphabet.size())
     logger.info("POS Alphabet Size: %d" % pos_alphabet.size())
-    logger.info("Chunk Alphabet Size: %d" % chunk_alphabet.size())
-    logger.info("NER Alphabet Size: %d" % ner_alphabet.size())
 
     logger.info("Reading Data")
 
-    data_train = conll03_data.read_bucketed_data(train_path, word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet)
+    data_train = conllx_data.read_bucketed_data(train_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
     num_data = sum(data_train[1])
-    num_labels = ner_alphabet.size()
+    num_labels = pos_alphabet.size()
 
-    data_dev = conll03_data.read_data(dev_path, word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet)
-    data_test = conll03_data.read_data(test_path, word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet)
-
-    writer = CoNLL03Writer(word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet)
+    data_dev = conllx_data.read_data(dev_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
+    data_test = conllx_data.read_data(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
 
     def construct_word_embedding_table():
         scale = np.sqrt(3.0 / embedd_dim)
         table = np.empty([word_alphabet.size(), embedd_dim], dtype=np.float32)
-        table[conll03_data.UNK_ID, :] = np.random.uniform(-scale, scale, [1, embedd_dim]).astype(np.float32)
+        table[conllx_data.UNK_ID, :] = np.random.uniform(-scale, scale, [1, embedd_dim]).astype(np.float32)
         oov = 0
         for word, index in word_alphabet.items():
             if word in embedd_dict:
@@ -203,14 +182,10 @@ def main():
     logger.info("dropout(in, out, rnn): %s(%.2f, %.2f, %s)" % (dropout, p_in, p_out, p_rnn))
     print('# of Parameters: %d' % (sum([param.numel() for param in network.parameters()])))
 
-    best_f1 = 0.0
-    best_acc = 0.0
-    best_precision = 0.0
-    best_recall = 0.0
-    test_f1 = 0.0
-    test_acc = 0.0
-    test_precision = 0.0
-    test_recall = 0.0
+    best_corr = 0.0
+    best_total = 0.0
+    test_corr = 0.0
+    test_total = 0.0
     best_epoch = 0
     num_batches = num_data // batch_size + 1
     result_path = os.path.join(model_path, 'tmp')
@@ -232,7 +207,7 @@ def main():
             optimizer.zero_grad()
             words = data['WORD'].to(device)
             chars = data['CHAR'].to(device)
-            labels = data['NER'].to(device)
+            labels = data['POS'].to(device)
             masks = data['MASK'].to(device)
 
             nbatch = words.size(0)
@@ -277,27 +252,21 @@ def main():
 
         # evaluate performance on dev data
         with torch.no_grad():
-            outfile = os.path.join(result_path, 'pred_dev%d' % epoch)
-            scorefile = os.path.join(result_path, "score_dev%d" % epoch)
-            acc, precision, recall, f1 = eval(data_dev, network, writer, outfile, scorefile, device)
-            print('Dev  acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%%' % (acc, precision, recall, f1))
-            if best_f1 < f1:
+            dev_corr, dev_total = eval(data_dev, network, device)
+            print('Dev  corr: %.2f, total: %.2f%%, acc: %.2f%%' % (dev_corr, dev_total, dev_corr * 100 / dev_total))
+            if best_corr < dev_corr:
                 torch.save(network.state_dict(), model_name)
-                best_f1 = f1
-                best_acc = acc
-                best_precision = precision
-                best_recall = recall
+                best_corr = dev_corr
+                best_total = dev_total
                 best_epoch = epoch
 
                 # evaluate on test data when better performance detected
-                outfile = os.path.join(result_path, 'pred_test%d' % epoch)
-                scorefile = os.path.join(result_path, "score_test%d" % epoch)
-                test_acc, test_precision, test_recall, test_f1 = eval(data_test, network, writer, outfile, scorefile, device)
-                print('test acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%%' % (test_acc, test_precision, test_recall, test_f1))
+                test_corr, test_total = eval(data_test, network, device)
+                print('test corr: %.2f, total: %.2f%%, acc: %.2f%%' % (test_corr, test_total, test_corr * 100 / test_total))
             print('-' * 100)
 
-            print("Best dev  acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%% (epoch: %d)" % (best_acc, best_precision, best_recall, best_f1, best_epoch))
-            print("Best test acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%% (epoch: %d)" % (test_acc, test_precision, test_recall, test_f1, best_epoch))
+            print("Best dev  corr: %.2f, total: %.2f%%, acc: %.2f%% (epoch: %d)" % (best_corr, best_total, best_corr * 100 / best_total, best_epoch))
+            print("Best test corr: %.2f, total: %.2f%%, acc: %.2f%% (epoch: %d)" % (test_corr, test_total, test_corr * 100 / test_total, best_epoch))
             print('=' * 100)
 
 
