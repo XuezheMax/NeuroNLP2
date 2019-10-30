@@ -196,7 +196,7 @@ def main():
     network = network.to(device)
 
     optimizer, scheduler = get_optimizer(network.parameters(), optim, learning_rate, lr_decay, amsgrad, weight_decay, warmup_steps)
-    model = "{}-CNN{}".format(mode, "CRF" if crf else "")
+    model = "{}-CNN{}".format(mode, "-CRF" if crf else "")
     logger.info("Network: %s, num_layer=%d, hidden=%d" % (model, num_layers, hidden_size))
     logger.info("training: l2: %f, (#training data: %d, batch: %d, unk replace: %.2f)" % (weight_decay, num_data, batch_size, unk_replace))
     logger.info("dropout(in, out, rnn): %s(%.2f, %.2f, %s)" % (args.dropout, p_in, p_out, p_rnn))
