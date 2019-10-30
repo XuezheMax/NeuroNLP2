@@ -5,6 +5,7 @@ Implementation of Bi-directional LSTM-CNNs model for NER.
 import os
 import sys
 import gc
+import json
 
 current_path = os.path.dirname(os.path.realpath(__file__))
 root_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
@@ -68,20 +69,10 @@ def eval(data, network, writer, outfile, scorefile, device):
 
 def main():
     parser = argparse.ArgumentParser(description='NER with bi-directional RNN-CNN')
-    parser.add_argument('--mode', choices=['RNN', 'LSTM', 'GRU'], help='architecture of rnn', required=True)
+    parser.add_argument('--config', type=str, help='config file', required=True)
     parser.add_argument('--num_epochs', type=int, default=100, help='Number of training epochs')
     parser.add_argument('--batch_size', type=int, default=16, help='Number of sentences in each batch')
-    parser.add_argument('--hidden_size', type=int, default=128, help='Number of hidden units in RNN')
-    parser.add_argument('--num_layers', type=int, default=1, help='Number of layers of RNN')
-    parser.add_argument('--char_dim', type=int, default=30, help='Dimension of Character embeddings')
-    parser.add_argument('--dropout', choices=['std', 'variational'], help='type of dropout', required=True)
-    parser.add_argument('--p_rnn', nargs=2, type=float, required=True, help='dropout rate for RNN')
-    parser.add_argument('--p_in', type=float, default=0.33, help='dropout rate for input embeddings')
-    parser.add_argument('--p_out', type=float, default=0.33, help='dropout rate for output layer')
-    parser.add_argument('--crf', action='store_true', help='using CRF output layer')
-    parser.add_argument('--bigram', action='store_true', help='bi-gram parameter for CRF')
-    parser.add_argument('--loss_type', choices=['sentence', 'token'], default='sentence',
-                        help='loss type (default: sentence)')
+    parser.add_argument('--loss_type', choices=['sentence', 'token'], default='sentence', help='loss type (default: sentence)')
     parser.add_argument('--optim', choices=['sgd', 'adam'], help='type of optimizer', required=True)
     parser.add_argument('--learning_rate', type=float, default=0.1, help='Learning rate')
     parser.add_argument('--lr_decay', type=float, default=0.999995, help='Decay rate of learning rate')
@@ -102,7 +93,6 @@ def main():
 
     args.cuda = torch.cuda.is_available()
     device = torch.device('cuda', 0) if args.cuda else torch.device('cpu')
-    mode = args.mode
     train_path = args.train
     dev_path = args.dev
     test_path = args.test
@@ -116,18 +106,11 @@ def main():
     warmup_steps = args.warmup_steps
     weight_decay = args.weight_decay
 
-    char_dim = args.char_dim
-    num_layers = args.num_layers
-    crf = args.crf
-    hidden_size = args.hidden_size
-    bigram = args.bigram
     loss_ty_token = args.loss_type == 'token'
-    p_rnn = tuple(args.p_rnn)
-    p_in = args.p_in
-    p_out = args.p_out
     unk_replace = args.unk_replace
 
     model_path = args.model_path
+    model_name = os.path.join(model_path, 'model.pt')
     embedding = args.embedding
     embedding_path = args.embedding_dict
 
@@ -176,9 +159,24 @@ def main():
         return torch.from_numpy(table)
 
     word_table = construct_word_embedding_table()
+
     logger.info("constructing network...")
 
-    if args.dropout == 'std':
+    hyps = json.load(open(args.config, 'r'))
+    json.dump(hyps, open(os.path.join(model_path, 'config.json'), 'w'), indent=2)
+    dropout = hyps['dropout']
+    crf = hyps['crf']
+    bigram = hyps['bigram']
+    assert embedd_dim == hyps['embedd_dim']
+    char_dim = hyps['char_dim']
+    mode = hyps['rnn_mode']
+    hidden_size = hyps['hidden_size']
+    num_layers = hyps['num_layers']
+    p_in = hyps['p_in']
+    p_out = hyps['p_out']
+    p_rnn = hyps['p_rnn']
+
+    if dropout == 'std':
         if crf:
             network = BiRecurrentConvCRF(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), mode, hidden_size,
                                          num_layers, num_labels, embedd_word=word_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn, bigram=bigram)
@@ -199,7 +197,7 @@ def main():
     model = "{}-CNN{}".format(mode, "-CRF" if crf else "")
     logger.info("Network: %s, num_layer=%d, hidden=%d" % (model, num_layers, hidden_size))
     logger.info("training: l2: %f, (#training data: %d, batch: %d, unk replace: %.2f)" % (weight_decay, num_data, batch_size, unk_replace))
-    logger.info("dropout(in, out, rnn): %s(%.2f, %.2f, %s)" % (args.dropout, p_in, p_out, p_rnn))
+    logger.info("dropout(in, out, rnn): %s(%.2f, %.2f, %s)" % (dropout, p_in, p_out, p_rnn))
 
     best_f1 = 0.0
     best_acc = 0.0
@@ -279,6 +277,7 @@ def main():
             acc, precision, recall, f1 = eval(data_dev, network, writer, outfile, scorefile, device)
             print('Dev  acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%%' % (acc, precision, recall, f1))
             if best_f1 < f1:
+                torch.save(network.state_dict(), model_name)
                 best_f1 = f1
                 best_acc = acc
                 best_precision = precision

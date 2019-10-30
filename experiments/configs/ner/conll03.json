@@ -1,0 +1,13 @@
+{
+  "crf": true,
+  "bigram": true,
+  "embedd_dim": 100,
+  "char_dim": 30,
+  "rnn_mode": "LSTM",
+  "num_layers":1,
+  "hidden_size": 256,
+  "dropout": "std",
+  "p_in": 0.33,
+  "p_out": 0.5,
+  "p_rnn": [0.33, 0.5]
+}
