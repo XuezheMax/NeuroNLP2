@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from ..nn import TreeCRF, VarGRU, VarRNN, VarLSTM, VarFastLSTM
-from ..nn import SkipConnectFastLSTM, SkipConnectGRU, SkipConnectLSTM, SkipConnectRNN
+from ..nn import VarSkipFastLSTM, VarSkipGRU, VarSkipLSTM, VarSkipRNN
 from ..nn import BiAAttention, BiLinear
 from neuronlp2.tasks import parser
 
@@ -303,16 +303,16 @@ class StackPtrNet(nn.Module):
 
         if rnn_mode == 'RNN':
             RNN_ENCODER = VarRNN
-            RNN_DECODER = SkipConnectRNN if skipConnect else VarRNN
+            RNN_DECODER = VarSkipRNN if skipConnect else VarRNN
         elif rnn_mode == 'LSTM':
             RNN_ENCODER = VarLSTM
-            RNN_DECODER = SkipConnectLSTM if skipConnect else VarLSTM
+            RNN_DECODER = VarSkipLSTM if skipConnect else VarLSTM
         elif rnn_mode == 'FastLSTM':
             RNN_ENCODER = VarFastLSTM
-            RNN_DECODER = SkipConnectFastLSTM if skipConnect else VarFastLSTM
+            RNN_DECODER = VarSkipFastLSTM if skipConnect else VarFastLSTM
         elif rnn_mode == 'GRU':
             RNN_ENCODER = VarGRU
-            RNN_DECODER = SkipConnectGRU if skipConnect else VarGRU
+            RNN_DECODER = VarSkipGRU if skipConnect else VarGRU
         else:
             raise ValueError('Unknown RNN mode: %s' % rnn_mode)
 

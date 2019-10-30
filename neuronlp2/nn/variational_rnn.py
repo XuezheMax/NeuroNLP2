@@ -47,10 +47,10 @@ class VarRNNBase(nn.Module):
             if self.lstm:
                 hx = (hx, hx)
 
-        func = rnn_F.AutogradVarMaskedRNN(num_layers=self.num_layers,
-                                          batch_first=self.batch_first,
-                                          bidirectional=self.bidirectional,
-                                          lstm=self.lstm)
+        func = rnn_F.AutogradVarRNN(num_layers=self.num_layers,
+                                    batch_first=self.batch_first,
+                                    bidirectional=self.bidirectional,
+                                    lstm=self.lstm)
 
         self.reset_noise(batch_size)
 
@@ -76,7 +76,7 @@ class VarRNNBase(nn.Module):
             if self.lstm:
                 hx = (hx, hx)
 
-        func = rnn_F.AutogradVarMaskedStep(num_layers=self.num_layers, lstm=self.lstm)
+        func = rnn_F.AutogradVarRNNStep(num_layers=self.num_layers, lstm=self.lstm)
 
         output, hidden = func(input, self.all_cells, hx, mask)
         return output, hidden

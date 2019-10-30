@@ -114,7 +114,7 @@ def VarFastGRUCell(input, hidden, w_ih, w_hh, b_ih=None, b_hh=None, noise_in=Non
     return hy
 
 
-def VarMaskedRecurrent(reverse=False):
+def VarRecurrent(reverse=False):
     def forward(input, hidden, cell, mask):
         output = []
         steps = range(input.size(0) - 1, -1, -1) if reverse else range(input.size(0))
@@ -177,8 +177,8 @@ def StackedRNN(inners, num_layers, lstm=False):
     return forward
 
 
-def AutogradVarMaskedRNN(num_layers=1, batch_first=False, bidirectional=False, lstm=False):
-    rec_factory = VarMaskedRecurrent
+def AutogradVarRNN(num_layers=1, batch_first=False, bidirectional=False, lstm=False):
+    rec_factory = VarRecurrent
 
     if bidirectional:
         layer = (rec_factory(), rec_factory(reverse=True))
@@ -205,7 +205,7 @@ def AutogradVarMaskedRNN(num_layers=1, batch_first=False, bidirectional=False, l
     return forward
 
 
-def VarMaskedStep():
+def VarRNNStep():
     def forward(input, hidden, cell, mask):
         if mask is None or mask.data.min() > 0.5:
             hidden = cell(input, hidden)
@@ -253,8 +253,8 @@ def StackedStep(layer, num_layers, lstm=False):
     return forward
 
 
-def AutogradVarMaskedStep(num_layers=1, lstm=False):
-    layer = VarMaskedStep()
+def AutogradVarRNNStep(num_layers=1, lstm=False):
+    layer = VarRNNStep()
 
     func = StackedStep(layer,
                        num_layers,
