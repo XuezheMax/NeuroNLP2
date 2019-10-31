@@ -80,10 +80,15 @@ class CharCNN(nn.Module):
     """
     CNN layers for characters
     """
-    def __init__(self, in_channels, hidden_channels):
+    def __init__(self, in_channels, hidden_channels, activation='elu'):
         super(CharCNN, self).__init__()
         self.conv1 = nn.Conv1d(in_channels, hidden_channels, kernel_size=3, padding=1)
         self.conv2 = nn.Conv1d(hidden_channels, in_channels, kernel_size=3, padding=1)
+        assert activation in ['elu', 'tanh']
+        if activation == 'elu':
+            self.activation = nn.ELU()
+        else:
+            self.activation = nn.Tanh()
 
     def reset_parameters(self):
         nn.init.xavier_uniform_(self.conv1.weight)
@@ -108,9 +113,8 @@ class CharCNN(nn.Module):
         # first transform to [batch * sent_length, char_length, in_channels]
         # then transpose to [batch * sent_length, in_channels, char_length]
         char = char.view(-1, char_size[2], char_size[3]).transpose(1, 2)
-        char = F.elu(self.conv1(char), inplace=True)
-        # char = torch.tanh_(self.conv1(char))
+        char = self.activation(self.conv1(char))
         # [batch * sent_length, in_channels, char_length]
-        char = self.conv2(char).max(dim=2)[0]
+        char = self.activation(self.conv2(char)).max(dim=2)[0]
         # [batch, sent_length, in_channels]
         return char.view(char_size[0], char_size[1], -1)

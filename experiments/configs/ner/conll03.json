@@ -10,5 +10,6 @@
   "dropout": "std",
   "p_in": 0.33,
   "p_out": 0.5,
-  "p_rnn": [0.33, 0.5]
+  "p_rnn": [0.33, 0.5],
+  "activation": "elu"
 }

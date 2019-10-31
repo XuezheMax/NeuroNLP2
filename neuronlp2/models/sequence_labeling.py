@@ -9,12 +9,12 @@ from neuronlp2.nn import ChainCRF, VarGRU, VarRNN, VarLSTM, VarFastLSTM, CharCNN
 
 class BiRecurrentConv(nn.Module):
     def __init__(self, word_dim, num_words, char_dim, num_chars, rnn_mode, hidden_size, out_features, num_layers,
-                 num_labels, embedd_word=None, embedd_char=None, p_in=0.33, p_out=0.5, p_rnn=(0.5, 0.5)):
+                 num_labels, embedd_word=None, embedd_char=None, p_in=0.33, p_out=0.5, p_rnn=(0.5, 0.5), activation='elu'):
         super(BiRecurrentConv, self).__init__()
 
         self.word_embed = nn.Embedding(num_words, word_dim, _weight=embedd_word, padding_idx=1)
         self.char_embed = nn.Embedding(num_chars, char_dim, _weight=embedd_char, padding_idx=1)
-        self.char_cnn = CharCNN(char_dim, char_dim * 4)
+        self.char_cnn = CharCNN(char_dim, char_dim * 4, activation=activation)
         # dropout word
         self.dropout_in = nn.Dropout2d(p=p_in)
         # standard dropout
@@ -33,6 +33,11 @@ class BiRecurrentConv(nn.Module):
         self.rnn = RNN(word_dim + char_dim, hidden_size, num_layers=num_layers, batch_first=True, bidirectional=True, dropout=p_rnn[1])
 
         self.fc = nn.Linear(hidden_size * 2, out_features)
+        assert activation in ['elu', 'tanh']
+        if activation == 'elu':
+            self.activation = nn.ELU()
+        else:
+            self.activation = nn.Tanh()
         self.readout = nn.Linear(out_features, num_labels)
         self.criterion = nn.CrossEntropyLoss(reduction='none')
 
@@ -87,7 +92,7 @@ class BiRecurrentConv(nn.Module):
 
         output = self.dropout_out(output)
         # [batch, length, out_features]
-        output = self.dropout_out(F.elu(self.fc(output)))
+        output = self.dropout_out(self.activation(self.fc(output)))
         return output
 
     def forward(self, input_word, input_char, mask=None):
@@ -123,9 +128,10 @@ class BiRecurrentConv(nn.Module):
 
 class BiVarRecurrentConv(BiRecurrentConv):
     def __init__(self, word_dim, num_words, char_dim, num_chars, rnn_mode, hidden_size, out_features, num_layers,
-                 num_labels, embedd_word=None, embedd_char=None, p_in=0.33, p_out=0.33, p_rnn=(0.33, 0.33)):
+                 num_labels, embedd_word=None, embedd_char=None, p_in=0.33, p_out=0.33, p_rnn=(0.33, 0.33), activation='elu'):
         super(BiVarRecurrentConv, self).__init__(word_dim, num_words, char_dim, num_chars, rnn_mode, hidden_size, out_features, num_layers,
-                                                 num_labels, embedd_word=embedd_word, embedd_char=embedd_char, p_in=p_in, p_out=p_out, p_rnn=p_rnn)
+                                                 num_labels, embedd_word=embedd_word, embedd_char=embedd_char,
+                                                 p_in=p_in, p_out=p_out, p_rnn=p_rnn, activation=activation)
 
         self.dropout_rnn_in = None
         self.dropout_out = nn.Dropout2d(p_out)
@@ -163,7 +169,7 @@ class BiVarRecurrentConv(BiRecurrentConv):
         # [batch, length, 2 * hidden_size] --> [batch, 2 * hidden_size, length] --> [batch, length, 2 * hidden_size]
         output = self.dropout_out(output.transpose(1, 2)).transpose(1, 2)
         # [batch, length, out_features]
-        output = F.elu(self.fc(output))
+        output = self.activation(self.fc(output))
         # [batch, length, out_features] --> [batch, out_features, length] --> [batch, length, out_features]
         output = self.dropout_out(output.transpose(1, 2)).transpose(1, 2)
         return output
@@ -171,9 +177,10 @@ class BiVarRecurrentConv(BiRecurrentConv):
 
 class BiRecurrentConvCRF(BiRecurrentConv):
     def __init__(self, word_dim, num_words, char_dim, num_chars, rnn_mode, hidden_size, out_features, num_layers,
-                 num_labels, embedd_word=None, embedd_char=None, p_in=0.33, p_out=0.5, p_rnn=(0.5, 0.5), bigram=False):
+                 num_labels, embedd_word=None, embedd_char=None, p_in=0.33, p_out=0.5, p_rnn=(0.5, 0.5), bigram=False, activation='elu'):
         super(BiRecurrentConvCRF, self).__init__(word_dim, num_words, char_dim, num_chars, rnn_mode, hidden_size, out_features, num_layers,
-                                                 num_labels, embedd_word=embedd_word, embedd_char=embedd_char, p_in=p_in, p_out=p_out, p_rnn=p_rnn)
+                                                 num_labels, embedd_word=embedd_word, embedd_char=embedd_char,
+                                                 p_in=p_in, p_out=p_out, p_rnn=p_rnn, activation=activation)
 
         self.crf = ChainCRF(out_features, num_labels, bigram=bigram)
         self.readout = None
@@ -203,9 +210,10 @@ class BiRecurrentConvCRF(BiRecurrentConv):
 
 class BiVarRecurrentConvCRF(BiVarRecurrentConv):
     def __init__(self, word_dim, num_words, char_dim, num_chars, rnn_mode, hidden_size, out_features, num_layers,
-                 num_labels, embedd_word=None, embedd_char=None, p_in=0.33, p_out=0.33, p_rnn=(0.33, 0.33), bigram=False):
+                 num_labels, embedd_word=None, embedd_char=None, p_in=0.33, p_out=0.33, p_rnn=(0.33, 0.33), bigram=False, activation='elu'):
         super(BiVarRecurrentConvCRF, self).__init__(word_dim, num_words, char_dim, num_chars, rnn_mode, hidden_size, out_features, num_layers,
-                                                    num_labels, embedd_word=embedd_word, embedd_char=embedd_char, p_in=p_in, p_out=p_out, p_rnn=p_rnn)
+                                                    num_labels, embedd_word=embedd_word, embedd_char=embedd_char,
+                                                    p_in=p_in, p_out=p_out, p_rnn=p_rnn, activation=activation)
 
         self.crf = ChainCRF(out_features, num_labels, bigram=bigram)
         self.readout = None

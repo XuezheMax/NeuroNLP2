@@ -157,21 +157,22 @@ def main():
     p_in = hyps['p_in']
     p_out = hyps['p_out']
     p_rnn = hyps['p_rnn']
+    activation = hyps['activation']
 
     if dropout == 'std':
         if crf:
-            network = BiRecurrentConvCRF(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), mode, hidden_size, out_features,
-                                         num_layers, num_labels, embedd_word=word_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn, bigram=bigram)
+            network = BiRecurrentConvCRF(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), mode, hidden_size, out_features, num_layers,
+                                         num_labels, embedd_word=word_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn, bigram=bigram, activation=activation)
         else:
-            network = BiRecurrentConv(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), mode, hidden_size, out_features,
-                                      num_layers, num_labels, embedd_word=word_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn)
+            network = BiRecurrentConv(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), mode, hidden_size, out_features, num_layers,
+                                      num_labels, embedd_word=word_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn, activation=activation)
     elif dropout == 'variational':
         if crf:
-            network = BiVarRecurrentConvCRF(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), mode, hidden_size, out_features,
-                                            num_layers, num_labels, embedd_word=word_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn, bigram=bigram)
+            network = BiVarRecurrentConvCRF(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), mode, hidden_size, out_features, num_layers,
+                                            num_labels, embedd_word=word_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn, bigram=bigram, activation=activation)
         else:
-            network = BiVarRecurrentConv(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), mode, hidden_size, out_features,
-                                         num_layers, num_labels, embedd_word=word_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn)
+            network = BiVarRecurrentConv(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), mode, hidden_size, out_features, num_layers,
+                                         num_labels, embedd_word=word_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn, activation=activation)
     else:
         raise ValueError('Unkown dropout type: {}'.format(dropout))
 
@@ -179,7 +180,7 @@ def main():
 
     optimizer, scheduler = get_optimizer(network.parameters(), optim, learning_rate, lr_decay, amsgrad, weight_decay, warmup_steps)
     model = "{}-CNN{}".format(mode, "-CRF" if crf else "")
-    logger.info("Network: %s, num_layer=%d, hidden=%d" % (model, num_layers, hidden_size))
+    logger.info("Network: %s, num_layer=%d, hidden=%d, act=%s" % (model, num_layers, hidden_size, activation))
     logger.info("training: l2: %f, (#training data: %d, batch: %d, unk replace: %.2f)" % (weight_decay, num_data, batch_size, unk_replace))
     logger.info("dropout(in, out, rnn): %s(%.2f, %.2f, %s)" % (dropout, p_in, p_out, p_rnn))
     print('# of Parameters: %d' % (sum([param.numel() for param in network.parameters()])))
