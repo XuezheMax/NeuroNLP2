@@ -253,7 +253,7 @@ def main():
         # evaluate performance on dev data
         with torch.no_grad():
             dev_corr, dev_total = eval(data_dev, network, device)
-            print('Dev  corr: %.2f, total: %.2f%%, acc: %.2f%%' % (dev_corr, dev_total, dev_corr * 100 / dev_total))
+            print('Dev  corr: %d, total: %d, acc: %.2f%%' % (dev_corr, dev_total, dev_corr * 100 / dev_total))
             if best_corr < dev_corr:
                 torch.save(network.state_dict(), model_name)
                 best_corr = dev_corr
@@ -262,11 +262,11 @@ def main():
 
                 # evaluate on test data when better performance detected
                 test_corr, test_total = eval(data_test, network, device)
-                print('test corr: %.2f, total: %.2f%%, acc: %.2f%%' % (test_corr, test_total, test_corr * 100 / test_total))
+                print('test corr: %d, total: %d, acc: %.2f%%' % (test_corr, test_total, test_corr * 100 / test_total))
             print('-' * 100)
 
-            print("Best dev  corr: %.2f, total: %.2f%%, acc: %.2f%% (epoch: %d)" % (best_corr, best_total, best_corr * 100 / best_total, best_epoch))
-            print("Best test corr: %.2f, total: %.2f%%, acc: %.2f%% (epoch: %d)" % (test_corr, test_total, test_corr * 100 / test_total, best_epoch))
+            print("Best dev  corr: %d, total: %d, acc: %.2f%% (epoch: %d)" % (best_corr, best_total, best_corr * 100 / best_total, best_epoch))
+            print("Best test corr: %d, total: %d, acc: %.2f%% (epoch: %d)" % (test_corr, test_total, test_corr * 100 / test_total, best_epoch))
             print('=' * 100)
 
 
