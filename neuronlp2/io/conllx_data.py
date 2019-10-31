@@ -16,7 +16,7 @@ from neuronlp2.io.common import ROOT, END, ROOT_CHAR, ROOT_POS, ROOT_TYPE, END_C
 _START_VOCAB = [PAD, ROOT, END]
 NUM_SYMBOLIC_TAGS = 3
 
-_buckets = [10, 15, 20, 25, 30, 35, 40, 50, 60, 70, 80, 90, 100, 140]
+_buckets = [10, 15, 20, 25, 30, 35, 40, 50, 60, 70, 140]
 
 
 def create_alphabets(alphabet_directory, train_path, data_paths=None, max_vocabulary_size=100000, embedd_dict=None,
