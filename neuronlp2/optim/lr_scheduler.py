@@ -49,7 +49,7 @@ class _LRScheduler(object):
             param_group['lr'] = lr
 
     def reset_state(self):
-        self.optimizer.state = defaultdict(dict)
+        self.optimizer.state.clear()
 
 
 class InverseSquareRootScheduler(_LRScheduler):
