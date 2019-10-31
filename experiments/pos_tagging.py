@@ -187,6 +187,7 @@ def main():
     test_corr = 0.0
     test_total = 0.0
     best_epoch = 0
+    patient = 0
     num_batches = num_data // batch_size + 1
     result_path = os.path.join(model_path, 'tmp')
     if not os.path.exists(result_path):
@@ -263,11 +264,19 @@ def main():
                 # evaluate on test data when better performance detected
                 test_corr, test_total = eval(data_test, network, device)
                 print('test corr: %d, total: %d, acc: %.2f%%' % (test_corr, test_total, test_corr * 100 / test_total))
+                patient = 0
+            else:
+                patient += 1
             print('-' * 100)
 
-            print("Best dev  corr: %d, total: %d, acc: %.2f%% (epoch: %d)" % (best_corr, best_total, best_corr * 100 / best_total, best_epoch))
-            print("Best test corr: %d, total: %d, acc: %.2f%% (epoch: %d)" % (test_corr, test_total, test_corr * 100 / test_total, best_epoch))
+            print("Best dev  corr: %d, total: %d, acc: %.2f%% (epoch: %d (%d))" % (best_corr, best_total, best_corr * 100 / best_total, best_epoch, patient))
+            print("Best test corr: %d, total: %d, acc: %.2f%% (epoch: %d (%d))" % (test_corr, test_total, test_corr * 100 / test_total, best_epoch, patient))
             print('=' * 100)
+
+        if patient > 4:
+            logger.info('reset optimizer momentums')
+            scheduler.reset_state()
+            patient = 0
 
 
 if __name__ == '__main__':
