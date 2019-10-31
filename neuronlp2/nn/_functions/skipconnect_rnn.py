@@ -26,7 +26,7 @@ def SkipConnectRNNTanhCell(input, hidden, hidden_skip, w_ih, w_hh, b_ih=None, b_
     if noise_hidden is not None:
         hidden = hidden * noise_hidden
 
-    hy = F.tanh(F.linear(input, w_ih, b_ih) + F.linear(hidden, w_hh, b_hh))
+    hy = torch.tanh(F.linear(input, w_ih, b_ih) + F.linear(hidden, w_hh, b_hh))
     return hy
 
 
@@ -41,13 +41,13 @@ def SkipConnectLSTMCell(input, hidden, hidden_skip, w_ih, w_hh, b_ih=None, b_hh=
 
     ingate, forgetgate, cellgate, outgate = gates
 
-    ingate = F.sigmoid(ingate)
-    forgetgate = F.sigmoid(forgetgate)
-    cellgate = F.tanh(cellgate)
-    outgate = F.sigmoid(outgate)
+    ingate = torch.sigmoid(ingate)
+    forgetgate = torch.sigmoid(forgetgate)
+    cellgate = torch.tanh(cellgate)
+    outgate = torch.sigmoid(outgate)
 
     cy = (forgetgate * cx) + (ingate * cellgate)
-    hy = outgate * F.tanh(cy)
+    hy = outgate * torch.tanh(cy)
 
     return hy, cy
 
@@ -71,13 +71,13 @@ def SkipConnectFastLSTMCell(input, hidden, hidden_skip, w_ih, w_hh, b_ih=None, b
 
     ingate, forgetgate, cellgate, outgate = gates.chunk(4, 1)
 
-    ingate = F.sigmoid(ingate)
-    forgetgate = F.sigmoid(forgetgate)
-    cellgate = F.tanh(cellgate)
-    outgate = F.sigmoid(outgate)
+    ingate = torch.sigmoid(ingate)
+    forgetgate = torch.sigmoid(forgetgate)
+    cellgate = torch.tanh(cellgate)
+    outgate = torch.sigmoid(outgate)
 
     cy = (forgetgate * cx) + (ingate * cellgate)
-    hy = outgate * F.tanh(cy)
+    hy = outgate * torch.tanh(cy)
 
     return hy, cy
 
@@ -92,9 +92,9 @@ def SkipConnectGRUCell(input, hidden, hidden_skip, w_ih, w_hh, b_ih=None, b_hh=N
     i_r, i_i, i_n = gi
     h_r, h_i, h_n = gh
 
-    resetgate = F.sigmoid(i_r + h_r)
-    inputgate = F.sigmoid(i_i + h_i)
-    newgate = F.tanh(i_n + resetgate * h_n)
+    resetgate = torch.sigmoid(i_r + h_r)
+    inputgate = torch.sigmoid(i_i + h_i)
+    newgate = torch.tanh(i_n + resetgate * h_n)
     hy = newgate + inputgate * (hidden - newgate)
 
     return hy
@@ -119,9 +119,9 @@ def SkipConnectFastGRUCell(input, hidden, hidden_skip, w_ih, w_hh, b_ih=None, b_
     i_r, i_i, i_n = gi.chunk(3, 1)
     h_r, h_i, h_n = gh.chunk(3, 1)
 
-    resetgate = F.sigmoid(i_r + h_r)
-    inputgate = F.sigmoid(i_i + h_i)
-    newgate = F.tanh(i_n + resetgate * h_n)
+    resetgate = torch.sigmoid(i_r + h_r)
+    inputgate = torch.sigmoid(i_i + h_i)
+    newgate = torch.tanh(i_n + resetgate * h_n)
     hy = newgate + inputgate * (hidden - newgate)
 
     return hy
