@@ -186,13 +186,15 @@ def main():
         else:
             network = BiRecurrentConv(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), mode, hidden_size, out_features,
                                       num_layers, num_labels, embedd_word=word_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn)
-    else:
+    elif dropout == 'variational':
         if crf:
             network = BiVarRecurrentConvCRF(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), mode, hidden_size, out_features,
                                             num_layers, num_labels, embedd_word=word_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn, bigram=bigram)
         else:
             network = BiVarRecurrentConv(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), mode, hidden_size, out_features,
                                          num_layers, num_labels, embedd_word=word_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn)
+    else:
+        raise ValueError('Unkown dropout type: {}'.format(dropout))
 
     network = network.to(device)
 
