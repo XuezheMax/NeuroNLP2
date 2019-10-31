@@ -2,7 +2,6 @@ __author__ = 'max'
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 from neuronlp2.nn import ChainCRF, VarGRU, VarRNN, VarLSTM, VarFastLSTM, CharCNN
 
@@ -14,7 +13,7 @@ class BiRecurrentConv(nn.Module):
 
         self.word_embed = nn.Embedding(num_words, word_dim, _weight=embedd_word, padding_idx=1)
         self.char_embed = nn.Embedding(num_chars, char_dim, _weight=embedd_char, padding_idx=1)
-        self.char_cnn = CharCNN(char_dim, char_dim * 4, activation=activation)
+        self.char_cnn = CharCNN(1, char_dim, char_dim, activation=activation)
         # dropout word
         self.dropout_in = nn.Dropout2d(p=p_in)
         # standard dropout

@@ -1,10 +1,10 @@
 __author__ = 'max'
 
-from overrides import overrides
 import numpy as np
 import torch
 import torch.nn as nn
 from torch.nn.parameter import Parameter
+from neuronlp2.nn.modules import BiAffine
 
 
 class ChainCRF(nn.Module):
@@ -274,81 +274,3 @@ class TreeCRF(nn.Module):
         tgt_energy = tgt_energy.sum(dim=0)
 
         return z - tgt_energy
-
-
-class BiAffine(nn.Module):
-    '''
-    Bi-Affine energy layer.
-    '''
-
-    def __init__(self, key_dim, query_dim):
-        '''
-
-        Args:
-            key_dim: int
-                the dimension of the key.
-            query_dim: int
-                the dimension of the query.
-
-        '''
-        super(BiAffine, self).__init__()
-        self.key_dim = key_dim
-        self.query_dim = query_dim
-
-        self.q_weight = Parameter(torch.Tensor(self.query_dim))
-        self.key_weight = Parameter(torch.Tensor(self.key_dim))
-        self.b = Parameter(torch.Tensor(1))
-        self.U = Parameter(torch.Tensor(self.query_dim, self.key_dim))
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        nn.init.xavier_uniform_(self.q_weight)
-        nn.init.xavier_uniform_(self.key_weight)
-        nn.init.constant_(self.b, 0.)
-        nn.init.xavier_uniform_(self.U)
-
-    def forward(self, query, key, mask_query=None, mask_key=None):
-        """
-
-        Args:
-            query: Tensor
-                the decoder input tensor with shape = [batch, length_query, query_dim]
-            key: Tensor
-                the child input tensor with shape = [batch, length_key, key_dim]
-            mask_query: Tensor or None
-                the mask tensor for decoder with shape = [batch, length_query]
-            mask_key: Tensor or None
-                the mask tensor for encoder with shape = [batch, length_key]
-
-        Returns: Tensor
-            the energy tensor with shape = [batch, length_query, length_key]
-
-        """
-        # output shape [batch, length_query, length_key]
-        # compute bi-affine part
-        # [batch, length_query, query_dim] * [query_dim, key_dim]
-        # output shape [batch, length_query, key_dim]
-        output = torch.matmul(query, self.U)
-        # [batch, length_query, key_dim] * [batch, key_dim, length_key]
-        # output shape [batch, length_query, length_key]
-        output = torch.matmul(output, key.transpose(1, 2))
-
-        # compute query part: [query_dim] * [batch, query_dim, length_query]
-        # the output shape is [batch, length_query, 1]
-        out_q = torch.matmul(self.q_weight, query.transpose(1, 2)).unsqueeze(2)
-        # compute decoder part: [key_dim] * [batch, key_dim, length_key]
-        # the output shape is [batch, 1, length_key]
-        out_k = torch.matmul(self.key_weight, key.transpose(1, 2)).unsqueeze(1)
-
-        output = output + out_q + out_k + self.b
-
-        if mask_query is not None:
-            output = output * mask_query.unsqueeze(1).unsqueeze(3)
-        if mask_key is not None:
-            output = output * mask_key.unsqueeze(1).unsqueeze(2)
-        return output
-
-    @overrides
-    def extra_repr(self):
-        s = ('{key_dim}, {query_dim}')
-        return s.format(**self.__dict__)
