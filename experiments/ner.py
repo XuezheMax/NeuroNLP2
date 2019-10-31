@@ -212,6 +212,7 @@ def main():
     test_precision = 0.0
     test_recall = 0.0
     best_epoch = 0
+    patient = 0
     num_batches = num_data // batch_size + 1
     result_path = os.path.join(model_path, 'tmp')
     if not os.path.exists(result_path):
@@ -294,11 +295,19 @@ def main():
                 scorefile = os.path.join(result_path, "score_test%d" % epoch)
                 test_acc, test_precision, test_recall, test_f1 = eval(data_test, network, writer, outfile, scorefile, device)
                 print('test acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%%' % (test_acc, test_precision, test_recall, test_f1))
+                patient = 0
+            else:
+                patient += 1
             print('-' * 100)
 
-            print("Best dev  acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%% (epoch: %d)" % (best_acc, best_precision, best_recall, best_f1, best_epoch))
-            print("Best test acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%% (epoch: %d)" % (test_acc, test_precision, test_recall, test_f1, best_epoch))
+            print("Best dev  acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%% (epoch: %d (%d))" % (best_acc, best_precision, best_recall, best_f1, best_epoch, patient))
+            print("Best test acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%% (epoch: %d (%d))" % (test_acc, test_precision, test_recall, test_f1, best_epoch, patient))
             print('=' * 100)
+
+        if patient > 10:
+            logger.info('reset optimizer momentums')
+            scheduler.reset_state()
+            patient = 0
 
 
 if __name__ == '__main__':

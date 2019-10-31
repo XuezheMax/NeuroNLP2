@@ -1,5 +1,6 @@
 __author__ = 'max'
 
+from collections import defaultdict
 from torch.optim.optimizer import Optimizer
 
 
@@ -46,6 +47,9 @@ class _LRScheduler(object):
         self.last_epoch = epoch
         for param_group, lr in zip(self.optimizer.param_groups, self.get_lr()):
             param_group['lr'] = lr
+
+    def reset_state(self):
+        self.optimizer.state = defaultdict(dict)
 
 
 class InverseSquareRootScheduler(_LRScheduler):
