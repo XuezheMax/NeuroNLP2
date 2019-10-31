@@ -304,7 +304,7 @@ def main():
             print("Best test acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%% (epoch: %d (%d))" % (test_acc, test_precision, test_recall, test_f1, best_epoch, patient))
             print('=' * 100)
 
-        if patient > 10:
+        if patient > 4:
             logger.info('reset optimizer momentums')
             scheduler.reset_state()
             patient = 0
