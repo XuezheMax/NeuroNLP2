@@ -3,8 +3,6 @@ __author__ = 'max'
 import torch
 from torch.nn import functional as F
 
-from neuronlp2.nn._functions import rnnFusedBackend as fusedBackend
-
 
 def SkipConnectRNNReLUCell(input, hidden, hidden_skip, w_ih, w_hh, b_ih=None, b_hh=None, noise_in=None, noise_hidden=None, noise_skip=None):
     if noise_in is not None:
@@ -61,12 +59,6 @@ def SkipConnectFastLSTMCell(input, hidden, hidden_skip, w_ih, w_hh, b_ih=None, b
     if noise_hidden is not None:
         hx = hx * noise_hidden
 
-    if input.is_cuda:
-        igates = F.linear(input, w_ih)
-        hgates = F.linear(hx, w_hh)
-        state = fusedBackend.LSTMFused.apply
-        return state(igates, hgates, cx) if b_ih is None else state(igates, hgates, cx, b_ih, b_hh)
-
     gates = F.linear(input, w_ih, b_ih) + F.linear(hx, w_hh, b_hh)
 
     ingate, forgetgate, cellgate, outgate = gates.chunk(4, 1)
@@ -107,12 +99,6 @@ def SkipConnectFastGRUCell(input, hidden, hidden_skip, w_ih, w_hh, b_ih=None, b_
     hx = torch.cat([hidden, hidden_skip], dim=1)
     if noise_hidden is not None:
         hx = hx * noise_hidden
-
-    if input.is_cuda:
-        gi = F.linear(input, w_ih)
-        gh = F.linear(hx, w_hh)
-        state = fusedBackend.GRUFused.apply
-        return state(gi, gh, hidden) if b_ih is None else state(gi, gh, hidden, b_ih, b_hh)
 
     gi = F.linear(input, w_ih, b_ih)
     gh = F.linear(hx, w_hh, b_hh)

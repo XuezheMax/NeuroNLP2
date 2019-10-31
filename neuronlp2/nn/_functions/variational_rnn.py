@@ -3,8 +3,6 @@ __author__ = 'max'
 import torch
 from torch.nn import functional as F
 
-from neuronlp2.nn._functions import rnnFusedBackend as fusedBackend
-
 
 def VarRNNReLUCell(input, hidden, w_ih, w_hh, b_ih=None, b_hh=None, noise_in=None, noise_hidden=None):
     if noise_in is not None:
@@ -49,12 +47,6 @@ def VarFastLSTMCell(input, hidden, w_ih, w_hh, b_ih=None, b_hh=None, noise_in=No
     if noise_in is not None:
         input = input * noise_in
 
-    if input.is_cuda:
-        igates = F.linear(input, w_ih)
-        hgates = F.linear(hidden[0], w_hh) if noise_hidden is None else F.linear(hidden[0] * noise_hidden, w_hh)
-        state = fusedBackend.LSTMFused.apply
-        return state(igates, hgates, hidden[1]) if b_ih is None else state(igates, hgates, hidden[1], b_ih, b_hh)
-
     hx, cx = hidden
     if noise_hidden is not None:
         hx = hx * noise_hidden
@@ -95,11 +87,6 @@ def VarFastGRUCell(input, hidden, w_ih, w_hh, b_ih=None, b_hh=None, noise_in=Non
         input = input * noise_in
 
     hx = hidden if noise_hidden is None else hidden * noise_hidden
-    if input.is_cuda:
-        gi = F.linear(input, w_ih)
-        gh = F.linear(hx, w_hh)
-        state = fusedBackend.GRUFused.apply
-        return state(gi, gh, hidden) if b_ih is None else state(gi, gh, hidden, b_ih, b_hh)
 
     gi = F.linear(input, w_ih, b_ih)
     gh = F.linear(hx, w_hh, b_hh)
