@@ -23,7 +23,7 @@ class BiRecurrentConv(nn.Module):
 
         if rnn_mode == 'RNN':
             RNN = nn.RNN
-        elif rnn_mode == 'LSTM':
+        elif rnn_mode == 'LSTM' or rnn_mode == 'FastLSTM':
             RNN = nn.LSTM
         elif rnn_mode == 'GRU':
             RNN = nn.GRU
