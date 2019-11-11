@@ -118,7 +118,7 @@ class DeepBiAffine(nn.Module):
             enc = torch.cat([enc, pos], dim=2)
 
         # output from rnn [batch, length, hidden_size]
-        output, _ = self.rnn(input, mask)
+        output, _ = self.rnn(enc, mask)
 
         # apply dropout for output
         # [batch, length, hidden_size] --> [batch, hidden_size, length] --> [batch, length, hidden_size]
