@@ -2,6 +2,7 @@ __author__ = 'max'
 
 from overrides import overrides
 from collections import OrderedDict
+import math
 import numpy as np
 import torch
 import torch.nn as nn
@@ -104,8 +105,10 @@ class BiAffine(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        nn.init.kaiming_uniform_(self.q_weight)
-        nn.init.kaiming_uniform_(self.key_weight)
+        bound = 1 / math.sqrt(self.query_dim)
+        nn.init.uniform_(self.q_weight, -bound, bound)
+        bound = 1 / math.sqrt(self.key_dim)
+        nn.init.uniform_(self.key_weight, -bound, bound)
         nn.init.constant_(self.b, 0.)
         nn.init.xavier_uniform_(self.U)
 
