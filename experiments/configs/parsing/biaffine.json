@@ -1,0 +1,16 @@
+{
+  "model": "DeepBiAffine",
+  "word_dim": 100,
+  "char_dim": 100,
+  "pos": true,
+  "pos_dim": 100,
+  "rnn_mode": "FastLSTM",
+  "num_layers":3,
+  "hidden_size": 512,
+  "arc_space": 512,
+  "type_space": 128,
+  "p_in": 0.33,
+  "p_out": 0.33,
+  "p_rnn": [0.33, 0.33],
+  "activation": "elu"
+}

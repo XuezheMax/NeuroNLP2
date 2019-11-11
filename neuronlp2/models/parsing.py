@@ -23,9 +23,9 @@ class DeepBiAffine(nn.Module):
                  embedd_word=None, embedd_char=None, embedd_pos=None, p_in=0.33, p_out=0.33, p_rnn=(0.33, 0.33), pos=True, activation='elu'):
         super(DeepBiAffine, self).__init__()
 
-        self.word_embed = nn.Embedding(num_words, word_dim, _weight=embedd_word)
-        self.pos_embed = nn.Embedding(num_pos, pos_dim, _weight=embedd_pos) if pos else None
-        self.char_embed = nn.Embedding(num_chars, char_dim, _weight=embedd_char)
+        self.word_embed = nn.Embedding(num_words, word_dim, _weight=embedd_word, padding_idx=1)
+        self.pos_embed = nn.Embedding(num_pos, pos_dim, _weight=embedd_pos, padding_idx=1) if pos else None
+        self.char_embed = nn.Embedding(num_chars, char_dim, _weight=embedd_char, padding_idx=1)
         self.char_cnn = CharCNN(2, char_dim, char_dim, hidden_channels=char_dim * 4, activation=activation)
 
         self.dropout_in = nn.Dropout2d(p=p_in)

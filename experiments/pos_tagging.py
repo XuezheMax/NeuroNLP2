@@ -233,7 +233,6 @@ def main():
                 num_words += nwords
                 train_loss += loss_total.item()
 
-                torch.cuda.empty_cache()
             # update log
             if step % 100 == 0:
                 torch.cuda.empty_cache()
