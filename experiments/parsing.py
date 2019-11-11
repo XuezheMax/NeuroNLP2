@@ -107,7 +107,6 @@ def eval(data, network, pred_writer, gold_writer, punct_set, word_alphabet, pos_
 def main():
     args_parser = argparse.ArgumentParser(description='Tuning with graph-based parsing')
     args_parser.add_argument('--num_epochs', type=int, default=200, help='Number of training epochs')
-    args_parser.add_argument('--decode', choices=['mst', 'greedy'], help='decoding algorithm', required=True)
     args_parser.add_argument('--loss_type', choices=['sentence', 'token'], default='sentence', help='loss type (default: sentence)')
     args_parser.add_argument('--optim', choices=['sgd', 'adam'], help='type of optimizer', required=True)
     args_parser.add_argument('--learning_rate', type=float, default=0.1, help='Learning rate')
