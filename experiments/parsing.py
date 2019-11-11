@@ -398,7 +398,7 @@ def main():
                                                                                                        train_arc_loss / num_insts, train_arc_loss / num_words,
                                                                                                        train_type_loss / num_insts, train_type_loss / num_words,
                                                                                                        time.time() - start_time))
-        print('-' * 100)
+        print('-' * 125)
 
         # evaluate performance on dev data
         with torch.no_grad():
