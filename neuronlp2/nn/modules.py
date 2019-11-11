@@ -104,8 +104,8 @@ class BiAffine(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        nn.init.xavier_uniform_(self.q_weight)
-        nn.init.xavier_uniform_(self.key_weight)
+        nn.init.kaiming_uniform_(self.q_weight)
+        nn.init.kaiming_uniform_(self.key_weight)
         nn.init.constant_(self.b, 0.)
         nn.init.xavier_uniform_(self.U)
 

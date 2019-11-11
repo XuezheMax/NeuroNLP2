@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 CUDA_VISIBLE_DEVICES=0 python parsing.py --config configs/parsing/biaffine.json --num_epochs 1000 --batch_size 32 \
  --opt adam --learning_rate 0.001 --lr_decay 0.999995 --beta1 0.9 --beta2 0.999 --eps 1e-8 --grad_clip 5.0 \
- --loss_type sentence --warmup_steps 40 --weight_decay 0.0 --unk_replace 0.5 \
+ --loss_type token --warmup_steps 40 --weight_decay 0.0 --unk_replace 0.5 \
  --word_embedding sskip --word_path "data/sskip/sskip.eng.100.gz" --char_embedding random \
  --punctuation '.' '``' "''" ':' ',' \
  --train "data/PTB3.0/PTB3.0-Stanford_dep/ptb3.0-stanford.auto.cpos.train.conll" \
