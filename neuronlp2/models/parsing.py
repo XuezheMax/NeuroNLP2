@@ -301,7 +301,7 @@ class NeuroMST(DeepBiAffine):
         type_h, type_c = out_type
 
         # create batch index [batch]
-        batch_index = torch.arange(0, batch).type_as(out_type).long()
+        batch_index = torch.arange(0, batch).type_as(loss_arc).long()
         # get vector for heads [batch, length, type_space],
         type_h = type_h[batch_index, heads.t()].transpose(0, 1).contiguous()
         # compute output for type [batch, length, num_labels]
