@@ -352,7 +352,7 @@ class NeuroMST(DeepBiAffine):
         # compute lengths
         length = mask.sum(dim=1).long()
         heads, _ = parser.decode_MST(energy.cpu().numpy(), length.cpu().numpy(), leading_symbolic=leading_symbolic, labeled=False)
-        types = self._decode_types(out_type, heads.from_numpy().type_as(length), leading_symbolic)
+        types = self._decode_types(out_type, torch.from_numpy(heads).type_as(length), leading_symbolic)
         return heads, types.cpu().numpy()
 
 
