@@ -20,7 +20,7 @@ from torch.optim.adamw import AdamW
 from torch.optim import SGD
 from torch.nn.utils import clip_grad_norm_
 from neuronlp2.io import get_logger, conllx_data, iterate_data
-from neuronlp2.models import DeepBiAffine
+from neuronlp2.models import DeepBiAffine, NeuroMST
 from neuronlp2.optim import ExponentialScheduler
 from neuronlp2 import utils
 from neuronlp2.io import CoNLLXWriter
@@ -273,7 +273,10 @@ def main():
                                embedd_word=word_table, embedd_char=char_table,
                                p_in=p_in, p_out=p_out, p_rnn=p_rnn, pos=use_pos, activation=activation)
     elif model_type == 'NeuroMST':
-        raise NotImplementedError
+        network = NeuroMST(word_dim, num_words, char_dim, num_chars, pos_dim, num_pos,
+                           mode, hidden_size, num_layers, num_types, arc_space, type_space,
+                           embedd_word=word_table, embedd_char=char_table,
+                           p_in=p_in, p_out=p_out, p_rnn=p_rnn, pos=use_pos, activation=activation)
     else:
         raise RuntimeError('Unknown model type: %s' % model_type)
 

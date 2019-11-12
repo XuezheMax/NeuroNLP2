@@ -1,5 +1,6 @@
 __author__ = 'max'
 
+from overrides import overrides
 import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
@@ -148,6 +149,7 @@ class BiVarRecurrentConv(BiRecurrentConv):
 
         self.rnn = RNN(word_dim + char_dim, hidden_size, num_layers=num_layers, batch_first=True, bidirectional=True, dropout=p_rnn)
 
+    @overrides
     def _get_rnn_output(self, input_word, input_char, mask=None):
         # [batch, length, word_dim]
         word = self.word_embed(input_word)
@@ -191,12 +193,14 @@ class BiRecurrentConvCRF(BiRecurrentConv):
         # [batch, length, num_label, num_label]
         return self.crf(output, mask=mask)
 
+    @overrides
     def loss(self, input_word, input_char, target, mask=None):
         # output from rnn [batch, length, hidden_size]
         output = self._get_rnn_output(input_word, input_char, mask=mask)
         # [batch]
         return self.crf.loss(output, target, mask=mask)
 
+    @overrides
     def decode(self, input_word, input_char, mask=None, leading_symbolic=0):
         # output from rnn [batch, length, hidden_size]
         output = self._get_rnn_output(input_word, input_char, mask=mask)
@@ -224,12 +228,14 @@ class BiVarRecurrentConvCRF(BiVarRecurrentConv):
         # [batch, length, num_label,  num_label]
         return self.crf(output, mask=mask)
 
+    @overrides
     def loss(self, input_word, input_char, target, mask=None):
         # output from rnn [batch, length, hidden_size]
         output = self._get_rnn_output(input_word, input_char, mask=mask)
         # [batch]
         return self.crf.loss(output, target, mask=mask)
 
+    @overrides
     def decode(self, input_word, input_char, mask=None, leading_symbolic=0):
         # output from rnn [batch, length, hidden_size]
         output = self._get_rnn_output(input_word, input_char, mask=mask)

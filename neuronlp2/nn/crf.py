@@ -214,8 +214,6 @@ class TreeCRF(nn.Module):
         batch, length, _ = heads.size()
         # [batch, length, length]
         output = self.energy(heads, children, mask_query=mask, mask_key=mask)
-        # set diagonal elements to -inf
-        output = output + torch.diag(output.new_full((length,), -np.inf))
         return output
 
     def loss(self, heads, children, target_heads, mask=None):
@@ -240,16 +238,16 @@ class TreeCRF(nn.Module):
         A = torch.exp(energy)
         # mask out invalid positions
         if mask is not None:
-            A = A * mask.unsqueeze(1).unsqueeze(2) * mask.unsqueeze(1).unsqueeze(1)
+            A = A * mask.unsqueeze(2) * mask.unsqueeze(1)
+
+        # set diagonal elements to 0
+        diag_mask = 1.0 - torch.eye(length).unsqueeze(0).type_as(energy)
+        A = A * diag_mask
+        energy = energy * diag_mask
 
         A = A.double()
         # get D [batch, length]
         D = A.sum(dim=1)
-
-        # # make sure L is positive-defined
-        # rtol = 1e-4
-        # atol = 1e-6
-        # D += D * rtol + atol
 
         # [batch, length, length]
         D = torch.diag_embed(D)
@@ -259,9 +257,10 @@ class TreeCRF(nn.Module):
         L = D - A
 
         if mask is not None:
-            L = L + torch.diag_embed(1. - mask)
+            L = L + torch.diag_embed(1. - mask).double()
 
         # compute partition Z(x) [batch]
+        L = L[:, 1:, 1:]
         z = torch.logdet(L).float()
 
         # first create index matrix [length, batch]
