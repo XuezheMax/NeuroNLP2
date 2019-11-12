@@ -234,10 +234,11 @@ class TreeCRF(nn.Module):
         '''
         batch, length, _ = heads.size()
         # [batch, length, length]
-        energy = self(heads, children, mask=mask)
+        energy = self(heads, children, mask=mask).double()
         A = torch.exp(energy)
         # mask out invalid positions
         if mask is not None:
+            mask = mask.double()
             A = A * mask.unsqueeze(2) * mask.unsqueeze(1)
 
         # set diagonal elements to 0
@@ -245,23 +246,25 @@ class TreeCRF(nn.Module):
         A = A * diag_mask
         energy = energy * diag_mask
 
-        A = A.double()
         # get D [batch, length]
         D = A.sum(dim=1)
 
         # [batch, length, length]
         D = torch.diag_embed(D)
+        # rtol = 1e-4
+        # atol = 1e-6
+        # D += atol
 
         # compute laplacian matrix
         # [batch, length, length]
         L = D - A
 
         if mask is not None:
-            L = L + torch.diag_embed(1. - mask).double()
+            L = L + torch.diag_embed(1. - mask)
 
         # compute partition Z(x) [batch]
         L = L[:, 1:, 1:]
-        z = torch.logdet(L).float()
+        z = torch.logdet(L)
 
         # first create index matrix [length, batch]
         index = torch.arange(0, length).view(length, 1).expand(length, batch)
@@ -272,4 +275,4 @@ class TreeCRF(nn.Module):
         # sum over dim=0 shape = [batch]
         tgt_energy = tgt_energy.sum(dim=0)
 
-        return z - tgt_energy
+        return (z - tgt_energy).float()
