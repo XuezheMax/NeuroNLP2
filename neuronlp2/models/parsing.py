@@ -345,10 +345,6 @@ class NeuroMST(DeepBiAffine):
         if mask is not None:
             energy = energy * mask.unsqueeze(2) * mask.unsqueeze(1)
 
-        # set diagonal elements to 0
-        diag_mask = 1.0 - torch.eye(max_len).unsqueeze(0).type_as(energy)
-        energy = energy * diag_mask
-
         # compute lengths
         length = mask.sum(dim=1).long()
         heads, _ = parser.decode_MST(energy.cpu().numpy(), length.cpu().numpy(), leading_symbolic=leading_symbolic, labeled=False)

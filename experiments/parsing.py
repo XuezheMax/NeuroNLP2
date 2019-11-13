@@ -201,6 +201,10 @@ def main():
     data_dev = conllx_data.read_data(dev_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, symbolic_root=True)
     data_test = conllx_data.read_data(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, symbolic_root=True)
 
+    result_path = os.path.join(model_path, 'tmp')
+    if not os.path.exists(result_path):
+        os.makedirs(result_path)
+
     punct_set = None
     if punctuation is not None:
         punct_set = set(punctuation)
@@ -333,9 +337,6 @@ def main():
         opt_info = 'adam, betas=(%.1f, %.3f), eps=%.1e, amsgrad=%s'.format(betas[0], betas[1], eps, amsgrad)
     else:
         opt_info = 'sgd, momentum=0.9, nesterov=True'
-    result_path = os.path.join(model_path, 'tmp')
-    if not os.path.exists(result_path):
-        os.makedirs(result_path)
     for epoch in range(1, num_epochs + 1):
         start_time = time.time()
         train_loss = 0.
