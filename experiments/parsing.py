@@ -119,6 +119,7 @@ def main():
     args_parser.add_argument('--amsgrad', action='store_true', help='AMS Grad')
     args_parser.add_argument('--grad_clip', type=float, default=0, help='max norm for gradient clip (default 0: no clip')
     args_parser.add_argument('--warmup_steps', type=int, default=0, metavar='N', help='number of steps to warm up (default: 0)')
+    args_parser.add_argument('--reset', type=int, default=10, help='Number of epochs to reset optimizer (default 10)')
     args_parser.add_argument('--weight_decay', type=float, default=0.0, help='weight for l2 norm decay')
     args_parser.add_argument('--unk_replace', type=float, default=0., help='The rate to replace a singleton word with UNK')
     args_parser.add_argument('--freeze', action='store_true', help='frozen the word embedding (disable fine-tuning).')
@@ -332,6 +333,7 @@ def main():
     test_total_root = 0
 
     patient = 0
+    reset = args.reset
     num_batches = num_data // batch_size + 1
     if optim == 'adam':
         opt_info = 'adam, betas=(%.1f, %.3f), eps=%.1e, amsgrad=%s'.format(betas[0], betas[1], eps, amsgrad)
@@ -489,7 +491,7 @@ def main():
                 test_root_correct, test_total_root, test_root_correct * 100 / test_total_root, best_epoch))
             print('=' * 125)
 
-            if patient > 9:
+            if patient >= reset:
                 logger.info('reset optimizer momentums')
                 scheduler.reset_state()
                 patient = 0
