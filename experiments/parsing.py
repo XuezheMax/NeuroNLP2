@@ -329,6 +329,10 @@ def main():
 
     patient = 0
     num_batches = num_data // batch_size + 1
+    if optim == 'adam':
+        opt_info = 'adam, betas=(%.1f, %.3f), eps=%.1e, amsgrad=%s'.format(betas[0], betas[1], eps, amsgrad)
+    else:
+        opt_info = 'sgd, momentum=0.9, nesterov=True'
     result_path = os.path.join(model_path, 'tmp')
     if not os.path.exists(result_path):
         os.makedirs(result_path)
@@ -342,7 +346,7 @@ def main():
         num_back = 0
         network.train()
         lr = scheduler.get_lr()[0]
-        print('Epoch %d (%s, lr=%.6f, lr decay=%.6f, amsgrad=%s, l2=%.1e): ' % (epoch, optim, lr, lr_decay, amsgrad, weight_decay))
+        print('Epoch %d (%s, lr=%.6f, lr decay=%.6f, l2=%.1e): ' % (epoch, opt_info, lr, lr_decay, weight_decay))
         if args.cuda:
             torch.cuda.empty_cache()
         gc.collect()
