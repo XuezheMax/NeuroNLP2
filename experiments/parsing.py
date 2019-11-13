@@ -336,7 +336,7 @@ def main():
     reset = args.reset
     num_batches = num_data // batch_size + 1
     if optim == 'adam':
-        opt_info = 'adam, betas=({:.1f}, {:.3f}), eps={:.1e}, amsgrad={:s}'.format(betas[0], betas[1], eps, amsgrad)
+        opt_info = 'adam, betas=(%.1f, %.3f), eps=%.1e, amsgrad=%s' % (betas[0], betas[1], eps, amsgrad)
     else:
         opt_info = 'sgd, momentum=0.9, nesterov=True'
     for epoch in range(1, num_epochs + 1):
