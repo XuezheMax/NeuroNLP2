@@ -257,13 +257,14 @@ class DeepBiAffine(nn.Module):
         # compute output for type [batch, length_h, length_c, num_labels]
         out_type = self.bilinear(type_h, type_c)
 
+        if mask is not None:
+            minus_mask = mask.eq(0).unsqueeze(2)
+            out_arc.masked_fill_(minus_mask, float('-inf'))
         # loss_arc shape [batch, length_h, length_c]
         loss_arc = F.log_softmax(out_arc, dim=1)
         # loss_type shape [batch, length_h, length_c, num_labels]
         loss_type = F.log_softmax(out_type, dim=3).permute(0, 3, 1, 2)
         # [batch, num_labels, length_h, length_c]
-        # TODO
-        # energy = torch.exp(loss_arc.unsqueeze(1) + loss_type)
         energy = loss_arc.unsqueeze(1) + loss_type
 
         # compute lengths
