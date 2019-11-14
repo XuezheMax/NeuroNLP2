@@ -104,37 +104,7 @@ def eval(data, network, pred_writer, gold_writer, punct_set, word_alphabet, pos_
            (accum_root_corr, accum_total_root, accum_total_inst)
 
 
-def main():
-    args_parser = argparse.ArgumentParser(description='Tuning with graph-based parsing')
-    args_parser.add_argument('--config', type=str, help='config file', required=True)
-    args_parser.add_argument('--num_epochs', type=int, default=200, help='Number of training epochs')
-    args_parser.add_argument('--batch_size', type=int, default=16, help='Number of sentences in each batch')
-    args_parser.add_argument('--loss_type', choices=['sentence', 'token'], default='sentence', help='loss type (default: sentence)')
-    args_parser.add_argument('--optim', choices=['sgd', 'adam'], help='type of optimizer', required=True)
-    args_parser.add_argument('--learning_rate', type=float, default=0.1, help='Learning rate')
-    args_parser.add_argument('--beta1', type=float, default=0.9, help='beta1 of Adam')
-    args_parser.add_argument('--beta2', type=float, default=0.999, help='beta2 of Adam')
-    args_parser.add_argument('--eps', type=float, default=1e-8, help='epsilon for adam or adamax')
-    args_parser.add_argument('--lr_decay', type=float, default=0.999995, help='Decay rate of learning rate')
-    args_parser.add_argument('--amsgrad', action='store_true', help='AMS Grad')
-    args_parser.add_argument('--grad_clip', type=float, default=0, help='max norm for gradient clip (default 0: no clip')
-    args_parser.add_argument('--warmup_steps', type=int, default=0, metavar='N', help='number of steps to warm up (default: 0)')
-    args_parser.add_argument('--reset', type=int, default=10, help='Number of epochs to reset optimizer (default 10)')
-    args_parser.add_argument('--weight_decay', type=float, default=0.0, help='weight for l2 norm decay')
-    args_parser.add_argument('--unk_replace', type=float, default=0., help='The rate to replace a singleton word with UNK')
-    args_parser.add_argument('--freeze', action='store_true', help='frozen the word embedding (disable fine-tuning).')
-    args_parser.add_argument('--punctuation', nargs='+', type=str, help='List of punctuations')
-    args_parser.add_argument('--word_embedding', choices=['glove', 'senna', 'sskip', 'polyglot'], help='Embedding for words', required=True)
-    args_parser.add_argument('--word_path', help='path for word embedding dict')
-    args_parser.add_argument('--char_embedding', choices=['random', 'polyglot'], help='Embedding for characters', required=True)
-    args_parser.add_argument('--char_path', help='path for character embedding dict')
-    args_parser.add_argument('--train', help='path for training file.', required=True)
-    args_parser.add_argument('--dev', help='path for dev file.', required=True)
-    args_parser.add_argument('--test', help='path for test file.', required=True)
-    args_parser.add_argument('--model_path', help='path for saving model file.', required=True)
-
-    args = args_parser.parse_args()
-
+def train(args):
     logger = get_logger("Parsing")
 
     args.cuda = torch.cuda.is_available()
@@ -497,5 +467,123 @@ def main():
                 patient = 0
 
 
+def parse(args):
+    logger = get_logger("Parsing")
+    args.cuda = torch.cuda.is_available()
+    device = torch.device('cuda', 0) if args.cuda else torch.device('cpu')
+    test_path = args.test
+
+    model_path = args.model_path
+    model_name = os.path.join(model_path, 'model.pt')
+    punctuation = args.punctuation
+    print(args)
+
+    logger.info("Creating Alphabets")
+    alphabet_path = os.path.join(model_path, 'alphabets')
+    assert os.path.exists(alphabet_path)
+    word_alphabet, char_alphabet, pos_alphabet, type_alphabet = conllx_data.create_alphabets(alphabet_path, None)
+
+    num_words = word_alphabet.size()
+    num_chars = char_alphabet.size()
+    num_pos = pos_alphabet.size()
+    num_types = type_alphabet.size()
+
+    logger.info("Word Alphabet Size: %d" % num_words)
+    logger.info("Character Alphabet Size: %d" % num_chars)
+    logger.info("POS Alphabet Size: %d" % num_pos)
+    logger.info("Type Alphabet Size: %d" % num_types)
+
+    logger.info("Reading Data")
+    data_test = conllx_data.read_data(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, symbolic_root=True)
+
+    result_path = os.path.join(model_path, 'tmp')
+    if not os.path.exists(result_path):
+        os.makedirs(result_path)
+
+    punct_set = None
+    if punctuation is not None:
+        punct_set = set(punctuation)
+        logger.info("punctuations(%d): %s" % (len(punct_set), ' '.join(punct_set)))
+
+    logger.info("constructing network...")
+
+    hyps = json.load(open(os.path.join(model_path, 'config.json'), 'r'))
+    model_type = hyps['model']
+    assert model_type in ['DeepBiAffine', 'NeuroMST']
+    word_dim = hyps['word_dim']
+    char_dim = hyps['char_dim']
+    use_pos = hyps['pos']
+    pos_dim = hyps['pos_dim']
+    mode = hyps['rnn_mode']
+    hidden_size = hyps['hidden_size']
+    arc_space = hyps['arc_space']
+    type_space = hyps['type_space']
+    num_layers = hyps['num_layers']
+    p_in = hyps['p_in']
+    p_out = hyps['p_out']
+    p_rnn = hyps['p_rnn']
+    activation = hyps['activation']
+
+    if model_type == 'DeepBiAffine':
+        network = DeepBiAffine(word_dim, num_words, char_dim, num_chars, pos_dim, num_pos,
+                               mode, hidden_size, num_layers, num_types, arc_space, type_space,
+                               p_in=p_in, p_out=p_out, p_rnn=p_rnn, pos=use_pos, activation=activation)
+    elif model_type == 'NeuroMST':
+        network = NeuroMST(word_dim, num_words, char_dim, num_chars, pos_dim, num_pos,
+                           mode, hidden_size, num_layers, num_types, arc_space, type_space,
+                           p_in=p_in, p_out=p_out, p_rnn=p_rnn, pos=use_pos, activation=activation)
+    else:
+        raise RuntimeError('Unknown model type: %s' % model_type)
+
+    network = network.to(device)
+    network.load_state_dict(torch.load(model_name, map_location=device))
+
+    pred_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
+    gold_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
+    pred_filename = os.path.join(result_path, 'pred.txt')
+    pred_writer.start(pred_filename)
+    gold_filename = os.path.join(result_path, 'gold.txt')
+    gold_writer.start(gold_filename)
+
+    with torch.no_grad():
+        eval(data_test, network, pred_writer, gold_writer, punct_set, word_alphabet, pos_alphabet, device)
+
+    pred_writer.close()
+    gold_writer.close()
+
+
 if __name__ == '__main__':
-    main()
+    args_parser = argparse.ArgumentParser(description='Tuning with graph-based parsing')
+    args_parser.add_argument('--mode', choices=['train', 'parse'], required=True, help='processing mode')
+    args_parser.add_argument('--config', type=str, help='config file', required=True)
+    args_parser.add_argument('--num_epochs', type=int, default=200, help='Number of training epochs')
+    args_parser.add_argument('--batch_size', type=int, default=16, help='Number of sentences in each batch')
+    args_parser.add_argument('--loss_type', choices=['sentence', 'token'], default='sentence', help='loss type (default: sentence)')
+    args_parser.add_argument('--optim', choices=['sgd', 'adam'], help='type of optimizer', required=True)
+    args_parser.add_argument('--learning_rate', type=float, default=0.1, help='Learning rate')
+    args_parser.add_argument('--beta1', type=float, default=0.9, help='beta1 of Adam')
+    args_parser.add_argument('--beta2', type=float, default=0.999, help='beta2 of Adam')
+    args_parser.add_argument('--eps', type=float, default=1e-8, help='epsilon for adam or adamax')
+    args_parser.add_argument('--lr_decay', type=float, default=0.999995, help='Decay rate of learning rate')
+    args_parser.add_argument('--amsgrad', action='store_true', help='AMS Grad')
+    args_parser.add_argument('--grad_clip', type=float, default=0, help='max norm for gradient clip (default 0: no clip')
+    args_parser.add_argument('--warmup_steps', type=int, default=0, metavar='N', help='number of steps to warm up (default: 0)')
+    args_parser.add_argument('--reset', type=int, default=10, help='Number of epochs to reset optimizer (default 10)')
+    args_parser.add_argument('--weight_decay', type=float, default=0.0, help='weight for l2 norm decay')
+    args_parser.add_argument('--unk_replace', type=float, default=0., help='The rate to replace a singleton word with UNK')
+    args_parser.add_argument('--freeze', action='store_true', help='frozen the word embedding (disable fine-tuning).')
+    args_parser.add_argument('--punctuation', nargs='+', type=str, help='List of punctuations')
+    args_parser.add_argument('--word_embedding', choices=['glove', 'senna', 'sskip', 'polyglot'], help='Embedding for words', required=True)
+    args_parser.add_argument('--word_path', help='path for word embedding dict')
+    args_parser.add_argument('--char_embedding', choices=['random', 'polyglot'], help='Embedding for characters', required=True)
+    args_parser.add_argument('--char_path', help='path for character embedding dict')
+    args_parser.add_argument('--train', help='path for training file.')
+    args_parser.add_argument('--dev', help='path for dev file.')
+    args_parser.add_argument('--test', help='path for test file.', required=True)
+    args_parser.add_argument('--model_path', help='path for saving model file.', required=True)
+
+    args = args_parser.parse_args()
+    if args.mode == 'train':
+        train(args)
+    else:
+        parse(args)
