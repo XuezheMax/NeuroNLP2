@@ -505,8 +505,7 @@ def parse(args):
         punct_set = set(punctuation)
         logger.info("punctuations(%d): %s" % (len(punct_set), ' '.join(punct_set)))
 
-    logger.info("constructing network...")
-
+    logger.info("loading network...")
     hyps = json.load(open(os.path.join(model_path, 'config.json'), 'r'))
     model_type = hyps['model']
     assert model_type in ['DeepBiAffine', 'NeuroMST']

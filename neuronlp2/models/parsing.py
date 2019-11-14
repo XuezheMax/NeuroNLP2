@@ -257,11 +257,6 @@ class DeepBiAffine(nn.Module):
         # compute output for type [batch, length_h, length_c, num_labels]
         out_type = self.bilinear(type_h, type_c)
 
-        # mask invalid position to -inf for log_softmax
-        if mask is not None:
-            minus_mask = mask.eq(0).unsqueeze(2)
-            out_arc.masked_fill_(minus_mask, float('-inf'))
-
         # loss_arc shape [batch, length_h, length_c]
         loss_arc = F.log_softmax(out_arc, dim=1)
         # loss_type shape [batch, length_h, length_c, num_labels]
@@ -270,7 +265,6 @@ class DeepBiAffine(nn.Module):
         # TODO
         # energy = torch.exp(loss_arc.unsqueeze(1) + loss_type)
         energy = loss_arc.unsqueeze(1) + loss_type
-        energy = energy - energy.min()
 
         # compute lengths
         length = mask.sum(dim=1).long().cpu().numpy()
@@ -341,13 +335,8 @@ class NeuroMST(DeepBiAffine):
 
         """
         # out_arc shape [batch, length_h, length_c]
-        out_arc, out_type = self(input_word, input_char, input_pos, mask=mask)
-        batch, max_len, _ = out_arc.size()
-        # TODO
-        energy = out_arc - out_arc.min()
-        # mask out invalid positions
-        if mask is not None:
-            energy = energy * mask.unsqueeze(2) * mask.unsqueeze(1)
+        energy, out_type = self(input_word, input_char, input_pos, mask=mask)
+        batch, max_len, _ = energy.size()
 
         # compute lengths
         length = mask.sum(dim=1).long()

@@ -166,10 +166,8 @@ def decode_MST(energies, lengths, leading_symbolic=0, labeled=True):
         cyc_len = len(cycle)
         cyc_weight = 0.0
         cyc_nodes = np.zeros([cyc_len], dtype=np.int32)
-        id = 0
-        for cyc_node in cycle:
+        for id, cyc_node in enumerate(cycle):
             cyc_nodes[id] = cyc_node
-            id += 1
             cyc_weight += score_matrix[par[cyc_node], cyc_node]
 
         rep = cyc_nodes[0]
@@ -182,17 +180,16 @@ def decode_MST(energies, lengths, leading_symbolic=0, labeled=True):
             max2 = float("-inf")
             wh2 = -1
 
-            for j in range(cyc_len):
-                j1 = cyc_nodes[j]
-                if score_matrix[j1, i] > max1:
-                    max1 = score_matrix[j1, i]
-                    wh1 = j1
+            for j in cyc_nodes:
+                if score_matrix[j, i] > max1:
+                    max1 = score_matrix[j, i]
+                    wh1 = j
 
-                scr = cyc_weight + score_matrix[i, j1] - score_matrix[par[j1], j1]
+                scr = cyc_weight + score_matrix[i, j] - score_matrix[par[j], j]
 
                 if scr > max2:
                     max2 = scr
-                    wh2 = j1
+                    wh2 = j
 
             score_matrix[rep, i] = max1
             oldI[rep, i] = oldI[wh1, i]
@@ -208,8 +205,7 @@ def decode_MST(energies, lengths, leading_symbolic=0, labeled=True):
             for cc in reps[cyc_node]:
                 rep_cons[i].add(cc)
 
-        for i in range(1, cyc_len):
-            cyc_node = cyc_nodes[i]
+        for cyc_node in cyc_nodes[1:]:
             curr_nodes[cyc_node] = False
             for cc in reps[cyc_node]:
                 reps[rep].add(cc)
@@ -254,11 +250,13 @@ def decode_MST(energies, lengths, leading_symbolic=0, labeled=True):
         # calc real energy matrix shape = [length, length, num_labels - #symbolic] (remove the label for symbolic types).
         if labeled:
             energy = energy[leading_symbolic:, :length, :length]
+            energy = energy - energy.min() + 1e-6
             # get best label for each edge.
             label_id_matrix = energy.argmax(axis=0) + leading_symbolic
             energy = energy.max(axis=0)
         else:
             energy = energy[:length, :length]
+            energy = energy - energy.min() + 1e-6
             label_id_matrix = None
         # get original score matrix
         orig_score_matrix = energy
