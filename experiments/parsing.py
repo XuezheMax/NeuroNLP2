@@ -267,7 +267,7 @@ def train(args):
     optimizer, scheduler = get_optimizer(network.parameters(), optim, learning_rate, lr_decay, betas, eps, amsgrad, weight_decay, warmup_steps)
     model = "{}-{}".format(model_type, mode)
     logger.info("Network: %s, num_layer=%d, hidden=%d, act=%s" % (model, num_layers, hidden_size, activation))
-    logger.info("training: l2: %f, (#training data: %d, batch: %d, unk replace: %.2f)" % (weight_decay, num_data, batch_size, unk_replace))
+    logger.info("training: #training data: %d, batch: %d, unk replace: %.2f" % (num_data, batch_size, unk_replace))
     logger.info("dropout(in, out, rnn): %s(%.2f, %.2f, %s)" % ('variational', p_in, p_out, p_rnn))
     print('# of Parameters: %d' % (sum([param.numel() for param in network.parameters()])))
 
@@ -321,7 +321,7 @@ def train(args):
         num_nans = 0
         network.train()
         lr = scheduler.get_lr()[0]
-        print('Epoch %d (%s, lr=%.6f, lr decay=%.6f, l2=%.1e): ' % (epoch, opt_info, lr, lr_decay, weight_decay))
+        print('Epoch %d (%s, lr=%.6f, lr decay=%.6f, grad clip=%.1f, l2=%.1e): ' % (epoch, opt_info, lr, lr_decay, grad_clip, weight_decay))
         if args.cuda:
             torch.cuda.empty_cache()
         gc.collect()
