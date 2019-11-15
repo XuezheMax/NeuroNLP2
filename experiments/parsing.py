@@ -13,12 +13,13 @@ sys.path.append(root_path)
 
 import time
 import argparse
-
+import math
 import numpy as np
 import torch
 from torch.optim.adamw import AdamW
 from torch.optim import SGD
 from torch.nn.utils import clip_grad_norm_
+from neuronlp2.nn.utils import total_grad_norm
 from neuronlp2.io import get_logger, conllx_data, iterate_data
 from neuronlp2.models import DeepBiAffine, NeuroMST
 from neuronlp2.optim import ExponentialScheduler
@@ -256,7 +257,7 @@ def train(args):
         raise RuntimeError('Unknown model type: %s' % model_type)
 
     if freeze:
-        freeze_embedding(network.word_embedd)
+        freeze_embedding(network.word_embed)
 
     network = network.to(device)
 
@@ -317,6 +318,7 @@ def train(args):
         num_insts = 0
         num_words = 0
         num_back = 0
+        num_nans = 0
         network.train()
         lr = scheduler.get_lr()[0]
         print('Epoch %d (%s, lr=%.6f, lr decay=%.6f, l2=%.1e): ' % (epoch, opt_info, lr, lr_decay, weight_decay))
@@ -345,16 +347,22 @@ def train(args):
                 loss = loss_total.div(nbatch)
             loss.backward()
             if grad_clip > 0:
-                clip_grad_norm_(network.parameters(), grad_clip)
-            optimizer.step()
-            scheduler.step()
+                grad_norm = clip_grad_norm_(network.parameters(), grad_clip)
+            else:
+                grad_norm = total_grad_norm(network.parameters())
 
-            with torch.no_grad():
-                num_insts += nbatch
-                num_words += nwords
-                train_loss += loss_total.item()
-                train_arc_loss += loss_arc.item()
-                train_type_loss += loss_type.item()
+            if math.isnan(grad_norm):
+                num_nans += 1
+            else:
+                optimizer.step()
+                scheduler.step()
+
+                with torch.no_grad():
+                    num_insts += nbatch
+                    num_words += nwords
+                    train_loss += loss_total.item()
+                    train_arc_loss += loss_arc.item()
+                    train_type_loss += loss_type.item()
 
             # update log
             if step % 100 == 0:
@@ -363,10 +371,10 @@ def train(args):
                 sys.stdout.write(" " * num_back)
                 sys.stdout.write("\b" * num_back)
                 curr_lr = scheduler.get_lr()[0]
-                log_info = '[%d/%d (%.0f%%) lr=%.6f] loss: %.4f (%.4f), arc: %.4f (%.4f), type: %.4f (%.4f)' % (step, num_batches, 100. * step / num_batches, curr_lr,
-                                                                                                                train_loss / num_insts, train_loss / num_words,
-                                                                                                                train_arc_loss / num_insts, train_arc_loss / num_words,
-                                                                                                                train_type_loss / num_insts, train_type_loss / num_words)
+                log_info = '[%d/%d (%.0f%%) lr=%.6f (%d)] loss: %.4f (%.4f), arc: %.4f (%.4f), type: %.4f (%.4f)' % (step, num_batches, 100. * step / num_batches, curr_lr, num_nans,
+                                                                                                                     train_loss / num_insts, train_loss / num_words,
+                                                                                                                     train_arc_loss / num_insts, train_arc_loss / num_words,
+                                                                                                                     train_type_loss / num_insts, train_type_loss / num_words)
                 sys.stdout.write(log_info)
                 sys.stdout.flush()
                 num_back = len(log_info)

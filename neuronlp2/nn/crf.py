@@ -250,7 +250,7 @@ class TreeCRF(nn.Module):
         D = A.sum(dim=1)
         rtol = 1e-4
         atol = 1e-6
-        D += D * rtol + atol
+        D += atol
         if mask is not None:
             D = D * mask
 
