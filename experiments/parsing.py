@@ -371,6 +371,8 @@ def train(args):
                 sys.stdout.write(" " * num_back)
                 sys.stdout.write("\b" * num_back)
                 curr_lr = scheduler.get_lr()[0]
+                num_insts = max(num_insts, 1)
+                num_words = max(num_words, 1)
                 log_info = '[%d/%d (%.0f%%) lr=%.6f (%d)] loss: %.4f (%.4f), arc: %.4f (%.4f), type: %.4f (%.4f)' % (step, num_batches, 100. * step / num_batches, curr_lr, num_nans,
                                                                                                                      train_loss / num_insts, train_loss / num_words,
                                                                                                                      train_arc_loss / num_insts, train_arc_loss / num_words,
