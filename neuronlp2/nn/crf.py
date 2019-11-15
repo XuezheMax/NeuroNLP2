@@ -248,9 +248,9 @@ class TreeCRF(nn.Module):
 
         # get D [batch, length]
         D = A.sum(dim=1)
-        rtol = 1e-6
+        rtol = 1e-4
         atol = 1e-6
-        D += atol
+        D += D * rtol + atol
         if mask is not None:
             D = D * mask
 

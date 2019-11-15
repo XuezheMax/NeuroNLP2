@@ -463,6 +463,7 @@ def train(args):
 
             if patient >= reset:
                 logger.info('reset optimizer momentums')
+                network.load_state_dict(torch.load(model_name, map_location=device))
                 scheduler.reset_state()
                 patient = 0
 
