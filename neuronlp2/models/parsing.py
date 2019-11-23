@@ -681,7 +681,7 @@ class StackPtrNet(nn.Module):
             new_hypothesis_scores = hypothesis_scores[:num_hyp].unsqueeze(1) + hyp_scores
             # [num_hyp * length_encoder]
             new_hypothesis_scores, hyp_index = torch.sort(new_hypothesis_scores.view(-1), dim=0, descending=True)
-            base_index = hyp_index / length
+            base_index = hyp_index // length
             child_index = hyp_index % length
 
             cc = 0
