@@ -482,7 +482,7 @@ class StackPtrNet(nn.Module):
         if self.grandPar:
             # [length_decoder, batch]
             gpars = heads[batch_index, heads_stack.t()]
-            mask_gpar = gpars.ge(0).float().unsqueeze(2)
+            mask_gpar = gpars.t().ge(0).float().unsqueeze(2)
             # [batch, length_decoder, hidden_size * 2]
             output_enc_gpar = output_enc[batch_index, gpars].transpose(0, 1) * mask_gpar
             src_encoding = src_encoding + output_enc_gpar
