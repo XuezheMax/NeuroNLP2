@@ -257,7 +257,7 @@ def train(args):
         encoder_layers = hyps['encoder_layers']
         decoder_layers = hyps['decoder_layers']
         num_layers = (encoder_layers, decoder_layers)
-        prior_order = hyps['inside_out']
+        prior_order = hyps['prior_order']
         grandPar = hyps['grandPar']
         sibling = hyps['sibling']
         network = StackPtrNet(word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, mode, hidden_size,
@@ -578,7 +578,7 @@ def parse(args):
         encoder_layers = hyps['encoder_layers']
         decoder_layers = hyps['decoder_layers']
         num_layers = (encoder_layers, decoder_layers)
-        prior_order = hyps['inside_out']
+        prior_order = hyps['prior_order']
         grandPar = hyps['grandPar']
         sibling = hyps['sibling']
         network = StackPtrNet(word_dim, num_words, char_dim, num_chars, pos_dim, num_pos,
