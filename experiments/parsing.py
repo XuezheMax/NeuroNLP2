@@ -20,8 +20,8 @@ from torch.optim.adamw import AdamW
 from torch.optim import SGD
 from torch.nn.utils import clip_grad_norm_
 from neuronlp2.nn.utils import total_grad_norm
-from neuronlp2.io import get_logger, conllx_data, iterate_data
-from neuronlp2.models import DeepBiAffine, NeuroMST
+from neuronlp2.io import get_logger, conllx_data, conllx_stacked_data, iterate_data
+from neuronlp2.models import DeepBiAffine, NeuroMST, StackPtrNet
 from neuronlp2.optim import ExponentialScheduler
 from neuronlp2 import utils
 from neuronlp2.io import CoNLLXWriter
@@ -39,7 +39,7 @@ def get_optimizer(parameters, optim, learning_rate, lr_decay, betas, eps, amsgra
     return optimizer, scheduler
 
 
-def eval(data, network, pred_writer, gold_writer, punct_set, word_alphabet, pos_alphabet, device):
+def eval(alg, data, network, pred_writer, gold_writer, punct_set, word_alphabet, pos_alphabet, device, beam=1):
     network.eval()
     accum_ucorr = 0.0
     accum_lcorr = 0.0
@@ -60,9 +60,14 @@ def eval(data, network, pred_writer, gold_writer, punct_set, word_alphabet, pos_
         postags = data['POS'].to(device)
         heads = data['HEAD'].numpy()
         types = data['TYPE'].numpy()
-        masks = data['MASK'].to(device)
-        lengths = data['LENGTH'].numpy()
-        heads_pred, types_pred = network.decode(words, chars, postags, mask=masks, leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
+        if alg == 'graph':
+            masks = data['MASK'].to(device)
+            lengths = data['LENGTH'].numpy()
+            heads_pred, types_pred = network.decode(words, chars, postags, mask=masks, leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
+        else:
+            masks = data['MASK_ENC'].to(device)
+            lengths = data['LENGTH_ENC'].numpy()
+            heads_pred, types_pred = network.decode(words, chars, postags, mask=masks, beam=beam, leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
 
         words = words.cpu().numpy()
         postags = postags.cpu().numpy()
@@ -165,14 +170,6 @@ def train(args):
     logger.info("POS Alphabet Size: %d" % num_pos)
     logger.info("Type Alphabet Size: %d" % num_types)
 
-    logger.info("Reading Data")
-
-    data_train = conllx_data.read_bucketed_data(train_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, symbolic_root=True)
-    num_data = sum(data_train[1])
-
-    data_dev = conllx_data.read_data(dev_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, symbolic_root=True)
-    data_test = conllx_data.read_data(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, symbolic_root=True)
-
     result_path = os.path.join(model_path, 'tmp')
     if not os.path.exists(result_path):
         os.makedirs(result_path)
@@ -225,7 +222,7 @@ def train(args):
     hyps = json.load(open(args.config, 'r'))
     json.dump(hyps, open(os.path.join(model_path, 'config.json'), 'w'), indent=2)
     model_type = hyps['model']
-    assert model_type in ['DeepBiAffine', 'NeuroMST']
+    assert model_type in ['DeepBiAffine', 'NeuroMST', 'StackPtr']
     assert word_dim == hyps['word_dim']
     if char_dim is not None:
         assert char_dim == hyps['char_dim']
@@ -237,22 +234,36 @@ def train(args):
     hidden_size = hyps['hidden_size']
     arc_space = hyps['arc_space']
     type_space = hyps['type_space']
-    num_layers = hyps['num_layers']
     p_in = hyps['p_in']
     p_out = hyps['p_out']
     p_rnn = hyps['p_rnn']
     activation = hyps['activation']
+    prior_order = None
 
+    alg = 'transition' if model_type == 'StackPtr' else 'graph'
     if model_type == 'DeepBiAffine':
+        num_layers = hyps['num_layers']
         network = DeepBiAffine(word_dim, num_words, char_dim, num_chars, pos_dim, num_pos,
                                mode, hidden_size, num_layers, num_types, arc_space, type_space,
                                embedd_word=word_table, embedd_char=char_table,
                                p_in=p_in, p_out=p_out, p_rnn=p_rnn, pos=use_pos, activation=activation)
     elif model_type == 'NeuroMST':
+        num_layers = hyps['num_layers']
         network = NeuroMST(word_dim, num_words, char_dim, num_chars, pos_dim, num_pos,
                            mode, hidden_size, num_layers, num_types, arc_space, type_space,
                            embedd_word=word_table, embedd_char=char_table,
                            p_in=p_in, p_out=p_out, p_rnn=p_rnn, pos=use_pos, activation=activation)
+    elif model_type == 'StackPtr':
+        encoder_layers = hyps['encoder_layers']
+        decoder_layers = hyps['decoder_layers']
+        num_layers = (encoder_layers, decoder_layers)
+        prior_order = hyps['inside_out']
+        grandPar = hyps['grandPar']
+        sibling = hyps['sibling']
+        network = StackPtrNet(word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, mode, hidden_size,
+                              encoder_layers, decoder_layers, num_types, arc_space, type_space,
+                              embedd_word=word_table, embedd_char=char_table, prior_order=prior_order, activation=activation,
+                              p_in=p_in, p_out=p_out, p_rnn=p_rnn, pos=use_pos, grandPar=grandPar, sibling=sibling)
     else:
         raise RuntimeError('Unknown model type: %s' % model_type)
 
@@ -260,6 +271,17 @@ def train(args):
         freeze_embedding(network.word_embed)
 
     network = network.to(device)
+
+    logger.info("Reading Data")
+    if alg == 'graph':
+        data_train = conllx_data.read_bucketed_data(train_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, symbolic_root=True)
+        data_dev = conllx_data.read_data(dev_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, symbolic_root=True)
+        data_test = conllx_data.read_data(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, symbolic_root=True)
+    else:
+        data_train = conllx_stacked_data.read_bucketed_data(train_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, prior_order=prior_order)
+        data_dev = conllx_stacked_data.read_data(dev_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, prior_order=prior_order)
+        data_test = conllx_stacked_data.read_data(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, prior_order=prior_order)
+    num_data = sum(data_train[1])
 
     pred_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
     gold_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
@@ -304,6 +326,7 @@ def train(args):
     test_total_root = 0
 
     patient = 0
+    beam = args.beam
     reset = args.reset
     num_batches = num_data // batch_size + 1
     if optim == 'adam':
@@ -331,13 +354,22 @@ def train(args):
             chars = data['CHAR'].to(device)
             postags = data['POS'].to(device)
             heads = data['HEAD'].to(device)
-            types = data['TYPE'].to(device)
-            masks = data['MASK'].to(device)
-
             nbatch = words.size(0)
-            nwords = masks.sum() - nbatch
-
-            loss_arc, loss_type = network.loss(words, chars, postags, heads, types, mask=masks)
+            if alg == 'graph':
+                types = data['TYPE'].to(device)
+                masks = data['MASK'].to(device)
+                nwords = masks.sum() - nbatch
+                loss_arc, loss_type = network.loss(words, chars, postags, heads, types, mask=masks)
+            else:
+                masks_enc = data['MASK_ENC'].to(device)
+                masks_dec = data['MASK_DEC'].to(device)
+                stacked_heads = data['STACK_HEAD'].to(device)
+                children = data['CHILD'].to(device)
+                siblings = data['SIBLING'].to(device)
+                stacked_types = data['STACK_TYPE'].to(device)
+                nwords = masks_dec.sum()
+                loss_arc, loss_type = network.loss(words, chars, postags, heads, stacked_heads, children, siblings, stacked_types,
+                                                   mask_e=masks_enc, mask_d=masks_dec)
             loss_arc = loss_arc.sum()
             loss_type = loss_type.sum()
             loss_total = loss_arc + loss_type
@@ -398,7 +430,7 @@ def train(args):
             gold_writer.start(gold_filename)
 
             print('Evaluating dev:')
-            dev_stats, dev_stats_nopunct, dev_stats_root = eval(data_dev, network, pred_writer, gold_writer, punct_set, word_alphabet, pos_alphabet, device)
+            dev_stats, dev_stats_nopunct, dev_stats_root = eval(alg, data_dev, network, pred_writer, gold_writer, punct_set, word_alphabet, pos_alphabet, device, beam=beam)
 
             pred_writer.close()
             gold_writer.close()
@@ -434,7 +466,7 @@ def train(args):
                 gold_writer.start(gold_filename)
 
                 print('Evaluating test:')
-                test_stats, test_stats_nopunct, test_stats_root = eval(data_test, network, pred_writer, gold_writer, punct_set, word_alphabet, pos_alphabet, device)
+                test_stats, test_stats_nopunct, test_stats_root = eval(alg, data_test, network, pred_writer, gold_writer, punct_set, word_alphabet, pos_alphabet, device, beam=beam)
 
                 test_ucorrect, test_lcorrect, test_ucomlpete, test_lcomplete, test_total = test_stats
                 test_ucorrect_nopunc, test_lcorrect_nopunc, test_ucomlpete_nopunc, test_lcomplete_nopunc, test_total_nopunc = test_stats_nopunct
@@ -519,7 +551,7 @@ def parse(args):
     logger.info("loading network...")
     hyps = json.load(open(os.path.join(model_path, 'config.json'), 'r'))
     model_type = hyps['model']
-    assert model_type in ['DeepBiAffine', 'NeuroMST']
+    assert model_type in ['DeepBiAffine', 'NeuroMST', 'StackPtr']
     word_dim = hyps['word_dim']
     char_dim = hyps['char_dim']
     use_pos = hyps['pos']
@@ -583,6 +615,7 @@ if __name__ == '__main__':
     args_parser.add_argument('--unk_replace', type=float, default=0., help='The rate to replace a singleton word with UNK')
     args_parser.add_argument('--freeze', action='store_true', help='frozen the word embedding (disable fine-tuning).')
     args_parser.add_argument('--punctuation', nargs='+', type=str, help='List of punctuations')
+    args_parser.add_argument('--beam', type=int, default=1, help='Beam size for decoding')
     args_parser.add_argument('--word_embedding', choices=['glove', 'senna', 'sskip', 'polyglot'], help='Embedding for words')
     args_parser.add_argument('--word_path', help='path for word embedding dict')
     args_parser.add_argument('--char_embedding', choices=['random', 'polyglot'], help='Embedding for characters')

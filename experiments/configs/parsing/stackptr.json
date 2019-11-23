@@ -1,0 +1,20 @@
+{
+  "model": "StackPtr",
+  "word_dim": 100,
+  "char_dim": 100,
+  "pos": true,
+  "pos_dim": 100,
+  "rnn_mode": "FastLSTM",
+  "encoder_layers":3,
+  "decoder_layers":1,
+  "hidden_size": 512,
+  "arc_space": 512,
+  "type_space": 128,
+  "p_in": 0.33,
+  "p_out": 0.33,
+  "p_rnn": [0.33, 0.33],
+  "prior_order": "inside_out",
+  "grandPar": true,
+  "sibling": true,
+  "activation": "elu"
+}
