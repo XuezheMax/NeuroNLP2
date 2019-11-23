@@ -352,9 +352,9 @@ class StackPtrNet(nn.Module):
                  pos=True, prior_order='inside_out', grandPar=False, sibling=False, activation='elu'):
 
         super(StackPtrNet, self).__init__()
-        self.word_embedd = nn.Embedding(num_words, word_dim, _weight=embedd_word, padding_idx=1)
-        self.pos_embedd = nn.Embedding(num_pos, pos_dim, _weight=embedd_pos, padding_idx=1) if pos else None
-        self.char_embedd = nn.Embedding(num_chars, char_dim, _weight=embedd_char, padding_idx=1)
+        self.word_embed = nn.Embedding(num_words, word_dim, _weight=embedd_word, padding_idx=1)
+        self.pos_embed = nn.Embedding(num_pos, pos_dim, _weight=embedd_pos, padding_idx=1) if pos else None
+        self.char_embed = nn.Embedding(num_chars, char_dim, _weight=embedd_char, padding_idx=1)
         self.char_cnn = CharCNN(2, char_dim, char_dim, hidden_channels=char_dim * 4, activation=activation)
 
         self.dropout_in = nn.Dropout2d(p=p_in)
@@ -451,7 +451,7 @@ class StackPtrNet(nn.Module):
 
     def _get_encoder_output(self, input_word, input_char, input_pos, mask=None):
         # [batch, length, word_dim]
-        word = self.word_embedd(input_word)
+        word = self.word_embed(input_word)
 
         # [batch, length, char_length, char_dim]
         char = self.char_cnn(self.char_embed(input_char))
