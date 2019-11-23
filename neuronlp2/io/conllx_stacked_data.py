@@ -129,7 +129,7 @@ def read_data(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alph
 
     masks_e = np.zeros([data_size, max_length], dtype=np.float32)
     single = np.zeros([data_size, max_length], dtype=np.int64)
-    lengths_e = np.empty(data_size, dtype=np.int64)
+    lengths = np.empty(data_size, dtype=np.int64)
 
     stack_hid_inputs = np.empty([data_size, 2 * max_length - 1], dtype=np.int64)
     chid_inputs = np.empty([data_size, 2 * max_length - 1], dtype=np.int64)
@@ -138,12 +138,11 @@ def read_data(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alph
     skip_connect_inputs = np.empty([data_size, 2 * max_length - 1], dtype=np.int64)
 
     masks_d = np.zeros([data_size, 2 * max_length - 1], dtype=np.float32)
-    lengths_d = np.empty(data_size, dtype=np.int64)
 
     for i, inst in enumerate(data):
         wids, cid_seqs, pids, hids, tids, stack_hids, chids, ssids, stack_tids, skip_ids = inst
         inst_size = len(wids)
-        lengths_e[i] = inst_size
+        lengths[i] = inst_size
         # word ids
         wid_inputs[i, :inst_size] = wids
         wid_inputs[i, inst_size:] = PAD_ID_WORD
@@ -167,7 +166,6 @@ def read_data(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alph
                 single[i, j] = 1
 
         inst_size_decoder = 2 * inst_size - 1
-        lengths_d[i] = inst_size_decoder
         # stacked heads
         stack_hid_inputs[i, :inst_size_decoder] = stack_hids
         stack_hid_inputs[i, inst_size_decoder:] = PAD_ID_TAG
@@ -193,7 +191,7 @@ def read_data(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alph
     types = torch.from_numpy(tid_inputs)
     masks_e = torch.from_numpy(masks_e)
     single = torch.from_numpy(single)
-    lengths_e = torch.from_numpy(lengths_e)
+    lengths = torch.from_numpy(lengths)
 
     stacked_heads = torch.from_numpy(stack_hid_inputs)
     children = torch.from_numpy(chid_inputs)
@@ -201,12 +199,10 @@ def read_data(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alph
     stacked_types = torch.from_numpy(stack_tid_inputs)
     skip_connect = torch.from_numpy(skip_connect_inputs)
     masks_d = torch.from_numpy(masks_d)
-    lengths_d = torch.from_numpy(lengths_d)
 
     data_tensor = {'WORD': words, 'CHAR': chars, 'POS': pos, 'HEAD': heads, 'TYPE': types, 'MASK_ENC': masks_e,
-                   'SINGLE': single, 'LENGTH_ENC': lengths_e, 'STACK_HEAD': stacked_heads, 'CHILD': children,
-                   'SIBLING': siblings, 'STACK_TYPE': stacked_types, 'SKIP_CONNECT': skip_connect, 'MASK_DEC': masks_d,
-                   'LENGTH_DEC': lengths_d}
+                   'SINGLE': single, 'LENGTH': lengths, 'STACK_HEAD': stacked_heads, 'CHILD': children,
+                   'SIBLING': siblings, 'STACK_TYPE': stacked_types, 'SKIP_CONNECT': skip_connect, 'MASK_DEC': masks_d}
     return data_tensor, data_size
 
 
