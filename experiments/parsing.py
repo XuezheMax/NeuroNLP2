@@ -271,6 +271,10 @@ def train(args):
         freeze_embedding(network.word_embed)
 
     network = network.to(device)
+    model = "{}-{}".format(model_type, mode)
+    logger.info("Network: %s, num_layer=%s, hidden=%d, act=%s" % (model, num_layers, hidden_size, activation))
+    logger.info("dropout(in, out, rnn): %s(%.2f, %.2f, %s)" % ('variational', p_in, p_out, p_rnn))
+    logger.info('# of Parameters: %d' % (sum([param.numel() for param in network.parameters()])))
 
     logger.info("Reading Data")
     if alg == 'graph':
@@ -282,16 +286,11 @@ def train(args):
         data_dev = conllx_stacked_data.read_data(dev_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, prior_order=prior_order)
         data_test = conllx_stacked_data.read_data(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, prior_order=prior_order)
     num_data = sum(data_train[1])
+    logger.info("training: #training data: %d, batch: %d, unk replace: %.2f" % (num_data, batch_size, unk_replace))
 
     pred_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
     gold_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
-
     optimizer, scheduler = get_optimizer(network.parameters(), optim, learning_rate, lr_decay, betas, eps, amsgrad, weight_decay, warmup_steps)
-    model = "{}-{}".format(model_type, mode)
-    logger.info("Network: %s, num_layer=%d, hidden=%d, act=%s" % (model, num_layers, hidden_size, activation))
-    logger.info("training: #training data: %d, batch: %d, unk replace: %.2f" % (num_data, batch_size, unk_replace))
-    logger.info("dropout(in, out, rnn): %s(%.2f, %.2f, %s)" % ('variational', p_in, p_out, p_rnn))
-    print('# of Parameters: %d' % (sum([param.numel() for param in network.parameters()])))
 
     best_ucorrect = 0.0
     best_lcorrect = 0.0
@@ -591,7 +590,7 @@ def parse(args):
     network = network.to(device)
     network.load_state_dict(torch.load(model_name, map_location=device))
     model = "{}-{}".format(model_type, mode)
-    logger.info("Network: %s, num_layer=%d, hidden=%d, act=%s" % (model, num_layers, hidden_size, activation))
+    logger.info("Network: %s, num_layer=%s, hidden=%d, act=%s" % (model, num_layers, hidden_size, activation))
 
     logger.info("Reading Data")
     if alg == 'graph':
