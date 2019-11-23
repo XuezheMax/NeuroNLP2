@@ -60,13 +60,12 @@ def eval(alg, data, network, pred_writer, gold_writer, punct_set, word_alphabet,
         postags = data['POS'].to(device)
         heads = data['HEAD'].numpy()
         types = data['TYPE'].numpy()
+        lengths = data['LENGTH'].numpy()
         if alg == 'graph':
             masks = data['MASK'].to(device)
-            lengths = data['LENGTH'].numpy()
             heads_pred, types_pred = network.decode(words, chars, postags, mask=masks, leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
         else:
             masks = data['MASK_ENC'].to(device)
-            lengths = data['LENGTH_ENC'].numpy()
             heads_pred, types_pred = network.decode(words, chars, postags, mask=masks, beam=beam, leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
 
         words = words.cpu().numpy()
