@@ -536,9 +536,6 @@ def parse(args):
     logger.info("POS Alphabet Size: %d" % num_pos)
     logger.info("Type Alphabet Size: %d" % num_types)
 
-    logger.info("Reading Data")
-    data_test = conllx_data.read_data(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, symbolic_root=True)
-
     result_path = os.path.join(model_path, 'tmp')
     if not os.path.exists(result_path):
         os.makedirs(result_path)
@@ -560,26 +557,49 @@ def parse(args):
     hidden_size = hyps['hidden_size']
     arc_space = hyps['arc_space']
     type_space = hyps['type_space']
-    num_layers = hyps['num_layers']
     p_in = hyps['p_in']
     p_out = hyps['p_out']
     p_rnn = hyps['p_rnn']
     activation = hyps['activation']
+    prior_order = None
 
+    alg = 'transition' if model_type == 'StackPtr' else 'graph'
     if model_type == 'DeepBiAffine':
+        num_layers = hyps['num_layers']
         network = DeepBiAffine(word_dim, num_words, char_dim, num_chars, pos_dim, num_pos,
                                mode, hidden_size, num_layers, num_types, arc_space, type_space,
                                p_in=p_in, p_out=p_out, p_rnn=p_rnn, pos=use_pos, activation=activation)
     elif model_type == 'NeuroMST':
+        num_layers = hyps['num_layers']
         network = NeuroMST(word_dim, num_words, char_dim, num_chars, pos_dim, num_pos,
                            mode, hidden_size, num_layers, num_types, arc_space, type_space,
                            p_in=p_in, p_out=p_out, p_rnn=p_rnn, pos=use_pos, activation=activation)
+    elif model_type == 'StackPtr':
+        encoder_layers = hyps['encoder_layers']
+        decoder_layers = hyps['decoder_layers']
+        num_layers = (encoder_layers, decoder_layers)
+        prior_order = hyps['inside_out']
+        grandPar = hyps['grandPar']
+        sibling = hyps['sibling']
+        network = StackPtrNet(word_dim, num_words, char_dim, num_chars, pos_dim, num_pos,
+                              mode, hidden_size, encoder_layers, decoder_layers, num_types, arc_space, type_space,
+                              prior_order=prior_order, activation=activation, p_in=p_in, p_out=p_out, p_rnn=p_rnn,
+                              pos=use_pos, grandPar=grandPar, sibling=sibling)
     else:
         raise RuntimeError('Unknown model type: %s' % model_type)
 
     network = network.to(device)
     network.load_state_dict(torch.load(model_name, map_location=device))
+    model = "{}-{}".format(model_type, mode)
+    logger.info("Network: %s, num_layer=%d, hidden=%d, act=%s" % (model, num_layers, hidden_size, activation))
 
+    logger.info("Reading Data")
+    if alg == 'graph':
+        data_test = conllx_data.read_data(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, symbolic_root=True)
+    else:
+        data_test = conllx_stacked_data.read_data(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, prior_order=prior_order)
+
+    beam = args.beam
     pred_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
     gold_writer = CoNLLXWriter(word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
     pred_filename = os.path.join(result_path, 'pred.txt')
@@ -588,7 +608,7 @@ def parse(args):
     gold_writer.start(gold_filename)
 
     with torch.no_grad():
-        eval(data_test, network, pred_writer, gold_writer, punct_set, word_alphabet, pos_alphabet, device)
+        eval(alg, data_test, network, pred_writer, gold_writer, punct_set, word_alphabet, pos_alphabet, device, beam)
 
     pred_writer.close()
     gold_writer.close()
