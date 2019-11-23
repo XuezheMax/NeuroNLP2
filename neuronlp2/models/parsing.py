@@ -681,7 +681,7 @@ class StackPtrNet(nn.Module):
             new_hypothesis_scores = hypothesis_scores[:num_hyp].unsqueeze(1) + hyp_scores
             # [num_hyp * length_encoder]
             new_hypothesis_scores, hyp_index = torch.sort(new_hypothesis_scores.view(-1), dim=0, descending=True)
-            base_index = hyp_index // length
+            base_index = hyp_index / length
             child_index = hyp_index % length
 
             cc = 0
@@ -820,18 +820,21 @@ class StackPtrNet(nn.Module):
         type_c = self.activation(self.type_c(output_enc))
         # [decoder_layers, batch, hidden_size
         hn = self._transform_decoder_init_state(hn)
-        batch, max_len_e, _ = output_enc.size()
+        batch, max_len, _ = output_enc.size()
 
-        heads = np.zeros([batch, max_len_e], dtype=np.int32)
-        types = np.zeros([batch, max_len_e], dtype=np.int32)
+        heads = np.zeros([batch, max_len], dtype=np.int32)
+        types = np.zeros([batch, max_len], dtype=np.int32)
 
-        children = np.zeros([batch, 2 * max_len_e - 1], dtype=np.int32)
-        stack_types = np.zeros([batch, 2 * max_len_e - 1], dtype=np.int32)
+        children = np.zeros([batch, 2 * max_len - 1], dtype=np.int32)
+        stack_types = np.zeros([batch, 2 * max_len - 1], dtype=np.int32)
 
         # compute lengths
-        length = mask.sum(dim=1).long().cpu().numpy() if mask is not None else None
+        if mask is None:
+            length = [max_len] * batch
+        else:
+            length = mask.sum(dim=1).long()
         for b in range(batch):
-            sent_len = max_len_e if length is None else length[b]
+            sent_len = length[b]
             # hack to handle LSTM
             if isinstance(hn, tuple):
                 hx, cx = hn
