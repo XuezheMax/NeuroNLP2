@@ -79,12 +79,6 @@ class DeepBiAffine(nn.Module):
             if self.pos_embed is not None:
                 self.pos_embed.weight[self.pos_embed.padding_idx].fill_(0)
 
-        for param in self.rnn.parameters():
-            if param.dim() == 1:
-                nn.init.constant_(param, 0)
-            else:
-                nn.init.xavier_uniform_(param)
-
         nn.init.xavier_uniform_(self.arc_h.weight)
         nn.init.constant_(self.arc_h.bias, 0.)
         nn.init.xavier_uniform_(self.arc_c.weight)
@@ -432,12 +426,6 @@ class StackPtrNet(nn.Module):
             self.char_embed.weight[self.char_embed.padding_idx].fill_(0)
             if self.pos_embed is not None:
                 self.pos_embed.weight[self.pos_embed.padding_idx].fill_(0)
-
-        for param in self.rnn.parameters():
-            if param.dim() == 1:
-                nn.init.constant_(param, 0)
-            else:
-                nn.init.xavier_uniform_(param)
 
         nn.init.xavier_uniform_(self.arc_h.weight)
         nn.init.constant_(self.arc_h.bias, 0.)
