@@ -20,8 +20,12 @@ def get_batch(data, batch_size, unk_replace=0.):
         noise = single.new_empty(batch_size, max_length).bernoulli_(unk_replace).long()
         words = words * (ones - single * noise)
 
+    stack_keys = ['STACK_HEAD', 'CHILD', 'SIBLING', 'STACK_TYPE', 'SKIP_CONNECT', 'MASK_DEC']
+    exclude_keys = set(['SINGLE', 'WORD', 'LENGTH'] + stack_keys)
+    stack_keys = set(stack_keys)
     batch = {'WORD': words, 'LENGTH': lengths}
-    batch.update({key: field[index, :max_length] for key, field in data.items() if key not in ['SINGLE', 'WORD', 'LENGTH']})
+    batch.update({key: field[index, :max_length] for key, field in data.items() if key not in exclude_keys})
+    batch.update({key: field[index, :2 * max_length - 1] for key, field in data.items() if key in stack_keys})
     return batch
 
 
@@ -54,8 +58,12 @@ def get_bucketed_batch(data, batch_size, unk_replace=0.):
         noise = single.new_empty(batch_size, max_length).bernoulli_(unk_replace).long()
         words = words * (ones - single * noise)
 
+    stack_keys = ['STACK_HEAD', 'CHILD', 'SIBLING', 'STACK_TYPE', 'SKIP_CONNECT', 'MASK_DEC']
+    exclude_keys = set(['SINGLE', 'WORD', 'LENGTH'] + stack_keys)
+    stack_keys = set(stack_keys)
     batch = {'WORD': words, 'LENGTH': lengths}
-    batch.update({key: field[index, :max_length] for key, field in data.items() if key not in ['SINGLE', 'WORD', 'LENGTH']})
+    batch.update({key: field[index, :max_length] for key, field in data.items() if key not in exclude_keys})
+    batch.update({key: field[index, :2 * max_length - 1] for key, field in data.items() if key in stack_keys})
     return batch
 
 
@@ -75,7 +83,9 @@ def iterate_batch(data, batch_size, unk_replace=0., shuffle=False):
         indices = torch.randperm(data_size).long()
         indices = indices.to(words.device)
 
-    exclude_keys = ['SINGLE', 'WORD', 'LENGTH']
+    stack_keys = ['STACK_HEAD', 'CHILD', 'SIBLING', 'STACK_TYPE', 'SKIP_CONNECT', 'MASK_DEC']
+    exclude_keys = set(['SINGLE', 'WORD', 'LENGTH'] + stack_keys)
+    stack_keys = set(stack_keys)
     for start_idx in range(0, data_size, batch_size):
         if shuffle:
             excerpt = indices[start_idx:start_idx + batch_size]
@@ -86,6 +96,7 @@ def iterate_batch(data, batch_size, unk_replace=0., shuffle=False):
         batch_length = lengths.max().item()
         batch = {'WORD': words[excerpt, :batch_length], 'LENGTH': lengths}
         batch.update({key: field[excerpt, :batch_length] for key, field in data.items() if key not in exclude_keys})
+        batch.update({key: field[excerpt, :2 * batch_length - 1] for key, field in data.items() if key in stack_keys})
         yield batch
 
 
@@ -96,7 +107,9 @@ def iterate_bucketed_batch(data, batch_size, unk_replace=0., shuffle=False):
     if shuffle:
         np.random.shuffle((bucket_indices))
 
-    exclude_keys = ['SINGLE', 'WORD', 'LENGTH']
+    stack_keys = ['STACK_HEAD', 'CHILD', 'SIBLING', 'STACK_TYPE', 'SKIP_CONNECT', 'MASK_DEC']
+    exclude_keys = set(['SINGLE', 'WORD', 'LENGTH'] + stack_keys)
+    stack_keys = set(stack_keys)
     for bucket_id in bucket_indices:
         data = data_tensor[bucket_id]
         bucket_size = bucket_sizes[bucket_id]
@@ -125,6 +138,7 @@ def iterate_bucketed_batch(data, batch_size, unk_replace=0., shuffle=False):
             batch_length = lengths.max().item()
             batch = {'WORD': words[excerpt, :batch_length], 'LENGTH': lengths}
             batch.update({key: field[excerpt, :batch_length] for key, field in data.items() if key not in exclude_keys})
+            batch.update({key: field[excerpt, :2 * batch_length - 1] for key, field in data.items() if key in stack_keys})
             yield batch
 
 
