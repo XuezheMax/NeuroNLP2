@@ -365,7 +365,7 @@ def train(args):
                 children = data['CHILD'].to(device)
                 siblings = data['SIBLING'].to(device)
                 stacked_types = data['STACK_TYPE'].to(device)
-                nwords = masks_enc.sum()
+                nwords = masks_enc.sum() - nbatch
                 loss_arc, loss_type = network.loss(words, chars, postags, heads, stacked_heads, children, siblings, stacked_types,
                                                    mask_e=masks_enc, mask_d=masks_dec)
             loss_arc = loss_arc.sum()
