@@ -151,15 +151,16 @@ class DeepBiAffine(nn.Module):
     def loss(self, input_word, input_char, input_pos, heads, types, mask=None):
         # out_arc shape [batch, length_head, length_child]
         out_arc, out_type  = self(input_word, input_char, input_pos, mask=mask)
-        batch = out_arc.size(0)
+        # batch = out_arc.size(0)
 
         # out_type shape [batch, length, type_space]
         type_h, type_c = out_type
 
         # create batch index [batch]
-        batch_index = torch.arange(0, batch).type_as(out_arc).long()
+        # batch_index = torch.arange(0, batch).type_as(out_arc).long()
         # get vector for heads [batch, length, type_space],
-        type_h = type_h[batch_index, heads.t()].transpose(0, 1).contiguous()
+        # type_h = type_h[batch_index, heads.t()].transpose(0, 1).contiguous()
+        type_h = type_h.gather(dim=1, index=heads.unsqueeze(2).expand(type_h.size()))
         # compute output for type [batch, length, num_labels]
         out_type = self.bilinear(type_h, type_c)
 
@@ -183,11 +184,12 @@ class DeepBiAffine(nn.Module):
     def _decode_types(self, out_type, heads, leading_symbolic):
         # out_type shape [batch, length, type_space]
         type_h, type_c = out_type
-        batch = type_h.size(0)
+        # batch = type_h.size(0)
         # create batch index [batch]
-        batch_index = torch.arange(0, batch).type_as(type_h).long()
+        # batch_index = torch.arange(0, batch).type_as(type_h).long()
         # get vector for heads [batch, length, type_space],
-        type_h = type_h[batch_index, heads.t()].transpose(0, 1).contiguous()
+        # type_h = type_h[batch_index, heads.t()].transpose(0, 1).contiguous()
+        type_h = type_h.gather(dim=1, index=heads.unsqueeze(2).expand(type_h.size()))
         # compute output for type [batch, length, num_labels]
         out_type = self.bilinear(type_h, type_c)
         # remove the first #leading_symbolic types.
@@ -286,15 +288,16 @@ class NeuroMST(DeepBiAffine):
         arc, out_type = self._get_rnn_output(input_word, input_char, input_pos, mask=mask)
         # [batch]
         loss_arc = self.treecrf.loss(arc[0], arc[1], heads, mask=mask)
-        batch = loss_arc.size(0)
+        # batch = loss_arc.size(0)
 
         # out_type shape [batch, length, type_space]
         type_h, type_c = out_type
 
         # create batch index [batch]
-        batch_index = torch.arange(0, batch).type_as(loss_arc).long()
+        # batch_index = torch.arange(0, batch).type_as(loss_arc).long()
         # get vector for heads [batch, length, type_space],
-        type_h = type_h[batch_index, heads.t()].transpose(0, 1).contiguous()
+        # type_h = type_h[batch_index, heads.t()].transpose(0, 1).contiguous()
+        type_h = type_h.gather(dim=1, index=heads.unsqueeze(2).expand(type_h.size()))
         # compute output for type [batch, length, num_labels]
         out_type = self.bilinear(type_h, type_c)
         loss_type = self.criterion(out_type.transpose(1, 2), types)
@@ -855,3 +858,40 @@ class StackPtrNet(nn.Module):
             stack_types[b, :2 * sent_len - 1] = stids
 
         return heads, types#, children, stack_types
+
+    def decode_batch(self, input_word, input_char, input_pos, mask=None, beam=1, leading_symbolic=0, ordered=True):
+        # reset noise for decoder
+        self.decoder.reset_noise(0)
+
+        # output from encoder [batch, length_encoder, tag_space]
+        # output_enc [batch, length, model_dim]
+        # arc_c [batch, length, arc_space]
+        # type_c [batch, length, type_space]
+        # hn [num_direction, batch, hidden_size]
+        output_enc, hn = self._get_encoder_output(input_word, input_char, input_pos, mask=mask)
+        device = output_enc.device
+        # output size [batch, length_encoder, arc_space]
+        arc_c = self.activation(self.arc_c(output_enc))
+        # output size [batch, length_encoder, type_space]
+        type_c = self.activation(self.type_c(output_enc))
+        # [decoder_layers, batch, hidden_size
+        hn = self._transform_decoder_init_state(hn)
+        batch, max_len, _ = output_enc.size()
+
+        heads = np.zeros([batch, max_len], dtype=np.int32)
+        types = np.zeros([batch, max_len], dtype=np.int32)
+
+        stacked_heads = torch.zeros(batch, beam, max_len, device=device, dtype=torch.int64)
+        children = torch.zeros(batch, beam, max_len, device=device, dtype=torch.int64)
+        stack_types = torch.zeros(batch, beam, max_len, device=device, dtype=torch.int64)
+        grand_parents = torch.zeros(batch, beam, max_len, device=device, dtype=torch.int64) if self.grandPar else None
+        siblings = torch.zeros(batch, beam, max_len, device=device, dtype=torch.int64) if self.sibling else None
+
+        # compute lengths
+        if mask is None:
+            length = [max_len] * batch
+        else:
+            length = mask.sum(dim=1).long()
+
+
+
