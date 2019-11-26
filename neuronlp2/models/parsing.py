@@ -151,15 +151,10 @@ class DeepBiAffine(nn.Module):
     def loss(self, input_word, input_char, input_pos, heads, types, mask=None):
         # out_arc shape [batch, length_head, length_child]
         out_arc, out_type  = self(input_word, input_char, input_pos, mask=mask)
-        # batch = out_arc.size(0)
-
         # out_type shape [batch, length, type_space]
         type_h, type_c = out_type
 
-        # create batch index [batch]
-        # batch_index = torch.arange(0, batch).type_as(out_arc).long()
         # get vector for heads [batch, length, type_space],
-        # type_h = type_h[batch_index, heads.t()].transpose(0, 1).contiguous()
         type_h = type_h.gather(dim=1, index=heads.unsqueeze(2).expand(type_h.size()))
         # compute output for type [batch, length, num_labels]
         out_type = self.bilinear(type_h, type_c)
@@ -184,11 +179,7 @@ class DeepBiAffine(nn.Module):
     def _decode_types(self, out_type, heads, leading_symbolic):
         # out_type shape [batch, length, type_space]
         type_h, type_c = out_type
-        # batch = type_h.size(0)
-        # create batch index [batch]
-        # batch_index = torch.arange(0, batch).type_as(type_h).long()
         # get vector for heads [batch, length, type_space],
-        # type_h = type_h[batch_index, heads.t()].transpose(0, 1).contiguous()
         type_h = type_h.gather(dim=1, index=heads.unsqueeze(2).expand(type_h.size()))
         # compute output for type [batch, length, num_labels]
         out_type = self.bilinear(type_h, type_c)
@@ -288,15 +279,10 @@ class NeuroMST(DeepBiAffine):
         arc, out_type = self._get_rnn_output(input_word, input_char, input_pos, mask=mask)
         # [batch]
         loss_arc = self.treecrf.loss(arc[0], arc[1], heads, mask=mask)
-        # batch = loss_arc.size(0)
-
         # out_type shape [batch, length, type_space]
         type_h, type_c = out_type
 
-        # create batch index [batch]
-        # batch_index = torch.arange(0, batch).type_as(loss_arc).long()
         # get vector for heads [batch, length, type_space],
-        # type_h = type_h[batch_index, heads.t()].transpose(0, 1).contiguous()
         type_h = type_h.gather(dim=1, index=heads.unsqueeze(2).expand(type_h.size()))
         # compute output for type [batch, length, num_labels]
         out_type = self.bilinear(type_h, type_c)
@@ -333,8 +319,6 @@ class NeuroMST(DeepBiAffine):
         """
         # out_arc shape [batch, length_h, length_c]
         energy, out_type = self(input_word, input_char, input_pos, mask=mask)
-        batch, max_len, _ = energy.size()
-
         # compute lengths
         length = mask.sum(dim=1).long()
         heads, _ = parser.decode_MST(energy.cpu().numpy(), length.cpu().numpy(), leading_symbolic=leading_symbolic, labeled=False)
