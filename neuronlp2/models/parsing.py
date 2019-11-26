@@ -455,12 +455,14 @@ class StackPtrNet(nn.Module):
 
     def _get_decoder_output(self, output_enc, heads, heads_stack, siblings, hx, mask=None):
         # get vector for heads [batch, length_decoder, input_dim],
-        src_encoding = output_enc.gather(dim=1, index=heads_stack.unsqueeze(2).expand(output_enc.size()))
+        enc_dim = output_enc.size(2)
+        batch, length_dec = heads_stack.size()
+        src_encoding = output_enc.gather(dim=1, index=heads_stack.unsqueeze(2).expand(batch, length_dec, enc_dim))
 
         if self.sibling:
             # [batch, length_decoder, hidden_size * 2]
             mask_sib = siblings.gt(0).float().unsqueeze(2)
-            output_enc_sibling = output_enc.gather(dim=1, index=siblings.unsqueeze(2).expand(output_enc.size())) * mask_sib
+            output_enc_sibling = output_enc.gather(dim=1, index=siblings.unsqueeze(2).expand(batch, length_dec, enc_dim)) * mask_sib
             src_encoding = src_encoding + output_enc_sibling
 
         if self.grandPar:
@@ -468,7 +470,7 @@ class StackPtrNet(nn.Module):
             gpars = heads.gather(dim=1, index=heads_stack).unsqueeze(2)
             mask_gpar = gpars.ge(0).float()
             # [batch, length_decoder, hidden_size * 2]
-            output_enc_gpar = output_enc.gather(dim=1, index=gpars.expand(output_enc.size())) * mask_gpar
+            output_enc_gpar = output_enc.gather(dim=1, index=gpars.expand(batch, length_dec, enc_dim)) * mask_gpar
             src_encoding = src_encoding + output_enc_gpar
 
         # transform to decoder input
@@ -536,8 +538,7 @@ class StackPtrNet(nn.Module):
         arc_h = self.activation(self.arc_h(output_dec))
         type_h = self.activation(self.type_h(output_dec))
 
-        _, max_len_d, _ = arc_h.size()
-
+        batch, max_len_d, type_space = type_h.size()
         # apply dropout
         # [batch, length_decoder, dim] + [batch, length_encoder, dim] --> [batch, length_decoder + length_encoder, dim]
         arc = self.dropout_out(torch.cat([arc_h, arc_c], dim=1).transpose(1, 2)).transpose(1, 2)
@@ -552,7 +553,7 @@ class StackPtrNet(nn.Module):
         out_arc = self.biaffine(arc_h, arc_c, mask_query=mask_d, mask_key=mask_e)
 
         # get vector for heads [batch, length_decoder, type_space],
-        type_c = type_c.gather(dim=1, index=children.unsqueeze(2).expand(type_c.size())).contiguous()
+        type_c = type_c.gather(dim=1, index=children.unsqueeze(2).expand(batch, max_len_d, type_space))
         # compute output for type [batch, length_decoder, num_labels]
         out_type = self.bilinear(type_h, type_c)
 
