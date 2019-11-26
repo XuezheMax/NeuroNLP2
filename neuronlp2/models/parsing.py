@@ -454,24 +454,21 @@ class StackPtrNet(nn.Module):
         return output, hn
 
     def _get_decoder_output(self, output_enc, heads, heads_stack, siblings, hx, mask=None):
-        batch, _, _ = output_enc.size()
-        # create batch index [batch]
-        batch_index = torch.arange(0, batch).type_as(output_enc).long()
         # get vector for heads [batch, length_decoder, input_dim],
-        src_encoding = output_enc[batch_index, heads_stack.t()].transpose(0, 1)
+        src_encoding = output_enc.gather(dim=1, index=heads_stack.unsqueeze(2).expand(output_enc.size()))
 
         if self.sibling:
             # [batch, length_decoder, hidden_size * 2]
             mask_sib = siblings.gt(0).float().unsqueeze(2)
-            output_enc_sibling = output_enc[batch_index, siblings.t()].transpose(0, 1) * mask_sib
+            output_enc_sibling = output_enc.gather(dim=1, index=siblings.unsqueeze(2).expand(output_enc.size())) * mask_sib
             src_encoding = src_encoding + output_enc_sibling
 
         if self.grandPar:
-            # [length_decoder, batch]
-            gpars = heads[batch_index, heads_stack.t()]
-            mask_gpar = gpars.t().ge(0).float().unsqueeze(2)
+            # [batch, length_decoder, 1]
+            gpars = heads.gather(dim=1, index=heads_stack).unsqueeze(2)
+            mask_gpar = gpars.ge(0).float()
             # [batch, length_decoder, hidden_size * 2]
-            output_enc_gpar = output_enc[batch_index, gpars].transpose(0, 1) * mask_gpar
+            output_enc_gpar = output_enc.gather(dim=1, index=gpars.expand(output_enc.size())) * mask_gpar
             src_encoding = src_encoding + output_enc_gpar
 
         # transform to decoder input
@@ -554,11 +551,8 @@ class StackPtrNet(nn.Module):
         # [batch, length_decoder, length_encoder]
         out_arc = self.biaffine(arc_h, arc_c, mask_query=mask_d, mask_key=mask_e)
 
-        batch = arc_c.size(0)
-        # create batch index [batch]
-        batch_index = torch.arange(0, batch).type_as(arc_c).long()
         # get vector for heads [batch, length_decoder, type_space],
-        type_c = type_c[batch_index, children.t()].transpose(0, 1).contiguous()
+        type_c = type_c.gather(dim=1, index=children.unsqueeze(2).expand(type_c.size())).contiguous()
         # compute output for type [batch, length_decoder, num_labels]
         out_type = self.bilinear(type_h, type_c)
 
