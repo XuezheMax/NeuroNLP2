@@ -875,10 +875,10 @@ class StackPtrNet(nn.Module):
 
         # compute lengths
         if mask is None:
-            length = torch.new_tensor([max_len] * batch, dtype=torch.int64, device=device)
+            steps = torch.new_tensor([num_steps] * batch, dtype=torch.int64, device=device)
             mask_sent = torch.ones(batch, 1, max_len, dtype=torch.bool, device=device)
         else:
-            length = mask.sum(dim=1).long()
+            steps = (mask.sum(dim=1) * 2 - 1).long()
             mask_sent = mask.unsqueeze(1).bool()
 
         num_hyp = 1
@@ -935,7 +935,7 @@ class StackPtrNet(nn.Module):
 
             # apply constrains to select valid hyps
             # [batch]
-            mask_last = length.eq(t + 1)
+            mask_last = steps.eq(t + 1)
             # [batch, num_hyp, length]
             mask_leaf = mask_leaf * (mask_last.unsqueeze(1) + curr_heads.ne(0)).unsqueeze(2)
             mask_non_leaf = mask_non_leaf * torch.logical_not(constraints)
