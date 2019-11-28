@@ -853,23 +853,22 @@ class StackPtrNet(nn.Module):
         arc_c = self.activation(self.arc_c(output_enc))
         # output size [batch, length_encoder, type_space]
         type_c = self.activation(self.type_c(output_enc))
+        type_space = type_c.size(2)
         # [decoder_layers, batch, hidden_size]
         hn = self._transform_decoder_init_state(hn)
         batch, max_len, _ = output_enc.size()
 
-        heads = torch.zeros(batch, beam, max_len, device=device, dtype=torch.int64)
-        types = torch.zeros(batch, beam, max_len, device=device, dtype=torch.int64)
+        heads = torch.zeros(batch, 1, max_len, device=device, dtype=torch.int64)
+        types = torch.zeros(batch, 1, max_len, device=device, dtype=torch.int64)
 
         num_steps = 2 * max_len - 1
-        stacked_heads = torch.zeros(batch, beam, num_steps, device=device, dtype=torch.int64)
-        stack_types = torch.zeros(batch, beam, num_steps, device=device, dtype=torch.int64)
-        grand_parents = torch.zeros(batch, beam, num_steps, device=device, dtype=torch.int64) if self.grandPar else None
-        siblings = torch.zeros(batch, beam, num_steps, device=device, dtype=torch.int64) if self.sibling else None
-        hypothesis_scores = output_enc.new_zeros((batch, beam))
+        stacked_heads = torch.zeros(batch, 1, num_steps, device=device, dtype=torch.int64)
+        siblings = torch.zeros(batch, 1, num_steps, device=device, dtype=torch.int64) if self.sibling else None
+        hypothesis_scores = output_enc.new_zeros((batch, 1))
 
         # [batch, beam, length]
         children = torch.arange(max_len, device=device, dtype=torch.int64).view(1, 1, max_len).expand(batch, beam, max_len)
-        constraints = torch.zeros(batch, beam, max_len, device=device, dtype=torch.bool)
+        constraints = torch.zeros(batch, 1, max_len, device=device, dtype=torch.bool)
         constraints[:, :, 0] = True
 
         # compute lengths
@@ -885,9 +884,9 @@ class StackPtrNet(nn.Module):
         hx = hn
         for t in range(num_steps):
             # [batch, num_hyp]
-            curr_heads = stacked_heads[:, :num_hyp, t]
-            curr_gpars = grand_parents[:, :num_hyp, t] if self.grandPar else None
-            curr_sibs = siblings[:, :num_hyp, t] if self.sibling else None
+            curr_heads = stacked_heads[:, :, t]
+            curr_gpars = heads.gather(dim=2, index=curr_heads.unsqueeze(2)).squeeze(1)
+            curr_sibs = siblings[:, :, t] if self.sibling else None
             # [batch, num_hyp, enc_dim]
             src_encoding = output_enc.gather(dim=1, index=curr_heads.unsqueeze(2).expand(batch, num_hyp, enc_dim))
 
@@ -910,14 +909,6 @@ class StackPtrNet(nn.Module):
             dec_dim = output_dec.size(1)
             # [batch, num_hyp, dec_dim]
             output_dec = output_dec.view(batch, num_hyp, dec_dim)
-            # [decoder_layer, batch, num_hyp, dec_dim]
-            if isinstance(hx, tuple):
-                hx, cx = hx
-                hx = hx.view(-1, batch, num_hyp, dec_dim)
-                cx = cx.view(-1, batch, num_hyp, dec_dim)
-                hx = (hx, cx)
-            else:
-                hx = hx.view(-1, batch, num_hyp, dec_dim)
 
             # [batch, num_hyp, arc_space]
             arc_h = self.activation(self.arc_h(output_dec))
@@ -934,7 +925,7 @@ class StackPtrNet(nn.Module):
             # [batch, num_hyp, length]
             hyp_scores = F.log_softmax(out_arc, dim=2)
             # [batch, num_hyp, length]
-            new_hypothesis_scores = hypothesis_scores[:, :num_hyp].unsqueeze(2) + hyp_scores
+            hypothesis_scores = hypothesis_scores.unsqueeze(2) + hyp_scores
 
             # [batch, num_hyp, length]
             mask_leaf = curr_heads.unsqueeze(2).eq(children[:, :num_hyp]) * mask_sent
@@ -945,27 +936,73 @@ class StackPtrNet(nn.Module):
             mask_last = length.eq(t + 1)
             # [batch, num_hyp, length]
             mask_leaf = mask_leaf * (mask_last.unsqueeze(1) + curr_heads.ne(0)).unsqueeze(2)
-            mask_non_leaf = mask_non_leaf * torch.logical_not(constraints[:, :num_hyp])
+            mask_non_leaf = mask_non_leaf * torch.logical_not(constraints)
+
+            hypothesis_scores.masked_fill_(torch.logical_not(mask_non_leaf + mask_leaf), float('-inf'))
+            # [batch, num_hyp * length]
+            hypothesis_scores, hyp_index = torch.sort(hypothesis_scores.view(batch, -1), dim=1, descending=True)
 
             # [batch]
             num_hyps = (mask_leaf + mask_non_leaf).long().view(batch, -1).sum(dim=1)
+            num_hyp = num_hyps.max().clamp(max=beam).item()
+            # [batch, new_hum_hyp]
+            hyps = torch.arange(num_hyp, device=device, dtype=torch.int64).view(1, num_hyp)
+            mask_hyp = hyps.lt(num_hyps.unsqueeze(1))
 
-
-            # [batch, num_hyp * length]
-            new_hypothesis_scores, hyp_index = torch.sort(new_hypothesis_scores.view(batch, -1), dim=1, descending=True)
+            # [batch, num_hyp]
+            hypothesis_scores = hypothesis_scores[:, :num_hyp]
+            hyp_index = hyp_index[:, :num_hyp]
             base_index = hyp_index / max_len
             child_index = hyp_index % max_len
 
-            # [batch, num_hyp * length]
+            # [batch, num_hyp]
             hyp_heads = curr_heads.gather(dim=1, index=base_index)
 
             # [batch, num_hyp, length]
-            ord_constraints = constraints[:, :num_hyp].gather(dim=1, index=base_index.view(batch, num_hyp, max_len))
-            ord_constraints = ord_constraints.gather(dim=2, index=child_index.view(batch, num_hyp, max_len))
-            # [batch, num_hyp * length]
-            mask_non_leaf = hyp_heads.ne(child_index) * torch.logical_not(ord_constraints.view(batch, -1))
+            base_index_expand = base_index.unsqueeze(2).expand(batch, num_hyp, max_len)
+            constraints = constraints.gather(dim=1, index=base_index_expand)
+            constraints.scatter_(2, child_index.unsqueeze(2), True)
 
-            valid_hyp_index = hyp_index[]
+            # [batch, num_hyp, length]
+            heads = heads.gather(dim=1, index=base_index_expand)
+            heads.scatter_(2, child_index.unsqueeze(2), hyp_heads.unsqueeze(2))
+            types = types.gather(dim=1, index=base_index_expand)
+
+            # [batch, num_hyp]
+            gpars = curr_gpars.gather(dim=1, index=base_index)
+            # [batch, num_hyp, num_steps]
+            base_index_expand = base_index.unsqueeze(2).expand(batch, num_hyp, num_steps)
+            stacked_heads = stacked_heads.gather(dim=1, index=base_index_expand)
+            stacked_heads[:, :, t] = torch.where(hyp_heads.eq(child_index), gpars, child_index)
+            if self.sibling:
+                siblings = siblings.gather(dim=1, index=base_index_expand)
+                siblings[:, :, t] = torch.where(hyp_heads.eq(child_index), child_index, torch.zeros_like(child_index))
+
+            # [batch, num_hyp, type_space]
+            base_index_expand = base_index.unsqueeze(2).expand(batch, num_hyp, type_space)
+            # [batch, num_hyp, num_labels]
+            out_type = self.bilinear(type_h.gather(dim=1, index=base_index_expand), type_c.gather(dim=1, index=base_index_expand))
+            hyp_type_scores = F.log_softmax(out_type, dim=2)
+            # compute the prediction of types [batch, num_hyp]
+            hyp_type_scores, hyp_types = hyp_type_scores.max(dim=1)
+            hypothesis_scores = hypothesis_scores + hyp_type_scores
+            types.scatter_(2, child_index.unsqueeze(2), hyp_types.unsqueeze(2))
+
+            # hx [decoder_layer, batch * num_hyp, dec_dim]
+            # hack to handle LSTM
+            hyp_index_expand = hyp_index.unsqueeze(2).expand(batch, num_hyp, dec_dim)
+            if isinstance(hx, tuple):
+                hx, cx = hx
+                hx = hx.gather(dim=1, index=hyp_index_expand)
+                cx = cx.gather(dim=1, index=hyp_index_expand)
+                hx = (hx, cx)
+            else:
+                hx = hx.gather(dim=1, index=hyp_index_expand)
+
+        heads = heads[:, 0].cpu().numpy()
+        types = types[:, 0].cpu().numpy()
+        return heads, types
+
 
 
 
