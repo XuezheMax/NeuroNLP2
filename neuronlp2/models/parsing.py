@@ -924,8 +924,11 @@ class StackPtrNet(nn.Module):
                 minus_mask_hyp = mask_hyp.eq(0).unsqueeze(2)
                 out_arc.masked_fill_(minus_mask_hyp + minus_mask_enc, float('-inf'))
 
+            # [batch]
+            mask_last = steps.le(t + 1)
+            mask_stop = steps.le(t)
             # [batch, num_hyp, length]
-            hyp_scores = F.log_softmax(out_arc, dim=2)
+            hyp_scores = F.log_softmax(out_arc, dim=2).masked_fill_(mask_stop, 0)
             # [batch, num_hyp, length]
             hypothesis_scores = hypothesis_scores.unsqueeze(2) + hyp_scores
 
@@ -934,8 +937,6 @@ class StackPtrNet(nn.Module):
             mask_non_leaf = torch.logical_not(mask_leaf) * mask_sent
 
             # apply constrains to select valid hyps
-            # [batch]
-            mask_last = steps.eq(t + 1)
             # [batch, num_hyp, length]
             mask_leaf = mask_leaf * (mask_last.unsqueeze(1) + curr_heads.ne(0)).unsqueeze(2)
             mask_non_leaf = mask_non_leaf * torch.logical_not(constraints)
