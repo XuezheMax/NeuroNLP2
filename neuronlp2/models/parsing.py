@@ -468,9 +468,9 @@ class StackPtrNet(nn.Module):
         if self.grandPar:
             # [batch, length_decoder, 1]
             gpars = heads.gather(dim=1, index=heads_stack).unsqueeze(2)
-            mask_gpar = gpars.ge(0).float()
+            # mask_gpar = gpars.ge(0).float()
             # [batch, length_decoder, hidden_size * 2]
-            output_enc_gpar = output_enc.gather(dim=1, index=gpars.expand(batch, length_dec, enc_dim)) * mask_gpar
+            output_enc_gpar = output_enc.gather(dim=1, index=gpars.expand(batch, length_dec, enc_dim)) #* mask_gpar
             src_encoding = src_encoding + output_enc_gpar
 
         # transform to decoder input
@@ -838,39 +838,134 @@ class StackPtrNet(nn.Module):
 
         return heads, types#, children, stack_types
 
-    def decode_batch(self, input_word, input_char, input_pos, mask=None, beam=1, leading_symbolic=0, ordered=True):
+    def decode_batch(self, input_word, input_char, input_pos, mask=None, beam=1, leading_symbolic=0):
         # reset noise for decoder
         self.decoder.reset_noise(0)
 
-        # output from encoder [batch, length_encoder, tag_space]
         # output_enc [batch, length, model_dim]
         # arc_c [batch, length, arc_space]
         # type_c [batch, length, type_space]
         # hn [num_direction, batch, hidden_size]
         output_enc, hn = self._get_encoder_output(input_word, input_char, input_pos, mask=mask)
+        enc_dim = output_enc.size(2)
         device = output_enc.device
         # output size [batch, length_encoder, arc_space]
         arc_c = self.activation(self.arc_c(output_enc))
         # output size [batch, length_encoder, type_space]
         type_c = self.activation(self.type_c(output_enc))
-        # [decoder_layers, batch, hidden_size
+        # [decoder_layers, batch, hidden_size]
         hn = self._transform_decoder_init_state(hn)
         batch, max_len, _ = output_enc.size()
 
-        heads = np.zeros([batch, max_len], dtype=np.int32)
-        types = np.zeros([batch, max_len], dtype=np.int32)
+        heads = torch.zeros(batch, beam, max_len, device=device, dtype=torch.int64)
+        types = torch.zeros(batch, beam, max_len, device=device, dtype=torch.int64)
 
-        stacked_heads = torch.zeros(batch, beam, max_len, device=device, dtype=torch.int64)
-        children = torch.zeros(batch, beam, max_len, device=device, dtype=torch.int64)
-        stack_types = torch.zeros(batch, beam, max_len, device=device, dtype=torch.int64)
-        grand_parents = torch.zeros(batch, beam, max_len, device=device, dtype=torch.int64) if self.grandPar else None
-        siblings = torch.zeros(batch, beam, max_len, device=device, dtype=torch.int64) if self.sibling else None
+        num_steps = 2 * max_len - 1
+        stacked_heads = torch.zeros(batch, beam, num_steps, device=device, dtype=torch.int64)
+        stack_types = torch.zeros(batch, beam, num_steps, device=device, dtype=torch.int64)
+        grand_parents = torch.zeros(batch, beam, num_steps, device=device, dtype=torch.int64) if self.grandPar else None
+        siblings = torch.zeros(batch, beam, num_steps, device=device, dtype=torch.int64) if self.sibling else None
+        hypothesis_scores = output_enc.new_zeros((batch, beam))
+
+        # [batch, beam, length]
+        children = torch.arange(max_len, device=device, dtype=torch.int64).view(1, 1, max_len).expand(batch, beam, max_len)
+        constraints = torch.zeros(batch, beam, max_len, device=device, dtype=torch.bool)
+        constraints[:, :, 0] = True
 
         # compute lengths
         if mask is None:
-            length = [max_len] * batch
+            length = torch.new_tensor([max_len] * batch, dtype=torch.int64, device=device)
+            mask_sent = torch.ones(batch, 1, max_len, dtype=torch.bool, device=device)
         else:
             length = mask.sum(dim=1).long()
+            mask_sent = mask.unsqueeze(1).bool()
+
+        num_hyp = 1
+        mask_hyp = torch.ones(batch, 1, device=device)
+        hx = hn
+        for t in range(num_steps):
+            # [batch, num_hyp]
+            curr_heads = stacked_heads[:, :num_hyp, t]
+            curr_gpars = grand_parents[:, :num_hyp, t] if self.grandPar else None
+            curr_sibs = siblings[:, :num_hyp, t] if self.sibling else None
+            # [batch, num_hyp, enc_dim]
+            src_encoding = output_enc.gather(dim=1, index=curr_heads.unsqueeze(2).expand(batch, num_hyp, enc_dim))
+
+            if self.sibling:
+                mask_sib = curr_sibs.gt(0).float().unsqueeze(2)
+                output_enc_sibling = output_enc.gather(dim=1, index=curr_sibs.unsqueeze(2).expand(batch, num_hyp, enc_dim)) * mask_sib
+                src_encoding = src_encoding + output_enc_sibling
+
+            if self.grandPar:
+                output_enc_gpar = output_enc.gather(dim=1, index=curr_gpars.unsqueeze(2).expand(batch, num_hyp, enc_dim))
+                src_encoding = src_encoding + output_enc_gpar
+
+            # transform to decoder input
+            # [batch, num_hyp, dec_dim]
+            src_encoding = self.activation(self.src_dense(src_encoding))
+
+            # output [batch * num_hyp, dec_dim]
+            # hx [decoder_layer, batch * num_hyp, dec_dim]
+            output_dec, hx = self.decoder.step(src_encoding.view(batch * num_hyp, -1), hx=hx)
+            dec_dim = output_dec.size(1)
+            # [batch, num_hyp, dec_dim]
+            output_dec = output_dec.view(batch, num_hyp, dec_dim)
+            # [decoder_layer, batch, num_hyp, dec_dim]
+            if isinstance(hx, tuple):
+                hx, cx = hx
+                hx = hx.view(-1, batch, num_hyp, dec_dim)
+                cx = cx.view(-1, batch, num_hyp, dec_dim)
+                hx = (hx, cx)
+            else:
+                hx = hx.view(-1, batch, num_hyp, dec_dim)
+
+            # [batch, num_hyp, arc_space]
+            arc_h = self.activation(self.arc_h(output_dec))
+            # [batch, num_hyp, type_space]
+            type_h = self.activation(self.type_h(output_dec))
+            # [batch, num_hyp, length]
+            out_arc = self.biaffine(arc_h, arc_c, mask_query=mask_hyp, mask_key=mask)
+            # mask invalid position to -inf for log_softmax
+            if mask is not None:
+                minus_mask_enc = mask.eq(0).unsqueeze(1)
+                minus_mask_hyp = mask_hyp.eq(0).unsqueeze(2)
+                out_arc = out_arc.masked_fill(minus_mask_hyp * minus_mask_enc, float('-inf'))
+
+            # [batch, num_hyp, length]
+            hyp_scores = F.log_softmax(out_arc, dim=2)
+            # [batch, num_hyp, length]
+            new_hypothesis_scores = hypothesis_scores[:, :num_hyp].unsqueeze(2) + hyp_scores
+
+            # [batch, num_hyp, length]
+            mask_leaf = curr_heads.unsqueeze(2).eq(children[:, :num_hyp]) * mask_sent
+            mask_non_leaf = torch.logical_not(mask_leaf) * mask_sent
+
+            # apply constrains to select valid hyps
+            # [batch]
+            mask_last = length.eq(t + 1)
+            # [batch, num_hyp, length]
+            mask_leaf = mask_leaf * (mask_last.unsqueeze(1) + curr_heads.ne(0)).unsqueeze(2)
+            mask_non_leaf = mask_non_leaf * torch.logical_not(constraints[:, :num_hyp])
+
+            # [batch]
+            num_hyps = (mask_leaf + mask_non_leaf).long().view(batch, -1).sum(dim=1)
+
+
+            # [batch, num_hyp * length]
+            new_hypothesis_scores, hyp_index = torch.sort(new_hypothesis_scores.view(batch, -1), dim=1, descending=True)
+            base_index = hyp_index / max_len
+            child_index = hyp_index % max_len
+
+            # [batch, num_hyp * length]
+            hyp_heads = curr_heads.gather(dim=1, index=base_index)
+
+            # [batch, num_hyp, length]
+            ord_constraints = constraints[:, :num_hyp].gather(dim=1, index=base_index.view(batch, num_hyp, max_len))
+            ord_constraints = ord_constraints.gather(dim=2, index=child_index.view(batch, num_hyp, max_len))
+            # [batch, num_hyp * length]
+            mask_non_leaf = hyp_heads.ne(child_index) * torch.logical_not(ord_constraints.view(batch, -1))
+
+            valid_hyp_index = hyp_index[]
 
 
 
