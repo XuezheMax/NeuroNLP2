@@ -39,7 +39,7 @@ def get_optimizer(parameters, optim, learning_rate, lr_decay, betas, eps, amsgra
     return optimizer, scheduler
 
 
-def eval(alg, data, network, pred_writer, gold_writer, punct_set, word_alphabet, pos_alphabet, device, beam=1):
+def eval(alg, data, network, pred_writer, gold_writer, punct_set, word_alphabet, pos_alphabet, device, beam=1, batch_size=256):
     network.eval()
     accum_ucorr = 0.0
     accum_lcorr = 0.0
@@ -54,7 +54,7 @@ def eval(alg, data, network, pred_writer, gold_writer, punct_set, word_alphabet,
     accum_root_corr = 0.0
     accum_total_root = 0.0
     accum_total_inst = 0.0
-    for data in iterate_data(data, 256):
+    for data in iterate_data(data, batch_size):
         words = data['WORD'].to(device)
         chars = data['CHAR'].to(device)
         postags = data['POS'].to(device)
@@ -608,7 +608,7 @@ def parse(args):
     with torch.no_grad():
         print('Parsing...')
         start_time = time.time()
-        eval(alg, data_test, network, pred_writer, gold_writer, punct_set, word_alphabet, pos_alphabet, device, beam)
+        eval(alg, data_test, network, pred_writer, gold_writer, punct_set, word_alphabet, pos_alphabet, device, beam, batch_size=args.batch_size)
         print('Time: %.2fs' % (time.time() - start_time))
 
     pred_writer.close()
