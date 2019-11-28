@@ -862,8 +862,8 @@ class StackPtrNet(nn.Module):
         types = torch.zeros(batch, 1, max_len, device=device, dtype=torch.int64)
 
         num_steps = 2 * max_len - 1
-        stacked_heads = torch.zeros(batch, 1, num_steps, device=device, dtype=torch.int64)
-        siblings = torch.zeros(batch, 1, num_steps, device=device, dtype=torch.int64) if self.sibling else None
+        stacked_heads = torch.zeros(batch, 1, num_steps + 1, device=device, dtype=torch.int64)
+        siblings = torch.zeros(batch, 1, num_steps + 1, device=device, dtype=torch.int64) if self.sibling else None
         hypothesis_scores = output_enc.new_zeros((batch, 1))
 
         # [batch, beam, length]
@@ -922,7 +922,7 @@ class StackPtrNet(nn.Module):
             if mask is not None:
                 minus_mask_enc = mask.eq(0).unsqueeze(1)
                 minus_mask_hyp = mask_hyp.eq(0).unsqueeze(2)
-                out_arc = out_arc.masked_fill(minus_mask_hyp * minus_mask_enc, float('-inf'))
+                out_arc.masked_fill_(minus_mask_hyp + minus_mask_enc, float('-inf'))
 
             # [batch, num_hyp, length]
             hyp_scores = F.log_softmax(out_arc, dim=2)
@@ -974,12 +974,12 @@ class StackPtrNet(nn.Module):
             # [batch, num_hyp]
             gpars = curr_gpars.gather(dim=1, index=base_index)
             # [batch, num_hyp, num_steps]
-            base_index_expand = base_index.unsqueeze(2).expand(batch, num_hyp, num_steps)
+            base_index_expand = base_index.unsqueeze(2).expand(batch, num_hyp, num_steps + 1)
             stacked_heads = stacked_heads.gather(dim=1, index=base_index_expand)
-            stacked_heads[:, :, t] = torch.where(hyp_heads.eq(child_index), gpars, child_index)
+            stacked_heads[:, :, t + 1] = torch.where(hyp_heads.eq(child_index), gpars, child_index)
             if self.sibling:
                 siblings = siblings.gather(dim=1, index=base_index_expand)
-                siblings[:, :, t] = torch.where(hyp_heads.eq(child_index), child_index, torch.zeros_like(child_index))
+                siblings[:, :, t + 1] = torch.where(hyp_heads.eq(child_index), child_index, torch.zeros_like(child_index))
 
             # [batch, num_hyp, type_space]
             base_index_expand = base_index.unsqueeze(2).expand(batch, num_hyp, type_space)
