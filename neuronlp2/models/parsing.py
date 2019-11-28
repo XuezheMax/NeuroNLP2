@@ -928,7 +928,7 @@ class StackPtrNet(nn.Module):
             mask_last = steps.le(t + 1)
             mask_stop = steps.le(t)
             # [batch, num_hyp, length]
-            hyp_scores = F.log_softmax(out_arc, dim=2).masked_fill_(mask_stop, 0)
+            hyp_scores = F.log_softmax(out_arc, dim=2).masked_fill_(mask_stop.view(batch, 1, 1), 0)
             # [batch, num_hyp, length]
             hypothesis_scores = hypothesis_scores.unsqueeze(2) + hyp_scores
 
