@@ -606,7 +606,10 @@ def parse(args):
     gold_writer.start(gold_filename)
 
     with torch.no_grad():
+        print('Parsing...')
+        start_time = time.time()
         eval(alg, data_test, network, pred_writer, gold_writer, punct_set, word_alphabet, pos_alphabet, device, beam)
+        print('Time: %.2fs' % (time.time() - start_time))
 
     pred_writer.close()
     gold_writer.close()
