@@ -870,6 +870,8 @@ class StackPtrNet(nn.Module):
         children = torch.arange(max_len, device=device, dtype=torch.int64).view(1, 1, max_len).expand(batch, beam, max_len)
         constraints = torch.zeros(batch, 1, max_len, device=device, dtype=torch.bool)
         constraints[:, :, 0] = True
+        # [batch, 1]
+        batch_index = torch.arange(batch, device=device, dtype=torch.int64).view(batch, 1)
 
         # compute lengths
         if mask is None:
@@ -943,6 +945,7 @@ class StackPtrNet(nn.Module):
             hypothesis_scores, hyp_index = torch.sort(hypothesis_scores.view(batch, -1), dim=1, descending=True)
 
             # [batch]
+            prev_num_hyp = num_hyp
             num_hyps = (mask_leaf + mask_non_leaf).long().view(batch, -1).sum(dim=1)
             num_hyp = num_hyps.max().clamp(max=beam).item()
             # [batch, new_hum_hyp]
@@ -990,14 +993,14 @@ class StackPtrNet(nn.Module):
 
             # hx [decoder_layer, batch * num_hyp, dec_dim]
             # hack to handle LSTM
-            hyp_index_expand = hyp_index.unsqueeze(2).expand(batch, num_hyp, dec_dim)
+            hx_index = (base_index + batch_index * prev_num_hyp).view(batch * num_hyp)
             if isinstance(hx, tuple):
                 hx, cx = hx
-                hx = hx.gather(dim=1, index=hyp_index_expand)
-                cx = cx.gather(dim=1, index=hyp_index_expand)
+                hx = hx[:, hx_index]
+                cx = cx[:, hx_index]
                 hx = (hx, cx)
             else:
-                hx = hx.gather(dim=1, index=hyp_index_expand)
+                hx = hx[:, hx_index]
 
         heads = heads[:, 0].cpu().numpy()
         types = types[:, 0].cpu().numpy()
