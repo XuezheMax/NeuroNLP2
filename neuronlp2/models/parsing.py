@@ -960,26 +960,27 @@ class StackPtrNet(nn.Module):
 
             # [batch, num_hyp]
             hyp_heads = curr_heads.gather(dim=1, index=base_index)
+            hyp_gpars = curr_gpars.gather(dim=1, index=base_index)
 
             # [batch, num_hyp, length]
             base_index_expand = base_index.unsqueeze(2).expand(batch, num_hyp, max_len)
             constraints = constraints.gather(dim=1, index=base_index_expand)
             constraints.scatter_(2, child_index.unsqueeze(2), True)
 
+            # [batch, num_hyp]
+            mask_leaf = hyp_heads.eq(child_index)
             # [batch, num_hyp, length]
             heads = heads.gather(dim=1, index=base_index_expand)
-            heads.scatter_(2, child_index.unsqueeze(2), hyp_heads.unsqueeze(2))
+            heads.scatter_(2, child_index.unsqueeze(2), torch.where(mask_leaf, hyp_gpars, hyp_heads).unsqueeze(2))
             types = types.gather(dim=1, index=base_index_expand)
 
-            # [batch, num_hyp]
-            gpars = curr_gpars.gather(dim=1, index=base_index)
             # [batch, num_hyp, num_steps]
             base_index_expand = base_index.unsqueeze(2).expand(batch, num_hyp, num_steps + 1)
             stacked_heads = stacked_heads.gather(dim=1, index=base_index_expand)
-            stacked_heads[:, :, t + 1] = torch.where(hyp_heads.eq(child_index), gpars, child_index)
+            stacked_heads[:, :, t + 1] = torch.where(mask_leaf, hyp_gpars, child_index)
             if self.sibling:
                 siblings = siblings.gather(dim=1, index=base_index_expand)
-                siblings[:, :, t + 1] = torch.where(hyp_heads.eq(child_index), child_index, torch.zeros_like(child_index))
+                siblings[:, :, t + 1] = torch.where(mask_leaf, child_index, torch.zeros_like(child_index))
 
             # [batch, num_hyp, type_space]
             base_index_expand = base_index.unsqueeze(2).expand(batch, num_hyp, type_space)
