@@ -973,6 +973,8 @@ class StackPtrNet(nn.Module):
             heads = heads.gather(dim=1, index=base_index_expand)
             heads.scatter_(2, child_index.unsqueeze(2), torch.where(mask_leaf, hyp_gpars, hyp_heads).unsqueeze(2))
             types = types.gather(dim=1, index=base_index_expand)
+            # [batch, num_hyp]
+            org_types = types.gather(dim=2, index=child_index.unsqueeze(2)).squeeze(2)
 
             # [batch, num_hyp, num_steps]
             base_index_expand = base_index.unsqueeze(2).expand(batch, num_hyp, num_steps + 1)
@@ -991,7 +993,7 @@ class StackPtrNet(nn.Module):
             # compute the prediction of types [batch, num_hyp]
             hyp_type_scores, hyp_types = hyp_type_scores.max(dim=2)
             hypothesis_scores = hypothesis_scores + hyp_type_scores
-            types.scatter_(2, child_index.unsqueeze(2), hyp_types.unsqueeze(2))
+            types.scatter_(2, child_index.unsqueeze(2), torch.where(mask_leaf, org_types, hyp_types).unsqueeze(2))
 
             # hx [decoder_layer, batch * num_hyp, dec_dim]
             # hack to handle LSTM
