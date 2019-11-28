@@ -983,8 +983,9 @@ class StackPtrNet(nn.Module):
 
             # [batch, num_hyp, type_space]
             base_index_expand = base_index.unsqueeze(2).expand(batch, num_hyp, type_space)
+            child_index_expand = child_index.unsqueeze(2).expand(batch, num_hyp, type_space)
             # [batch, num_hyp, num_labels]
-            out_type = self.bilinear(type_h.gather(dim=1, index=base_index_expand), type_c.gather(dim=1, index=base_index_expand))
+            out_type = self.bilinear(type_h.gather(dim=1, index=base_index_expand), type_c.gather(dim=1, index=child_index_expand))
             hyp_type_scores = F.log_softmax(out_type, dim=2)
             # compute the prediction of types [batch, num_hyp]
             hyp_type_scores, hyp_types = hyp_type_scores.max(dim=2)
