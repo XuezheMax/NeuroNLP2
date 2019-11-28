@@ -887,7 +887,7 @@ class StackPtrNet(nn.Module):
         for t in range(num_steps):
             # [batch, num_hyp]
             curr_heads = stacked_heads[:, :, t]
-            curr_gpars = heads.gather(dim=2, index=curr_heads.unsqueeze(2)).squeeze(1)
+            curr_gpars = heads.gather(dim=2, index=curr_heads.unsqueeze(2)).squeeze(2)
             curr_sibs = siblings[:, :, t] if self.sibling else None
             # [batch, num_hyp, enc_dim]
             src_encoding = output_enc.gather(dim=1, index=curr_heads.unsqueeze(2).expand(batch, num_hyp, enc_dim))
