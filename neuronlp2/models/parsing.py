@@ -786,7 +786,7 @@ class StackPtrNet(nn.Module):
 
         return heads, types, children, stacked_types
 
-    def decode(self, input_word, input_char, input_pos, mask=None, beam=1, leading_symbolic=0, ordered=True):
+    def decode_single(self, input_word, input_char, input_pos, mask=None, beam=1, leading_symbolic=0, ordered=True):
         # reset noise for decoder
         self.decoder.reset_noise(0)
 
@@ -838,7 +838,7 @@ class StackPtrNet(nn.Module):
 
         return heads, types#, children, stack_types
 
-    def decode_batch(self, input_word, input_char, input_pos, mask=None, beam=1, leading_symbolic=0):
+    def decode(self, input_word, input_char, input_pos, mask=None, beam=1, leading_symbolic=0):
         # reset noise for decoder
         self.decoder.reset_noise(0)
 
