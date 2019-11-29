@@ -27,42 +27,43 @@ It also includes the re-implementation of the Stanford Deep BiAffine Parser:
 
 >ICLR 2017
 
+## Updates
+1. Upgraded the code to support PyTorch 1.3 and Python 3.6
+2. Re-factored code to better organization
+3. Implemented the batch version of Stack-Pointer Parser decoding algorithm, about 50 times faster!
+
 ## Requirements
 
-Python 2.7, PyTorch >=0.3.0, Gensim >= 0.12.0
+Python 3.6, PyTorch >=1.3.1, Gensim >= 0.12.0
 
 ## Data format
 For the data format used in our implementation, please read this [issue](https://github.com/XuezheMax/NeuroNLP2/issues/9).
 
 ## Running the experiments
+First to the experiments folder:
 
+    cd experiments
 ### Sequence labeling
-In the root of the repository, first make the tmp directory:
+To train a CRF POS tagger of PTB WSJ corpus, 
 
-    mkdir tmp
-
-To train a CRF POS tagger, 
-
-    ./example/run_posCRFTagger.sh
+    ./scripts/run_pos_wsj.sh
 where the arguments for ```train/dev/test``` data, together with the pretrained word embedding should be setup.
 
-To train a NER model,
+To train a NER model on CoNLL-2003 English data set,
 
-    ./example/run_ner_crf.sh
-
-#### Note
-If you want to apply the sequence labeling model to other tasks or different datasets, please be sure to remove the corresponding folders storing the vocabularies located in ```data/alphabets/```. Otherwise, the old vocabularies will be loaded from disk.
+    ./scripts/run_ner_conll03.sh
 
 ### Dependency Parsing
 To train a Stack-Pointer parser, simply run
 
-    ./example/run_stackPtrParser.sh
+    ./scripts/run_stackptr.sh
 Remeber to setup the paths for data and embeddings.
 
 To train a Deep BiAffine parser, simply run
 
-    ./example/run_graphParser.sh
+    ./scripts/run_deepbiaf.sh
 Again, remember to setup the paths for data and embeddings.
 
-To train a Neural MST parser, run the same script, but change the argument ```objective``` from ```cross_entropy``` to ```crf``` (this part is still under development).
- 
+To train a Neural MST parser, 
+
+    ./scripts/run_neuromst.sh
