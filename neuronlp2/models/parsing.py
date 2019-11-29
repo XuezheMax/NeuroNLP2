@@ -921,14 +921,14 @@ class StackPtrNet(nn.Module):
             # mask invalid position to -inf for log_softmax
             if mask is not None:
                 minus_mask_enc = mask.eq(0).unsqueeze(1)
-                minus_mask_hyp = mask_hyp.eq(0).unsqueeze(2)
-                out_arc.masked_fill_(minus_mask_hyp + minus_mask_enc, float('-inf'))
+                out_arc.masked_fill_(minus_mask_enc, float('-inf'))
 
             # [batch]
             mask_last = steps.le(t + 1)
             mask_stop = steps.le(t)
+            minus_mask_hyp = mask_hyp.eq(0).unsqueeze(2)
             # [batch, num_hyp, length]
-            hyp_scores = F.log_softmax(out_arc, dim=2).masked_fill_(mask_stop.view(batch, 1, 1), 0)
+            hyp_scores = F.log_softmax(out_arc, dim=2).masked_fill_(mask_stop.view(batch, 1, 1) + minus_mask_hyp, 0)
             # [batch, num_hyp, length]
             hypothesis_scores = hypothesis_scores.unsqueeze(2) + hyp_scores
 
@@ -949,7 +949,7 @@ class StackPtrNet(nn.Module):
             prev_num_hyp = num_hyp
             num_hyps = (mask_leaf + mask_non_leaf).long().view(batch, -1).sum(dim=1)
             num_hyp = num_hyps.max().clamp(max=beam).item()
-            # [batch, new_hum_hyp]
+            # [batch, hum_hyp]
             hyps = torch.arange(num_hyp, device=device, dtype=torch.int64).view(1, num_hyp)
             mask_hyp = hyps.lt(num_hyps.unsqueeze(1))
 
