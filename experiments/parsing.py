@@ -157,7 +157,7 @@ def train(args):
     alphabet_path = os.path.join(model_path, 'alphabets')
     word_alphabet, char_alphabet, pos_alphabet, type_alphabet = conllx_data.create_alphabets(alphabet_path, train_path,
                                                                                              data_paths=[dev_path, test_path],
-                                                                                             embedd_dict=word_dict, max_vocabulary_size=100000)
+                                                                                             embedd_dict=word_dict, max_vocabulary_size=200000)
 
     num_words = word_alphabet.size()
     num_chars = char_alphabet.size()
