@@ -669,14 +669,14 @@ class StackPtrNet(nn.Module):
 
             # [batch, num_hyp, length]
             mask_leaf = curr_heads.unsqueeze(2).eq(children[:, :num_hyp]) * mask_sent
-            mask_non_leaf = torch.logical_not(mask_leaf) * mask_sent
+            mask_non_leaf = (~mask_leaf) * mask_sent
 
             # apply constrains to select valid hyps
             # [batch, num_hyp, length]
             mask_leaf = mask_leaf * (mask_last.unsqueeze(1) + curr_heads.ne(0)).unsqueeze(2)
-            mask_non_leaf = mask_non_leaf * torch.logical_not(constraints)
+            mask_non_leaf = mask_non_leaf * (~constraints)
 
-            hypothesis_scores.masked_fill_(torch.logical_not(mask_non_leaf + mask_leaf), float('-inf'))
+            hypothesis_scores.masked_fill_(~(mask_non_leaf + mask_leaf), float('-inf'))
             # [batch, num_hyp * length]
             hypothesis_scores, hyp_index = torch.sort(hypothesis_scores.view(batch, -1), dim=1, descending=True)
 
