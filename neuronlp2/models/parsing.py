@@ -686,7 +686,7 @@ class StackPtrNet(nn.Module):
             num_hyp = num_hyps.max().clamp(max=beam).item()
             # [batch, hum_hyp]
             hyps = torch.arange(num_hyp, device=device, dtype=torch.int64).view(1, num_hyp)
-            mask_hyp = hyps.lt(num_hyps.unsqueeze(1))
+            mask_hyp = hyps.lt(num_hyps.unsqueeze(1)).float()
 
             # [batch, num_hyp]
             hypothesis_scores = hypothesis_scores[:, :num_hyp]
