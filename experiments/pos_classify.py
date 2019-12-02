@@ -129,10 +129,12 @@ def encode(network, data, device, bucketed):
         nbatch = wids.size(0)
         with torch.no_grad():
             out = network.get_layer_outputs(wids, chids, postags, mask=masks)
-        word_embed = out['word']
-        char_embed = out['char']
+        word_embed = out['word'].cpu()
+        char_embed = out['char'].cpu()
         pos_embed = out['pos']
-        layer_outs = out['layers']
+        if pos_embed is not None:
+            pos_embed = pos_embed.cpu()
+        layer_outs = out['layers'].cpu()
         num_layers = len(layer_outs)
 
         if rnn_layers is None:
@@ -142,8 +144,8 @@ def encode(network, data, device, bucketed):
 
         if pos_embed is not None and pos is None:
             pos = []
-        lengths = masks.sum(dim=1).long()
-        postags = postags - conllx_data.NUM_SYMBOLIC_TAGS
+        lengths = masks.sum(dim=1).long().cpu()
+        postags = (postags - conllx_data.NUM_SYMBOLIC_TAGS).cpu()
         for b in range(nbatch):
             length = lengths[b]
             words.append(word_embed[b, 1:length])
@@ -154,23 +156,23 @@ def encode(network, data, device, bucketed):
             for rnn_layer, layer_out in zip(rnn_layers, layer_outs):
                 rnn_layer.append(layer_out[b, 1:length])
 
-    words = torch.cat(words, dim=0)
-    ntokens = words.size(0)
+    words = torch.cat(words, dim=0).numpy()
+    ntokens = words.shape[0]
 
-    chars = torch.cat(chars, dim=0)
-    assert ntokens == chars.size(0)
+    chars = torch.cat(chars, dim=0).numpu()
+    assert ntokens == chars.shape[0]
 
     if pos is not None:
-        pos = torch.cat(pos, dim=0)
-        assert ntokens == pos.size(0)
+        pos = torch.cat(pos, dim=0).numpy()
+        assert ntokens == pos.shape[0]
 
-    labels = torch.cat(labels, dim=0)
-    assert ntokens == labels.size(0)
+    labels = torch.cat(labels, dim=0).numpy()
+    assert ntokens == labels.shape[0]
 
-    rnn_layers = [torch.cat(rnn_layer, dim=0) for rnn_layer in rnn_layers]
+    rnn_layers = [torch.cat(rnn_layer, dim=0).numpy() for rnn_layer in rnn_layers]
     for rnn_layer in rnn_layers:
-        assert ntokens == rnn_layer.size(0)
-    print('number of tokens: %d' % words.size(0))
+        assert ntokens == rnn_layer.shape[0]
+    print('number of tokens: %d' % ntokens)
 
     features = {"word": words, "char": chars, "pos": pos}
     features.update({'rnn layer{}'.format(i): rnn_layer for i, rnn_layer in enumerate(rnn_layers)})
