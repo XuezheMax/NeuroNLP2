@@ -177,15 +177,7 @@ def encode(network, data, device, bucketed):
     return features, labels
 
 
-def main():
-    args_parser = argparse.ArgumentParser(description='POS tag classification')
-    args_parser.add_argument('--probe', choices=['svm',], required=True, help='classifier for probe')
-    args_parser.add_argument('--train', help='path for training file.')
-    args_parser.add_argument('--dev', help='path for dev file.')
-    args_parser.add_argument('--test', help='path for test file.', required=True)
-    args_parser.add_argument('--model_path', help='path for saving model file.', required=True)
-    args = args_parser.parse_args()
-
+def main(args):
     network, (data_train, data_dev, data_test), device = setup(args)
 
     train_features, train_labels = encode(network, data_train, device, bucketed=True)
@@ -196,5 +188,12 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    args_parser = argparse.ArgumentParser(description='POS tag classification')
+    args_parser.add_argument('--probe', choices=['svm',], required=True, help='classifier for probe')
+    args_parser.add_argument('--train', help='path for training file.')
+    args_parser.add_argument('--dev', help='path for dev file.')
+    args_parser.add_argument('--test', help='path for test file.', required=True)
+    args_parser.add_argument('--model_path', help='path for saving model file.', required=True)
+    args = args_parser.parse_args()
+    main(args)
 
