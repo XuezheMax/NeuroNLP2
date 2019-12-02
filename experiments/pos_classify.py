@@ -159,7 +159,7 @@ def encode(network, data, device, bucketed):
     words = torch.cat(words, dim=0).numpy()
     ntokens = words.shape[0]
 
-    chars = torch.cat(chars, dim=0).numpu()
+    chars = torch.cat(chars, dim=0).numpy()
     assert ntokens == chars.shape[0]
 
     if pos is not None:
