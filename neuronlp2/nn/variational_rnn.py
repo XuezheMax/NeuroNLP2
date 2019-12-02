@@ -57,6 +57,24 @@ class VarRNNBase(nn.Module):
         output, hidden = func(input, self.all_cells, hx, None if mask is None else mask.view(mask.size() + (1,)))
         return output, hidden
 
+    def get_layer_outputs(self, input, mask=None, hx=None):
+        batch_size = input.size(0) if self.batch_first else input.size(1)
+        if hx is None:
+            num_directions = 2 if self.bidirectional else 1
+            hx = input.new_zeros(self.num_layers * num_directions, batch_size, self.hidden_size)
+            if self.lstm:
+                hx = (hx, hx)
+
+        func = rnn_F.AutogradVarRNN(num_layers=self.num_layers,
+                                    batch_first=self.batch_first,
+                                    bidirectional=self.bidirectional,
+                                    lstm=self.lstm, layer_output=True)
+
+        self.reset_noise(batch_size)
+
+        output, hidden, layer_outputs = func(input, self.all_cells, hx, None if mask is None else mask.view(mask.size() + (1,)))
+        return output, hidden, layer_outputs
+
     def step(self, input, hx=None, mask=None):
         '''
         execute one step forward (only for one-directional RNN).

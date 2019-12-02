@@ -129,13 +129,14 @@ def VarRecurrent(reverse=False):
     return forward
 
 
-def StackedRNN(inners, num_layers, lstm=False):
+def StackedRNN(inners, num_layers, lstm=False, layer_output=False):
     num_directions = len(inners)
     total_layers = num_layers * num_directions
 
     def forward(input, hidden, cells, mask):
         assert (len(cells) == total_layers)
         next_hidden = []
+        layer_outputs = []
 
         if lstm:
             hidden = list(zip(*hidden))
@@ -149,6 +150,7 @@ def StackedRNN(inners, num_layers, lstm=False):
                 all_output.append(output)
 
             input = torch.cat(all_output, input.dim() - 1)
+            layer_outputs.append(input)
 
         if lstm:
             next_h, next_c = zip(*next_hidden)
@@ -159,12 +161,15 @@ def StackedRNN(inners, num_layers, lstm=False):
         else:
             next_hidden = torch.cat(next_hidden, 0).view(total_layers, *next_hidden[0].size())
 
-        return next_hidden, input
+        if layer_output:
+            return next_hidden, input, layer_outputs
+        else:
+            return next_hidden, input
 
     return forward
 
 
-def AutogradVarRNN(num_layers=1, batch_first=False, bidirectional=False, lstm=False):
+def AutogradVarRNN(num_layers=1, batch_first=False, bidirectional=False, lstm=False, layer_output=False):
     rec_factory = VarRecurrent
 
     if bidirectional:
@@ -174,7 +179,8 @@ def AutogradVarRNN(num_layers=1, batch_first=False, bidirectional=False, lstm=Fa
 
     func = StackedRNN(layer,
                       num_layers,
-                      lstm=lstm)
+                      lstm=lstm,
+                      layer_output=layer_output)
 
     def forward(input, cells, hidden, mask):
         if batch_first:
@@ -182,12 +188,21 @@ def AutogradVarRNN(num_layers=1, batch_first=False, bidirectional=False, lstm=Fa
             if mask is not None:
                 mask = mask.transpose(0, 1)
 
-        nexth, output = func(input, hidden, cells, mask)
+        if layer_output:
+            nexth, output, layer_outputs = func(input, hidden, cells, mask)
 
-        if batch_first:
-            output = output.transpose(0, 1)
+            if batch_first:
+                output = output.transpose(0, 1)
+                layer_outputs = [out.transpose(0, 1) for out in layer_outputs]
 
-        return output, nexth
+            return nexth, output, layer_outputs
+        else:
+            nexth, output = func(input, hidden, cells, mask)
+
+            if batch_first:
+                output = output.transpose(0, 1)
+
+            return output, nexth
 
     return forward
 

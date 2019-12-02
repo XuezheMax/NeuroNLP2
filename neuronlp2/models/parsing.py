@@ -89,6 +89,26 @@ class DeepBiAffine(nn.Module):
         nn.init.xavier_uniform_(self.type_c.weight)
         nn.init.constant_(self.type_c.bias, 0.)
 
+    def get_layer_outputs(self, input_word, input_char, input_pos, mask=None):
+        # [batch, length, word_dim]
+        word = self.word_embed(input_word)
+
+        # [batch, length, char_length, char_dim]
+        char = self.char_cnn(self.char_embed(input_char))
+
+        # concatenate word and char [batch, length, word_dim+char_filter]
+        enc = torch.cat([word, char], dim=2)
+
+        if self.pos_embed is not None:
+            # [batch, length, pos_dim]
+            pos = self.pos_embed(input_pos)
+            enc = torch.cat([enc, pos], dim=2)
+        else:
+            pos = None
+
+        _, _, layer_outputs = self.rnn.get_layer_outputs(enc, mask)
+        return {"word": word, "char": char, "pos": pos, "layers": layer_outputs}
+
     def _get_rnn_output(self, input_word, input_char, input_pos, mask=None):
         # [batch, length, word_dim]
         word = self.word_embed(input_word)
@@ -423,6 +443,26 @@ class StackPtrNet(nn.Module):
         nn.init.constant_(self.type_h.bias, 0.)
         nn.init.xavier_uniform_(self.type_c.weight)
         nn.init.constant_(self.type_c.bias, 0.)
+
+    def get_layer_outputs(self, input_word, input_char, input_pos, mask=None):
+        # [batch, length, word_dim]
+        word = self.word_embed(input_word)
+
+        # [batch, length, char_length, char_dim]
+        char = self.char_cnn(self.char_embed(input_char))
+
+        # concatenate word and char [batch, length, word_dim+char_filter]
+        enc = torch.cat([word, char], dim=2)
+
+        if self.pos_embed is not None:
+            # [batch, length, pos_dim]
+            pos = self.pos_embed(input_pos)
+            enc = torch.cat([enc, pos], dim=2)
+        else:
+            pos = None
+
+        _, _, layer_outputs = self.encoder.get_layer_outputs(enc, mask)
+        return {"word": word, "char": char, "pos": pos, "layers": layer_outputs}
 
     def _get_encoder_output(self, input_word, input_char, input_pos, mask=None):
         # [batch, length, word_dim]
