@@ -126,7 +126,7 @@ def encode(network, data, device, bucketed):
         chids = batch['CHAR'].to(device)
         postags = batch['POS'].to(device)
         masks = batch['MASK'].to(device)
-        nbatch = words.size(0)
+        nbatch = wids.size(0)
         with torch.no_grad():
             out = network.get_layer_outputs(wids, chids, postags, mask=masks)
         word_embed = out['word']
