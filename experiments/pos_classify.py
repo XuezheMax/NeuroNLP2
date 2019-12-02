@@ -134,7 +134,7 @@ def encode(network, data, device, bucketed):
         pos_embed = out['pos']
         if pos_embed is not None:
             pos_embed = pos_embed.cpu()
-        layer_outs = out['layers'].cpu()
+        layer_outs = [layer_out.cpu() for layer_out in out['layers']]
         num_layers = len(layer_outs)
 
         if rnn_layers is None:
