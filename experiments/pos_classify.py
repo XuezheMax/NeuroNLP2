@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import gc
 
 current_path = os.path.dirname(os.path.realpath(__file__))
 root_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
@@ -40,6 +41,8 @@ def classify(probe, num_labels, train_data, train_label, test_data, test_label, 
         print("Accuracy on {} is {:.2f}".format(key, acc))
         print('-' * 25)
         accs[key] = acc
+        torch.cuda.empty_cache()
+        gc.collect()
     return accs
 
 
@@ -189,6 +192,8 @@ def encode(network, data, device, bucketed):
     if pos is not None:
         features['pos'] = pos
     features.update({'rnn layer{}'.format(i): rnn_layer for i, rnn_layer in enumerate(rnn_layers)})
+    torch.cuda.empty_cache()
+    gc.collect()
     return features, labels
 
 
@@ -198,6 +203,7 @@ def main(args):
     train_features, train_labels = encode(network, data_train, device, bucketed=True)
     dev_features, dev_labels = encode(network, data_dev, device, bucketed=False)
     test_features, test_labels = encode(network, data_test, device, bucketed=False)
+
     classify(args.probe, num_labels, train_features, train_labels, test_features, test_labels, dev_features, dev_labels, device)
 
 
