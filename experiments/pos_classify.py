@@ -15,18 +15,27 @@ import torch
 
 from neuronlp2.io import get_logger, conllx_data, iterate_data
 from neuronlp2.models import DeepBiAffine, NeuroMST, StackPtrNet
+from neuronlp2.models import LinearClassifier
 
 
-def svm(train_data, train_label, test_data, test_label, kernel='linear'):
+def classify(probe, num_labels, train_data, train_label, test_data, test_label, dev_data, dev_label, device):
     accs = dict()
     for key in train_data:
         x_train = train_data[key]
         y_train = train_label
         x_test = test_data[key]
         y_test = test_label
-        clf = SVC(kernel=kernel)
-        clf.fit(x_train, y_train)
-        acc = clf.score(x_test, y_test)
+        x_dev = dev_data[key]
+        y_dev = dev_label
+        if probe == 'svm':
+            clf = SVC(kernel='linear')
+            clf.fit(x_train, y_train)
+            acc = clf.score(x_test, y_test)
+        elif probe == 'linear':
+            clf = LinearClassifier(x_train.size(1), num_labels)
+            clf.fit(x_train, y_train, x_val=x_dev, y_val=y_dev, device=device)
+            with torch.no_grad():
+                acc = clf.score(x_test, y_test, device=device)
         print("Accuracy on {} is {}".format(key, acc))
         accs[key] = acc
     return accs
@@ -111,7 +120,7 @@ def setup(args):
     data_dev = conllx_data.read_data(dev_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, symbolic_root=True)
     data_test = conllx_data.read_data(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, symbolic_root=True)
 
-    return network, (data_train, data_dev, data_test), device
+    return network, (data_train, data_dev, data_test), num_pos - conllx_data.NUM_SYMBOLIC_TAGS, device
 
 
 def encode(network, data, device, bucketed):
@@ -156,22 +165,22 @@ def encode(network, data, device, bucketed):
             for rnn_layer, layer_out in zip(rnn_layers, layer_outs):
                 rnn_layer.append(layer_out[b, 1:length])
 
-    words = torch.cat(words, dim=0).numpy()
-    ntokens = words.shape[0]
+    words = torch.cat(words, dim=0)
+    ntokens = words.size(0)
 
-    chars = torch.cat(chars, dim=0).numpy()
-    assert ntokens == chars.shape[0]
+    chars = torch.cat(chars, dim=0)
+    assert ntokens == chars.size(0)
 
     if pos is not None:
-        pos = torch.cat(pos, dim=0).numpy()
-        assert ntokens == pos.shape[0]
+        pos = torch.cat(pos, dim=0)
+        assert ntokens == pos.size(0)
 
-    labels = torch.cat(labels, dim=0).numpy()
-    assert ntokens == labels.shape[0]
+    labels = torch.cat(labels, dim=0)
+    assert ntokens == labels.size(0)
 
-    rnn_layers = [torch.cat(rnn_layer, dim=0).numpy() for rnn_layer in rnn_layers]
+    rnn_layers = [torch.cat(rnn_layer, dim=0) for rnn_layer in rnn_layers]
     for rnn_layer in rnn_layers:
-        assert ntokens == rnn_layer.shape[0]
+        assert ntokens == rnn_layer.size(0)
     print('number of tokens: %d' % ntokens)
 
     features = {"word": words, "char": chars, "pos": pos}
@@ -180,18 +189,17 @@ def encode(network, data, device, bucketed):
 
 
 def main(args):
-    network, (data_train, data_dev, data_test), device = setup(args)
+    network, (data_train, data_dev, data_test), num_labels, device = setup(args)
 
     train_features, train_labels = encode(network, data_train, device, bucketed=True)
     dev_features, dev_labels = encode(network, data_dev, device, bucketed=False)
     test_features, test_labels = encode(network, data_test, device, bucketed=False)
-
-    svm(train_features, train_labels, test_features, test_labels, kernel='linear')
+    classify(args.probe, num_labels, train_features, train_labels, test_features, test_labels, dev_features, dev_labels, device)
 
 
 if __name__ == "__main__":
     args_parser = argparse.ArgumentParser(description='POS tag classification')
-    args_parser.add_argument('--probe', choices=['svm',], required=True, help='classifier for probe')
+    args_parser.add_argument('--probe', choices=['svm', 'linear'], required=True, help='classifier for probe')
     args_parser.add_argument('--train', help='path for training file.')
     args_parser.add_argument('--dev', help='path for dev file.')
     args_parser.add_argument('--test', help='path for test file.', required=True)
