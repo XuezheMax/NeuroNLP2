@@ -38,6 +38,7 @@ def classify(probe, num_labels, train_data, train_label, test_data, test_label, 
             with torch.no_grad():
                 acc = clf.score(x_test, y_test, device=device)
         print("Accuracy on {} is {}".format(key, acc))
+        print('-' * 25)
         accs[key] = acc
     return accs
 
