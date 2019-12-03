@@ -28,6 +28,9 @@ class Classifier:
         self.core = nn.Module()
         self.criterion = nn.CrossEntropyLoss(reduction='mean')
 
+    def clone_core(self):
+        return nn.Module()
+
     def loss(self, x, y):
         out = self.core(x)
         loss = self.criterion(out, y)
@@ -51,7 +54,12 @@ class Classifier:
         init_lr = 1e-7
         scheduler = ExponentialScheduler(optimizer, 0.999995, 30, init_lr)
         self.core = self.core.to(device)
-
+        if x_val is not None:
+            best_core = self.clone_core()
+        else:
+            best_core = None
+        best_acc = 0.
+        patient = 0
         for epoch in range(100):
             self.core.train()
             for x, y in iterate_batch(x_train, y_train, batch_size=1024, shuffle=True):
@@ -66,6 +74,19 @@ class Classifier:
                 with torch.no_grad():
                     acc = self.score(x_val, y_val, device)
                     print('epoch: {}, acc: {:.2f}'.format(epoch, acc))
+                    if best_acc < acc:
+                        best_core.load_state_dict(self.core.state_dict())
+                        best_acc = acc
+                        patient = 0
+                    else:
+                        patient += 1
+            else:
+                best_acc = acc
+
+            if patient > 4:
+                break
+        if best_core is not None:
+            self.core.load_state_dict(best_core.state_dict())
 
 
 class LinearClassifier(Classifier):
