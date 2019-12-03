@@ -96,3 +96,14 @@ class LinearClassifier(Classifier):
             nn.Dropout(p=0.33),
             nn.Linear(num_features, num_labels)
         )
+        self.num_features = num_features
+        self.num_labels = num_labels
+
+    @overrides
+    def clone_core(self):
+        core = nn.Sequential(
+            nn.Dropout(p=0.33),
+            nn.Linear(self.num_features, self.num_labels)
+        )
+        return core
+
