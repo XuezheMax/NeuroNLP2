@@ -65,7 +65,7 @@ class Classifier:
             if x_val is not None:
                 with torch.no_grad():
                     acc = self.score(x_val, y_val, device)
-                    print('epoch: {}, acc: {.2f}'.format(epoch, acc))
+                    print('epoch: {}, acc: {:.2f}'.format(epoch, acc))
 
 
 class LinearClassifier(Classifier):

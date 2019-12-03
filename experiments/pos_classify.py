@@ -32,6 +32,7 @@ def classify(probe, num_labels, train_data, train_label, test_data, test_label, 
             clf.fit(x_train, y_train)
             acc = clf.score(x_test, y_test)
         elif probe == 'linear':
+            print('training: layer: {}, classifier: {}'.format(key, probe))
             clf = LinearClassifier(x_train.size(1), num_labels)
             clf.fit(x_train, y_train, x_val=x_dev, y_val=y_dev, device=device)
             with torch.no_grad():
