@@ -185,7 +185,9 @@ def encode(network, data, device, bucketed):
         assert ntokens == rnn_layer.size(0)
     print('number of tokens: %d' % ntokens)
 
-    features = {"word": words, "char": chars, "word+char": torch.cat([words, chars], dim=1), "pos": pos}
+    features = {"word": words, "char": chars, "word+char": torch.cat([words, chars], dim=1)}
+    if pos is not None:
+        features['pos'] = pos
     features.update({'rnn layer{}'.format(i): rnn_layer for i, rnn_layer in enumerate(rnn_layers)})
     return features, labels
 
