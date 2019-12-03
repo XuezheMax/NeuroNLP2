@@ -73,7 +73,7 @@ class Classifier:
             if x_val is not None:
                 with torch.no_grad():
                     acc = self.score(x_val, y_val, device)
-                    print('epoch: {}, acc: {:.2f}'.format(epoch, acc))
+                    # print('epoch: {}, acc: {:.2f}'.format(epoch, acc))
                     if best_acc < acc:
                         best_core.load_state_dict(self.core.state_dict())
                         best_acc = acc
