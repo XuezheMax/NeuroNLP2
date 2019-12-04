@@ -124,6 +124,9 @@ class MLPClassifier(Classifier):
             nn.Linear(num_features, hidden_features),
             nn.ELU(inplace=True),
             nn.Dropout(p=self.dropout),
+            nn.Linear(hidden_features, hidden_features),
+            nn.ELU(inplace=True),
+            nn.Dropout(p=self.dropout),
             nn.Linear(hidden_features, num_labels)
         )
         self.hidden_features = hidden_features
@@ -135,6 +138,9 @@ class MLPClassifier(Classifier):
         core = nn.Sequential(
             nn.Dropout(p=self.dropout),
             nn.Linear(self.num_features, self.hidden_features),
+            nn.ELU(inplace=True),
+            nn.Dropout(p=self.dropout),
+            nn.Linear(self.hidden_features, self.hidden_features),
             nn.ELU(inplace=True),
             nn.Dropout(p=self.dropout),
             nn.Linear(self.hidden_features, self.num_labels)
