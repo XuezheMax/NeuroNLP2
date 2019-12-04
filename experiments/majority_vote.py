@@ -60,7 +60,7 @@ def conll_pos(train_path, dev_path, test_path, word_alphabet, pos_alphabet, lowe
             word = DIGIT_RE.sub("0", tokens[1])
             if lowercase:
                 word = word.lower()
-            pos = tokens[4]
+            pos = tokens[3] if fake else tokens[4]
 
             word = word_alphabet.get_index(word)
             gold = pos_alphabet.get_index(pos) - conllx_data.NUM_SYMBOLIC_TAGS
