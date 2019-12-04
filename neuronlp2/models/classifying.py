@@ -116,7 +116,7 @@ class MLPClassifier(Classifier):
         super(MLPClassifier, self).__init__()
         self.dropout = 0.4
         if hidden_features is None:
-            hidden_features = min(4 * num_features, 1024)
+            hidden_features = min(4 * num_features, 2048)
         self.core = nn.Sequential(
             nn.Dropout(p=self.dropout),
             nn.Linear(num_features, hidden_features),
