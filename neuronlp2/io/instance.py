@@ -15,10 +15,12 @@ class Sentence(object):
 
 
 class DependencyInstance(object):
-    def __init__(self, sentence, postags, pos_ids, heads, types, type_ids):
+    def __init__(self, sentence, postags, pos_ids, fake_postags, fake_pos_ids, heads, types, type_ids):
         self.sentence = sentence
         self.postags = postags
         self.pos_ids = pos_ids
+        self.fake_postags = fake_postags
+        self.fake_pos_ids = fake_pos_ids
         self.heads = heads
         self.types = types
         self.type_ids = type_ids

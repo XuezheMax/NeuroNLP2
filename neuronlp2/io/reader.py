@@ -39,6 +39,8 @@ class CoNLLXReader(object):
         word_ids = []
         char_seqs = []
         char_id_seqs = []
+        fake_postags = []
+        fake_pos_ids = []
         postags = []
         pos_ids = []
         types = []
@@ -69,6 +71,7 @@ class CoNLLXReader(object):
             char_id_seqs.append(char_ids)
 
             word = DIGIT_RE.sub("0", tokens[1]) if normalize_digits else tokens[1]
+            fakepos = tokens[3]
             pos = tokens[4]
             head = int(tokens[6])
             type = tokens[7]
@@ -78,6 +81,9 @@ class CoNLLXReader(object):
 
             postags.append(pos)
             pos_ids.append(self.__pos_alphabet.get_index(pos))
+
+            fake_postags.append(fakepos)
+            fake_pos_ids.append(self.__pos_alphabet.get_index(fakepos))
 
             types.append(type)
             type_ids.append(self.__type_alphabet.get_index(type))
@@ -95,7 +101,8 @@ class CoNLLXReader(object):
             type_ids.append(self.__type_alphabet.get_index(END_TYPE))
             heads.append(0)
 
-        return DependencyInstance(Sentence(words, word_ids, char_seqs, char_id_seqs), postags, pos_ids, heads, types, type_ids)
+        return DependencyInstance(Sentence(words, word_ids, char_seqs, char_id_seqs), postags, pos_ids,
+                                  fake_postags, fake_pos_ids, heads, types, type_ids)
 
 
 class CoNLL03Reader(object):

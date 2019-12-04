@@ -16,7 +16,7 @@ import torch
 
 from neuronlp2.io import get_logger, conllx_data, iterate_data
 from neuronlp2.models import DeepBiAffine, NeuroMST, StackPtrNet
-from neuronlp2.models import LinearClassifier
+from neuronlp2.models import LinearClassifier, MLPClassifier
 
 
 def classify(probe, num_labels, train_data, train_label, test_data, test_label, dev_data, dev_label, device):
@@ -32,9 +32,14 @@ def classify(probe, num_labels, train_data, train_label, test_data, test_label, 
             clf = SVC(kernel='linear')
             clf.fit(x_train, y_train)
             acc = clf.score(x_test, y_test)
-        elif probe == 'linear':
+        else:
             print('training: layer: {}, classifier: {}'.format(key, probe))
-            clf = LinearClassifier(x_train.size(1), num_labels)
+            if probe == 'linear':
+                clf = LinearClassifier(x_train.size(1), num_labels)
+            elif probe == 'mlp':
+                clf = MLPClassifier(x_train.size(1), num_labels)
+            else:
+                raise ValueError('Unknown Classifier: {}'.format(probe))
             clf.fit(x_train, y_train, x_val=x_dev, y_val=y_dev, device=device)
             with torch.no_grad():
                 acc = clf.score(x_test, y_test, device=device)
@@ -133,12 +138,14 @@ def encode(network, data, device, bucketed):
     chars = []
     pos = None
     labels = []
+    fake_labels = []
     rnn_layers = None
     network.eval()
     for batch in iterate_data(data, batch_size=256, bucketed=bucketed, unk_replace=0., shuffle=False):
         wids = batch['WORD'].to(device)
         chids = batch['CHAR'].to(device)
         postags = batch['POS'].to(device)
+        fake_postags = batch['FAKEPOS'].to(device)
         masks = batch['MASK'].to(device)
         nbatch = wids.size(0)
         with torch.no_grad():
@@ -160,6 +167,7 @@ def encode(network, data, device, bucketed):
             pos = []
         lengths = masks.sum(dim=1).long().cpu()
         postags = (postags - conllx_data.NUM_SYMBOLIC_TAGS).cpu()
+        fake_postags = (fake_postags - conllx_data.NUM_SYMBOLIC_TAGS).cpu()
         for b in range(nbatch):
             length = lengths[b]
             words.append(word_embed[b, 1:length])
@@ -167,6 +175,7 @@ def encode(network, data, device, bucketed):
             if pos_embed is not None:
                 pos.append(pos_embed[b, 1:length])
             labels.append(postags[b, 1:length])
+            fake_labels.append(fake_postags[b, 1:length])
             for rnn_layer, layer_out in zip(rnn_layers, layer_outs):
                 rnn_layer.append(layer_out[b, 1:length])
 
@@ -182,6 +191,8 @@ def encode(network, data, device, bucketed):
 
     labels = torch.cat(labels, dim=0)
     assert ntokens == labels.size(0)
+    fake_labels = torch.cat(fake_labels, dim=0)
+    assert ntokens == fake_labels.size(0)
 
     rnn_layers = [torch.cat(rnn_layer, dim=0) for rnn_layer in rnn_layers]
     for rnn_layer in rnn_layers:
@@ -194,22 +205,27 @@ def encode(network, data, device, bucketed):
     features.update({'rnn layer{}'.format(i): rnn_layer for i, rnn_layer in enumerate(rnn_layers)})
     torch.cuda.empty_cache()
     gc.collect()
-    return features, labels
+    return features, labels, fake_labels
 
 
 def main(args):
     network, (data_train, data_dev, data_test), num_labels, device = setup(args)
 
-    train_features, train_labels = encode(network, data_train, device, bucketed=True)
-    dev_features, dev_labels = encode(network, data_dev, device, bucketed=False)
-    test_features, test_labels = encode(network, data_test, device, bucketed=False)
+    train_features, train_labels, train_fake_labels = encode(network, data_train, device, bucketed=True)
+    dev_features, dev_labels, dev_fake_labels = encode(network, data_dev, device, bucketed=False)
+    test_features, test_labels, test_fake_labels = encode(network, data_test, device, bucketed=False)
 
     classify(args.probe, num_labels, train_features, train_labels, test_features, test_labels, dev_features, dev_labels, device)
+
+    train_features.pop('pos')
+    dev_features.pop('pos')
+    test_features.pop('pos')
+    classify(args.probe, num_labels, train_features, train_fake_labels, test_features, test_fake_labels, dev_features, dev_fake_labels, device)
 
 
 if __name__ == "__main__":
     args_parser = argparse.ArgumentParser(description='POS tag classification')
-    args_parser.add_argument('--probe', choices=['svm', 'linear'], required=True, help='classifier for probe')
+    args_parser.add_argument('--probe', choices=['svm', 'linear', 'mlp'], required=True, help='classifier for probe')
     args_parser.add_argument('--train', help='path for training file.')
     args_parser.add_argument('--dev', help='path for dev file.')
     args_parser.add_argument('--test', help='path for test file.', required=True)

@@ -15,7 +15,7 @@ from neuronlp2.io import get_logger, conllx_data
 from neuronlp2.io.common import DIGIT_RE
 
 
-def conll_pos(train_path, dev_path, test_path, word_alphabet, pos_alphabet, lowercase):
+def conll_pos(train_path, dev_path, test_path, word_alphabet, pos_alphabet, lowercase, fake=False):
     votes = dict()
     num_tokens = 0
     num_postags = pos_alphabet.size() - conllx_data.NUM_SYMBOLIC_TAGS
@@ -29,7 +29,7 @@ def conll_pos(train_path, dev_path, test_path, word_alphabet, pos_alphabet, lowe
             word = DIGIT_RE.sub("0", tokens[1])
             if lowercase:
                 word = word.lower()
-            pos = tokens[4]
+            pos = tokens[3] if fake else tokens[4]
 
             word = word_alphabet.get_index(word)
             pos = pos_alphabet.get_index(pos) - conllx_data.NUM_SYMBOLIC_TAGS
@@ -97,5 +97,6 @@ if __name__ == "__main__":
     dev_path = args.dev
     test_path = args.test
 
-    conll_pos(train_path, dev_path, test_path, word_alphabet, pos_alphabet, lowercase=args.lowercase)
+    conll_pos(train_path, dev_path, test_path, word_alphabet, pos_alphabet, lowercase=args.lowercase, fake=False)
+    conll_pos(train_path, dev_path, test_path, word_alphabet, pos_alphabet, lowercase=args.lowercase, fake=True)
 

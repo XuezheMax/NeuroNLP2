@@ -1,7 +1,6 @@
 __author__ = 'max'
 
 from overrides import overrides
-import numpy as np
 import torch
 import torch.nn as nn
 from torch.optim.adamw import AdamW
@@ -92,18 +91,38 @@ class Classifier:
 class LinearClassifier(Classifier):
     def __init__(self, num_features, num_labels):
         super(LinearClassifier, self).__init__()
+        self.core = nn.Linear(num_features, num_labels)
+        self.num_features = num_features
+        self.num_labels = num_labels
+
+    @overrides
+    def clone_core(self):
+        core = nn.Linear(self.num_features, self.num_labels)
+        return core
+
+
+class MLPClassifier(Classifier):
+    def __init__(self, num_features, num_labels, hidden_features=None):
+        super(MLPClassifier, self).__init__()
+        self.dropout = 0.3
+        if hidden_features is None:
+            hidden_features = 4 * num_features
         self.core = nn.Sequential(
-            nn.Dropout(p=0.33),
-            nn.Linear(num_features, num_labels)
+            nn.Linear(num_features, hidden_features),
+            nn.ELU(inplace=True),
+            nn.Dropout(p=self.dropout),
+            nn.Linear(hidden_features, num_labels)
         )
+        self.hidden_features = hidden_features
         self.num_features = num_features
         self.num_labels = num_labels
 
     @overrides
     def clone_core(self):
         core = nn.Sequential(
-            nn.Dropout(p=0.33),
-            nn.Linear(self.num_features, self.num_labels)
+            nn.Linear(self.num_features, self.hidden_features),
+            nn.ELU(inplace=True),
+            nn.Dropout(p=self.dropout),
+            nn.Linear(self.hidden_features, self.num_labels)
         )
         return core
-

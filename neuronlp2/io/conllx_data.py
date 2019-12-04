@@ -150,7 +150,7 @@ def read_data(source_path: str, word_alphabet: Alphabet, char_alphabet: Alphabet
             print("reading data: %d" % counter)
 
         sent = inst.sentence
-        data.append([sent.word_ids, sent.char_id_seqs, inst.pos_ids, inst.heads, inst.type_ids])
+        data.append([sent.word_ids, sent.char_id_seqs, inst.pos_ids, inst.fake_pos_ids, inst.heads, inst.type_ids])
         max_len = max([len(char_seq) for char_seq in sent.char_seqs])
         if max_char_length < max_len:
             max_char_length = max_len
@@ -165,6 +165,7 @@ def read_data(source_path: str, word_alphabet: Alphabet, char_alphabet: Alphabet
     wid_inputs = np.empty([data_size, max_length], dtype=np.int64)
     cid_inputs = np.empty([data_size, max_length, char_length], dtype=np.int64)
     pid_inputs = np.empty([data_size, max_length], dtype=np.int64)
+    fpid_inputs = np.empty([data_size, max_length], dtype=np.int64)
     hid_inputs = np.empty([data_size, max_length], dtype=np.int64)
     tid_inputs = np.empty([data_size, max_length], dtype=np.int64)
 
@@ -173,7 +174,7 @@ def read_data(source_path: str, word_alphabet: Alphabet, char_alphabet: Alphabet
     lengths = np.empty(data_size, dtype=np.int64)
 
     for i, inst in enumerate(data):
-        wids, cid_seqs, pids, hids, tids = inst
+        wids, cid_seqs, pids, fpids, hids, tids = inst
         inst_size = len(wids)
         lengths[i] = inst_size
         # word ids
@@ -186,6 +187,9 @@ def read_data(source_path: str, word_alphabet: Alphabet, char_alphabet: Alphabet
         # pos ids
         pid_inputs[i, :inst_size] = pids
         pid_inputs[i, inst_size:] = PAD_ID_TAG
+        # pos ids
+        fpid_inputs[i, :inst_size] = fpids
+        fpid_inputs[i, inst_size:] = PAD_ID_TAG
         # type ids
         tid_inputs[i, :inst_size] = tids
         tid_inputs[i, inst_size:] = PAD_ID_TAG
@@ -201,13 +205,14 @@ def read_data(source_path: str, word_alphabet: Alphabet, char_alphabet: Alphabet
     words = torch.from_numpy(wid_inputs)
     chars = torch.from_numpy(cid_inputs)
     pos = torch.from_numpy(pid_inputs)
+    fake_pos = torch.from_numpy(fpid_inputs)
     heads = torch.from_numpy(hid_inputs)
     types = torch.from_numpy(tid_inputs)
     masks = torch.from_numpy(masks)
     single = torch.from_numpy(single)
     lengths = torch.from_numpy(lengths)
 
-    data_tensor = {'WORD': words, 'CHAR': chars, 'POS': pos, 'HEAD': heads, 'TYPE': types,
+    data_tensor = {'WORD': words, 'CHAR': chars, 'POS': pos, 'FAKEPOS': fake_pos, 'HEAD': heads, 'TYPE': types,
                    'MASK': masks, 'SINGLE': single, 'LENGTH': lengths}
     return data_tensor, data_size
 
@@ -229,7 +234,7 @@ def read_bucketed_data(source_path: str, word_alphabet: Alphabet, char_alphabet:
         sent = inst.sentence
         for bucket_id, bucket_size in enumerate(_buckets):
             if inst_size < bucket_size:
-                data[bucket_id].append([sent.word_ids, sent.char_id_seqs, inst.pos_ids, inst.heads, inst.type_ids])
+                data[bucket_id].append([sent.word_ids, sent.char_id_seqs, inst.pos_ids, inst.fake_pos_ids, inst.heads, inst.type_ids])
                 max_len = max([len(char_seq) for char_seq in sent.char_seqs])
                 if max_char_length[bucket_id] < max_len:
                     max_char_length[bucket_id] = max_len
@@ -252,6 +257,7 @@ def read_bucketed_data(source_path: str, word_alphabet: Alphabet, char_alphabet:
         wid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int64)
         cid_inputs = np.empty([bucket_size, bucket_length, char_length], dtype=np.int64)
         pid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int64)
+        fpid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int64)
         hid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int64)
         tid_inputs = np.empty([bucket_size, bucket_length], dtype=np.int64)
 
@@ -260,7 +266,7 @@ def read_bucketed_data(source_path: str, word_alphabet: Alphabet, char_alphabet:
         lengths = np.empty(bucket_size, dtype=np.int64)
 
         for i, inst in enumerate(data[bucket_id]):
-            wids, cid_seqs, pids, hids, tids = inst
+            wids, cid_seqs, pids, fpids, hids, tids = inst
             inst_size = len(wids)
             lengths[i] = inst_size
             # word ids
@@ -273,6 +279,9 @@ def read_bucketed_data(source_path: str, word_alphabet: Alphabet, char_alphabet:
             # pos ids
             pid_inputs[i, :inst_size] = pids
             pid_inputs[i, inst_size:] = PAD_ID_TAG
+            # pos ids
+            fpid_inputs[i, :inst_size] = fpids
+            fpid_inputs[i, inst_size:] = PAD_ID_TAG
             # type ids
             tid_inputs[i, :inst_size] = tids
             tid_inputs[i, inst_size:] = PAD_ID_TAG
@@ -288,13 +297,14 @@ def read_bucketed_data(source_path: str, word_alphabet: Alphabet, char_alphabet:
         words = torch.from_numpy(wid_inputs)
         chars = torch.from_numpy(cid_inputs)
         pos = torch.from_numpy(pid_inputs)
+        fake_pos = torch.from_numpy(fpid_inputs)
         heads = torch.from_numpy(hid_inputs)
         types = torch.from_numpy(tid_inputs)
         masks = torch.from_numpy(masks)
         single = torch.from_numpy(single)
         lengths = torch.from_numpy(lengths)
 
-        data_tensor = {'WORD': words, 'CHAR': chars, 'POS': pos, 'HEAD': heads, 'TYPE': types,
+        data_tensor = {'WORD': words, 'CHAR': chars, 'POS': pos, 'FAKEPOS': fake_pos, 'HEAD': heads, 'TYPE': types,
                        'MASK': masks, 'SINGLE': single, 'LENGTH': lengths}
         data_tensors.append(data_tensor)
     return data_tensors, bucket_sizes
