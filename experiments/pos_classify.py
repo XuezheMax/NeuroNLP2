@@ -215,11 +215,13 @@ def main(args):
     dev_features, dev_labels, dev_fake_labels = encode(network, data_dev, device, bucketed=False)
     test_features, test_labels, test_fake_labels = encode(network, data_test, device, bucketed=False)
 
+    print("Real POS")
     classify(args.probe, num_labels, train_features, train_labels, test_features, test_labels, dev_features, dev_labels, device)
 
     train_features.pop('pos')
     dev_features.pop('pos')
     test_features.pop('pos')
+    print('Fake POS')
     classify(args.probe, num_labels, train_features, train_fake_labels, test_features, test_fake_labels, dev_features, dev_fake_labels, device)
 
 
