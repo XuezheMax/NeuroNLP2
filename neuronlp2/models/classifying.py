@@ -53,14 +53,19 @@ class Classifier:
         best_core = self.clone_core()
         best_acc = 0.
         patient = 0
+        steps = 0
+        self.core.train()
         for epoch in range(500):
-            self.core.train()
             for x, y in iterate_batch(x_train, y_train, batch_size=4096, shuffle=True):
                 x = x.to(device)
                 y = y.to(device)
                 loss = self.loss(x, y)
                 loss.backward()
                 optimizer.step()
+                steps += 1
+
+            if steps < 500:
+                continue
 
             with torch.no_grad():
                 acc = self.score(x_val, y_val, device)
@@ -71,11 +76,14 @@ class Classifier:
                     patient = 0
                 else:
                     patient += 1
-                    lr *= 0.5
+                    lr = max(lr * 0.5, 1e-5)
                     optimizer = AdamW(self.core.parameters(), lr=lr, weight_decay=5e-4)
 
             if patient > 9:
                 break
+            steps = 0
+            self.core.train()
+
         if best_core is not None:
             self.core.load_state_dict(best_core.state_dict())
 
