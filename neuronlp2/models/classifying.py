@@ -53,6 +53,7 @@ class Classifier:
         best_core = self.clone_core()
         best_acc = 0.
         patient = 0
+        lr_decay = 0
         steps = 0
         self.core.train()
         for epoch in range(500):
@@ -74,11 +75,15 @@ class Classifier:
                     best_core.load_state_dict(self.core.state_dict())
                     best_acc = acc
                     patient = 0
+                    lr_decay = 0
                 else:
                     patient += 1
-                    lr = max(lr * 0.5, 1e-5)
-                    optimizer = AdamW(self.core.parameters(), lr=lr, weight_decay=5e-4)
+                    lr_decay += 1
 
+            if lr_decay > 2:
+                lr = max(lr * 0.5, 1e-5)
+                optimizer = AdamW(self.core.parameters(), lr=lr, weight_decay=5e-4)
+                lr_decay = 0
             if patient > 9:
                 break
             steps = 0
@@ -113,7 +118,7 @@ class MLPClassifier(Classifier):
         super(MLPClassifier, self).__init__()
         self.dropout = 0.4
         if hidden_features is None:
-            hidden_features = min(4 * num_features, 1024)
+            hidden_features = min(2 * num_features, 1024)
         self.core = nn.Sequential(
             nn.Dropout(p=self.dropout),
             nn.Linear(num_features, hidden_features),
