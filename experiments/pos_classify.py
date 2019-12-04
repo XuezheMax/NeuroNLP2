@@ -33,6 +33,7 @@ def classify(probe, num_labels, train_data, train_label, test_data, test_label, 
             clf = SVC(kernel='linear')
             clf.fit(x_train, y_train)
             acc = clf.score(x_test, y_test)
+            std = 0.
         else:
             accs = []
             print('training: layer: {}, classifier: {}'.format(key, probe))
@@ -49,11 +50,11 @@ def classify(probe, num_labels, train_data, train_label, test_data, test_label, 
                 print('{}: {:.2f}'.format(run, accs[run]))
             accs = np.array(accs)
             acc = accs.mean()
-            stdv = accs.std()
-        print("Accuracy on {} is {:.2f} ({:.2f})".format(key, acc, stdv))
+            std = accs.std()
+        print("Accuracy on {} is {:.2f} ({:.2f})".format(key, acc, std))
         print('-' * 25)
         accuracy[key] = acc
-        stdv[key] = stdv
+        stdv[key] = std
         torch.cuda.empty_cache()
         gc.collect()
     return accuracy, stdv
