@@ -218,9 +218,10 @@ def main(args):
     print("Real POS")
     classify(args.probe, num_labels, train_features, train_labels, test_features, test_labels, dev_features, dev_labels, device)
 
-    train_features.pop('pos')
-    dev_features.pop('pos')
-    test_features.pop('pos')
+    if 'pos' in train_features:
+        train_features.pop('pos')
+        dev_features.pop('pos')
+        test_features.pop('pos')
     print('Fake POS')
     classify(args.probe, num_labels, train_features, train_fake_labels, test_features, test_fake_labels, dev_features, dev_fake_labels, device)
 
