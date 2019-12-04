@@ -59,9 +59,9 @@ class Classifier:
             best_core = None
         best_acc = 0.
         patient = 0
-        for epoch in range(100):
+        for epoch in range(500):
             self.core.train()
-            for x, y in iterate_batch(x_train, y_train, batch_size=1024, shuffle=True):
+            for x, y in iterate_batch(x_train, y_train, batch_size=4096, shuffle=True):
                 x = x.to(device)
                 y = y.to(device)
                 loss = self.loss(x, y)
@@ -91,23 +91,31 @@ class Classifier:
 class LinearClassifier(Classifier):
     def __init__(self, num_features, num_labels):
         super(LinearClassifier, self).__init__()
-        self.core = nn.Linear(num_features, num_labels)
+        self.dropout = 0.33
+        self.core = nn.Sequential(
+            nn.Dropout(p=self.dropout),
+            nn.Linear(num_features, num_labels)
+        )
         self.num_features = num_features
         self.num_labels = num_labels
 
     @overrides
     def clone_core(self):
-        core = nn.Linear(self.num_features, self.num_labels)
+        core = nn.Sequential(
+            nn.Dropout(p=self.dropout),
+            nn.Linear(self.num_features, self.num_labels)
+        )
         return core
 
 
 class MLPClassifier(Classifier):
     def __init__(self, num_features, num_labels, hidden_features=None):
         super(MLPClassifier, self).__init__()
-        self.dropout = 0.3
+        self.dropout = 0.33
         if hidden_features is None:
             hidden_features = 4 * num_features
         self.core = nn.Sequential(
+            nn.Dropout(p=self.dropout),
             nn.Linear(num_features, hidden_features),
             nn.ELU(inplace=True),
             nn.Dropout(p=self.dropout),
@@ -120,6 +128,7 @@ class MLPClassifier(Classifier):
     @overrides
     def clone_core(self):
         core = nn.Sequential(
+            nn.Dropout(p=self.dropout),
             nn.Linear(self.num_features, self.hidden_features),
             nn.ELU(inplace=True),
             nn.Dropout(p=self.dropout),
