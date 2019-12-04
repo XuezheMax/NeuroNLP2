@@ -48,14 +48,12 @@ class Classifier:
         return corr / total * 100
 
     def fit(self, x_train, y_train, x_val, y_val, device=torch.device('cpu')):
-        lr = 1e-2
-        # optimizer = AdamW(self.core.parameters(), lr=lr, weight_decay=5e-4)
-        optimizer = SGD(self.core.parameters(), lr=lr, momentum=0.9, nesterov=True, weight_decay=5e-4)
+        lr = 5e-4
+        optimizer = AdamW(self.core.parameters(), lr=lr, weight_decay=5e-4)
         self.core = self.core.to(device)
         best_core = self.clone_core()
         best_acc = 0.
         patient = 0
-        lr_decay = 0
         steps = 0
         self.core.train()
         for epoch in range(500):
@@ -77,16 +75,10 @@ class Classifier:
                     best_core.load_state_dict(self.core.state_dict())
                     best_acc = acc
                     patient = 0
-                    lr_decay = 0
                 else:
                     patient += 1
-                    lr_decay += 1
-
-            if lr_decay > 2:
-                lr = max(lr * 0.5, 1e-5)
-                # optimizer = AdamW(self.core.parameters(), lr=lr, weight_decay=5e-4)
-                optimizer = SGD(self.core.parameters(), lr=lr, momentum=0.9, nesterov=True, weight_decay=5e-4)
-                lr_decay = 0
+                    lr = max(lr * 0.75, 1e-5)
+                    optimizer = AdamW(self.core.parameters(), lr=lr, weight_decay=5e-4)
             if patient > 9:
                 break
             steps = 0
