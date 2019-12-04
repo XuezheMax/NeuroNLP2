@@ -20,7 +20,8 @@ from neuronlp2.models import LinearClassifier, MLPClassifier
 
 
 def classify(probe, num_labels, train_data, train_label, test_data, test_label, dev_data, dev_label, device):
-    accs = dict()
+    accuracy = dict()
+    stdv = dict()
     for key in train_data:
         x_train = train_data[key]
         y_train = train_label
@@ -33,22 +34,29 @@ def classify(probe, num_labels, train_data, train_label, test_data, test_label, 
             clf.fit(x_train, y_train)
             acc = clf.score(x_test, y_test)
         else:
+            accs = []
             print('training: layer: {}, classifier: {}'.format(key, probe))
-            if probe == 'linear':
-                clf = LinearClassifier(x_train.size(1), num_labels)
-            elif probe == 'mlp':
-                clf = MLPClassifier(x_train.size(1), num_labels)
-            else:
-                raise ValueError('Unknown Classifier: {}'.format(probe))
-            clf.fit(x_train, y_train, x_val=x_dev, y_val=y_dev, device=device)
-            with torch.no_grad():
-                acc = clf.score(x_test, y_test, device=device)
-        print("Accuracy on {} is {:.2f}".format(key, acc))
+            for run in range(5):
+                if probe == 'linear':
+                    clf = LinearClassifier(x_train.size(1), num_labels)
+                elif probe == 'mlp':
+                    clf = MLPClassifier(x_train.size(1), num_labels)
+                else:
+                    raise ValueError('Unknown Classifier: {}'.format(probe))
+                clf.fit(x_train, y_train, x_val=x_dev, y_val=y_dev, device=device)
+                with torch.no_grad():
+                    accs.append(clf.score(x_test, y_test, device=device))
+                print('{}: {:.2f}'.format(run, accs[run]))
+            accs = np.array(accs)
+            acc = accs.mean()
+            stdv = accs.std()
+        print("Accuracy on {} is {:.2f} ({:.2f})".format(key, acc, stdv))
         print('-' * 25)
-        accs[key] = acc
+        accuracy[key] = acc
+        stdv[key] = stdv
         torch.cuda.empty_cache()
         gc.collect()
-    return accs
+    return accuracy, stdv
 
 
 def setup(args):
