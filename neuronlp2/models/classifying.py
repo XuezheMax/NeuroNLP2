@@ -25,14 +25,14 @@ def iterate_batch(data, labels, batch_size, shuffle=False):
 class Classifier:
     def __init__(self):
         self.core = nn.Module()
-        self.criterion = nn.CrossEntropyLoss(reduction='mean')
+        self.criterion = nn.CrossEntropyLoss(reduction='none')
 
     def clone_core(self):
         return nn.Module()
 
     def loss(self, x, y):
         out = self.core(x)
-        loss = self.criterion(out, y)
+        loss = self.criterion(out, y).mean()
         return loss
 
     def score(self, x, y, device):
