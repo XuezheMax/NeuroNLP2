@@ -56,8 +56,9 @@ class Classifier:
         best_acc = 0.
         patient = 0
         steps = 0
+        total_steps = 0
         self.core.train()
-        for epoch in range(500):
+        for epoch in range(5000):
             for x, y in iterate_batch(x_train, y_train, batch_size=4096, shuffle=True):
                 x = x.to(device)
                 y = y.to(device)
@@ -65,6 +66,7 @@ class Classifier:
                 loss.backward()
                 optimizer.step()
                 steps += 1
+                total_steps += 1
 
             if steps < 500:
                 continue
@@ -80,7 +82,7 @@ class Classifier:
                     patient += 1
                     lr = max(lr * 0.5, 1e-5)
                     optimizer = AdamW(self.core.parameters(), lr=lr, weight_decay=weight_decay)
-            if patient > 9:
+            if patient > 9 or total_steps > 200000:
                 break
             steps = 0
             self.core.train()
@@ -114,7 +116,7 @@ class MLPClassifier(Classifier):
         super(MLPClassifier, self).__init__()
         self.dropout = 0.4
         if hidden_features is None:
-            hidden_features = min(2 * num_features, 1024)
+            hidden_features = min(4 * num_features, 1024)
         self.core = nn.Sequential(
             nn.Dropout(p=self.dropout),
             nn.Linear(num_features, hidden_features),
