@@ -78,7 +78,7 @@ class Classifier:
                     patient = 0
                 else:
                     patient += 1
-                    lr = max(lr * 0.75, 1e-5)
+                    lr = max(lr * 0.5, 1e-5)
                     optimizer = AdamW(self.core.parameters(), lr=lr, weight_decay=weight_decay)
             if patient > 9:
                 break
