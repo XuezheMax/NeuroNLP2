@@ -91,7 +91,7 @@ class Classifier:
 class LinearClassifier(Classifier):
     def __init__(self, num_features, num_labels):
         super(LinearClassifier, self).__init__()
-        self.dropout = 0.33
+        self.dropout = 0.4
         self.core = nn.Sequential(
             nn.Dropout(p=self.dropout),
             nn.Linear(num_features, num_labels)
@@ -111,7 +111,7 @@ class LinearClassifier(Classifier):
 class MLPClassifier(Classifier):
     def __init__(self, num_features, num_labels, hidden_features=None):
         super(MLPClassifier, self).__init__()
-        self.dropout = 0.33
+        self.dropout = 0.4
         if hidden_features is None:
             hidden_features = 4 * num_features
         self.core = nn.Sequential(
