@@ -49,7 +49,8 @@ class Classifier:
 
     def fit(self, x_train, y_train, x_val, y_val, device=torch.device('cpu')):
         lr = 5e-4
-        optimizer = AdamW(self.core.parameters(), lr=lr, weight_decay=5e-4)
+        weight_decay = 5e-4
+        optimizer = AdamW(self.core.parameters(), lr=lr, weight_decay=weight_decay)
         self.core = self.core.to(device)
         best_core = self.clone_core()
         best_acc = 0.
@@ -78,7 +79,7 @@ class Classifier:
                 else:
                     patient += 1
                     lr = max(lr * 0.75, 1e-5)
-                    optimizer = AdamW(self.core.parameters(), lr=lr, weight_decay=5e-4)
+                    optimizer = AdamW(self.core.parameters(), lr=lr, weight_decay=weight_decay)
             if patient > 9:
                 break
             steps = 0
