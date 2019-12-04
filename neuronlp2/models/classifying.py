@@ -80,7 +80,7 @@ class Classifier:
                     patient = 0
                 else:
                     patient += 1
-                    lr = max(lr * 0.5, 1e-5)
+                    lr = max(lr * 0.8, 1e-5)
                     optimizer = AdamW(self.core.parameters(), lr=lr, weight_decay=weight_decay)
             if patient > 9 or total_steps > 200000:
                 break
@@ -120,7 +120,7 @@ class MLPClassifier(Classifier):
         self.core = nn.Sequential(
             nn.Dropout(p=self.dropout),
             nn.Linear(num_features, hidden_features),
-            nn.ELU(inplace=True),
+            nn.ReLU(inplace=True),
             nn.Dropout(p=self.dropout),
             nn.Linear(hidden_features, num_labels)
         )
@@ -133,7 +133,7 @@ class MLPClassifier(Classifier):
         core = nn.Sequential(
             nn.Dropout(p=self.dropout),
             nn.Linear(self.num_features, self.hidden_features),
-            nn.ELU(inplace=True),
+            nn.ReLU(inplace=True),
             nn.Dropout(p=self.dropout),
             nn.Linear(self.hidden_features, self.num_labels)
         )
