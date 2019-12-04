@@ -3,6 +3,7 @@ __author__ = 'max'
 from overrides import overrides
 import torch
 import torch.nn as nn
+from torch.optim import SGD
 from torch.optim.adamw import AdamW
 
 
@@ -47,8 +48,9 @@ class Classifier:
         return corr / total * 100
 
     def fit(self, x_train, y_train, x_val, y_val, device=torch.device('cpu')):
-        lr = 5e-4
-        optimizer = AdamW(self.core.parameters(), lr=lr, weight_decay=5e-4)
+        lr = 1e-2
+        # optimizer = AdamW(self.core.parameters(), lr=lr, weight_decay=5e-4)
+        optimizer = SGD(self.core.parameters(), lr=lr, momentum=0.9, nesterov=True, weight_decay=5e-4)
         self.core = self.core.to(device)
         best_core = self.clone_core()
         best_acc = 0.
@@ -82,7 +84,8 @@ class Classifier:
 
             if lr_decay > 2:
                 lr = max(lr * 0.5, 1e-5)
-                optimizer = AdamW(self.core.parameters(), lr=lr, weight_decay=5e-4)
+                # optimizer = AdamW(self.core.parameters(), lr=lr, weight_decay=5e-4)
+                optimizer = SGD(self.core.parameters(), lr=lr, momentum=0.9, nesterov=True, weight_decay=5e-4)
                 lr_decay = 0
             if patient > 9:
                 break
@@ -124,9 +127,6 @@ class MLPClassifier(Classifier):
             nn.Linear(num_features, hidden_features),
             nn.ELU(inplace=True),
             nn.Dropout(p=self.dropout),
-            nn.Linear(hidden_features, hidden_features),
-            nn.ELU(inplace=True),
-            nn.Dropout(p=self.dropout),
             nn.Linear(hidden_features, num_labels)
         )
         self.hidden_features = hidden_features
@@ -138,9 +138,6 @@ class MLPClassifier(Classifier):
         core = nn.Sequential(
             nn.Dropout(p=self.dropout),
             nn.Linear(self.num_features, self.hidden_features),
-            nn.ELU(inplace=True),
-            nn.Dropout(p=self.dropout),
-            nn.Linear(self.hidden_features, self.hidden_features),
             nn.ELU(inplace=True),
             nn.Dropout(p=self.dropout),
             nn.Linear(self.hidden_features, self.num_labels)
