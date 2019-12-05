@@ -12,6 +12,9 @@ import argparse
 import math
 import numpy as np
 from sklearn.svm import SVC
+from sklearn.ensemble import BaggingClassifier
+from sklearn.multiclass import OneVsRestClassifier
+from sklearn.linear_model import LogisticRegression
 import torch
 
 from neuronlp2.io import get_logger, conllx_data, iterate_data
@@ -29,14 +32,22 @@ def classify(probe, num_labels, train_data, train_label, test_data, test_label, 
         y_test = test_label
         x_dev = dev_data[key]
         y_dev = dev_label
-        if probe == 'svm':
+        start = time.time()
+        print('training: layer: {}, classifier: {}'.format(key, probe))
+        if probe.starstwith('svm'):
             clf = SVC(kernel='linear')
-            clf.fit(x_train, y_train)
-            acc = clf.score(x_test, y_test)
+            if probe == 'svm2':
+                clf = OneVsRestClassifier(clf, n_jobs=20)
+            clf.fit(x_train.numpy(), y_train.numpy())
+            acc = clf.score(x_test.numpy(), y_test.numpy())
+            std = 0.
+        elif probe == 'logistic':
+            clf = LogisticRegression(n_jobs=20)
+            clf.fit(x_train.numpy(), y_train.numpy())
+            acc = clf.score(x_test.numpy(), y_test.numpy())
             std = 0.
         else:
             accs = []
-            print('training: layer: {}, classifier: {}'.format(key, probe))
             for run in range(5):
                 if probe == 'linear':
                     clf = LinearClassifier(x_train.size(1), num_labels)
@@ -51,7 +62,7 @@ def classify(probe, num_labels, train_data, train_label, test_data, test_label, 
             accs = np.array(accs)
             acc = accs.mean()
             std = accs.std()
-        print("Accuracy on {} is {:.2f} ({:.2f})".format(key, acc, std))
+        print("Accuracy on {} is {:.2f} ({:.2f}), time: {:.2f}s".format(key, acc, std, time.time() - start))
         print('-' * 25)
         accuracy[key] = acc
         stdv[key] = std
@@ -237,7 +248,7 @@ def main(args):
 
 if __name__ == "__main__":
     args_parser = argparse.ArgumentParser(description='POS tag classification')
-    args_parser.add_argument('--probe', choices=['svm', 'linear', 'mlp'], required=True, help='classifier for probe')
+    args_parser.add_argument('--probe', choices=['svm1', 'svm2', 'logistic', 'linear', 'mlp'], required=True, help='classifier for probe')
     args_parser.add_argument('--train', help='path for training file.')
     args_parser.add_argument('--dev', help='path for dev file.')
     args_parser.add_argument('--test', help='path for test file.', required=True)
