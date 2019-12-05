@@ -34,7 +34,7 @@ def classify(probe, num_labels, train_data, train_label, test_data, test_label, 
         y_dev = dev_label
         start = time.time()
         print('training: layer: {}, classifier: {}'.format(key, probe))
-        if probe.starstwith('svm'):
+        if probe.startswith('svm'):
             clf = SVC(kernel='linear')
             if probe == 'svm2':
                 clf = OneVsRestClassifier(clf, n_jobs=20)
