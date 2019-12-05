@@ -39,12 +39,12 @@ def classify(probe, num_labels, train_data, train_label, test_data, test_label, 
             if probe == 'svm2':
                 clf = OneVsRestClassifier(clf, n_jobs=20)
             clf.fit(x_train.numpy(), y_train.numpy())
-            acc = clf.score(x_test.numpy(), y_test.numpy())
+            acc = clf.score(x_test.numpy(), y_test.numpy()) * 100
             std = 0.
         elif probe == 'logistic':
-            clf = LogisticRegression(n_jobs=20)
+            clf = LogisticRegression(max_iter=200, n_jobs=20)
             clf.fit(x_train.numpy(), y_train.numpy())
-            acc = clf.score(x_test.numpy(), y_test.numpy())
+            acc = clf.score(x_test.numpy(), y_test.numpy()) * 100
             std = 0.
         else:
             accs = []
