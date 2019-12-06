@@ -10,9 +10,11 @@ sys.path.append(root_path)
 import time
 import argparse
 import math
+import signal
+import threading
+import multiprocessing
 import numpy as np
 from sklearn.svm import SVC
-from sklearn.ensemble import BaggingClassifier
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.linear_model import LogisticRegression
 import torch
@@ -22,53 +24,123 @@ from neuronlp2.models import DeepBiAffine, NeuroMST, StackPtrNet
 from neuronlp2.models import LinearClassifier, MLPClassifier
 
 
-def classify(probe, num_labels, train_data, train_label, test_data, test_label, dev_data, dev_label, device):
-    accuracy = dict()
-    stdv = dict()
+class ErrorHandler(object):
+    """A class that listens for exceptions in children processes and propagates
+    the tracebacks to the parent process."""
+
+    def __init__(self, error_queue):
+        self.error_queue = error_queue
+        self.children_pids = []
+        self.error_thread = threading.Thread(target=self.error_listener, daemon=True)
+        self.error_thread.start()
+        signal.signal(signal.SIGUSR1, self.signal_handler)
+
+    def add_child(self, pid):
+        self.children_pids.append(pid)
+
+    def error_listener(self):
+        (rank, original_trace) = self.error_queue.get()
+        self.error_queue.put((rank, original_trace))
+        os.kill(os.getpid(), signal.SIGUSR1)
+
+    def signal_handler(self, signalnum, stackframe):
+        for pid in self.children_pids:
+            os.kill(pid, signal.SIGINT)  # kill children processes
+        (rank, original_trace) = self.error_queue.get()
+        msg = "\n\n-- Tracebacks above this line can probably be ignored --\n\n"
+        msg += original_trace
+        raise Exception(msg)
+
+
+def run_classifier(probe, key, x_train, y_train, x_test, y_test):
+    if probe.startswith('svm'):
+        clf = SVC(kernel='linear', max_iter=-1)
+        if probe == 'svm2':
+            clf = OneVsRestClassifier(clf, n_jobs=10)
+
+    elif probe == 'logistic':
+        clf = LogisticRegression(max_iter=100, n_jobs=10)
+    else:
+        raise ValueError('unknown probe: {}'.format(probe))
+
+    print('training: layer: {}, classifier: {}'.format(key, probe))
+    start = time.time()
+    clf.fit(x_train.numpy(), y_train.numpy())
+    acc = clf.score(x_test.numpy(), y_test.numpy()) * 100
+    gc.collect()
+    print("Accuracy on {} is {:.2f}, time: {:.2f}s".format(key, acc, time.time() - start))
+
+
+def classify(probe, train_data, train_label, test_data, test_label):
+    mp = multiprocessing.get_context('spawn')
+    # Create a thread to listen for errors in the child processes.
+    error_queue = mp.SimpleQueue()
+    error_handler = ErrorHandler(error_queue)
+    processes = []
     for key in train_data:
         x_train = train_data[key]
         y_train = train_label
         x_test = test_data[key]
         y_test = test_label
-        x_dev = dev_data[key]
-        y_dev = dev_label
-        start = time.time()
-        print('training: layer: {}, classifier: {}'.format(key, probe))
-        if probe.startswith('svm'):
-            clf = SVC(kernel='linear')
-            if probe == 'svm2':
-                clf = OneVsRestClassifier(clf, n_jobs=20)
-            clf.fit(x_train.numpy(), y_train.numpy())
-            acc = clf.score(x_test.numpy(), y_test.numpy()) * 100
-            std = 0.
-        elif probe == 'logistic':
-            clf = LogisticRegression(max_iter=200, n_jobs=20)
-            clf.fit(x_train.numpy(), y_train.numpy())
-            acc = clf.score(x_test.numpy(), y_test.numpy()) * 100
-            std = 0.
-        else:
-            accs = []
-            for run in range(5):
-                if probe == 'linear':
-                    clf = LinearClassifier(x_train.size(1), num_labels)
-                elif probe == 'mlp':
-                    clf = MLPClassifier(x_train.size(1), num_labels)
-                else:
-                    raise ValueError('Unknown Classifier: {}'.format(probe))
-                clf.fit(x_train, y_train, x_val=x_dev, y_val=y_dev, device=device)
-                with torch.no_grad():
-                    accs.append(clf.score(x_test, y_test, device=device))
-                print('{}: {:.2f}'.format(run, accs[run]))
-            accs = np.array(accs)
-            acc = accs.mean()
-            std = accs.std()
-        print("Accuracy on {} is {:.2f} ({:.2f}), time: {:.2f}s".format(key, acc, std, time.time() - start))
-        print('-' * 25)
-        accuracy[key] = acc
-        stdv[key] = std
-        torch.cuda.empty_cache()
-        gc.collect()
-    return accuracy, stdv
+
+        process = mp.Process(target=run_classifier,
+                             args=(probe, key, x_train, y_train, x_test, y_test, error_queue, ),
+                             daemon=False)
+        process.start()
+        error_handler.add_child(process.pid)
+        processes.append(process)
+
+    for process in processes:
+        process.join()
+
+
+# def classify(probe, num_labels, train_data, train_label, test_data, test_label, dev_data, dev_label, device):
+#     accuracy = dict()
+#     stdv = dict()
+#     for key in train_data:
+#         x_train = train_data[key]
+#         y_train = train_label
+#         x_test = test_data[key]
+#         y_test = test_label
+#         x_dev = dev_data[key]
+#         y_dev = dev_label
+#         start = time.time()
+#         print('training: layer: {}, classifier: {}'.format(key, probe))
+#         if probe.startswith('svm'):
+#             clf = SVC(kernel='linear')
+#             if probe == 'svm2':
+#                 clf = OneVsRestClassifier(clf, n_jobs=20)
+#             clf.fit(x_train.numpy(), y_train.numpy())
+#             acc = clf.score(x_test.numpy(), y_test.numpy()) * 100
+#             std = 0.
+#         elif probe == 'logistic':
+#             clf = LogisticRegression(max_iter=200, n_jobs=20)
+#             clf.fit(x_train.numpy(), y_train.numpy())
+#             acc = clf.score(x_test.numpy(), y_test.numpy()) * 100
+#             std = 0.
+#         else:
+#             accs = []
+#             for run in range(5):
+#                 if probe == 'linear':
+#                     clf = LinearClassifier(x_train.size(1), num_labels)
+#                 elif probe == 'mlp':
+#                     clf = MLPClassifier(x_train.size(1), num_labels)
+#                 else:
+#                     raise ValueError('Unknown Classifier: {}'.format(probe))
+#                 clf.fit(x_train, y_train, x_val=x_dev, y_val=y_dev, device=device)
+#                 with torch.no_grad():
+#                     accs.append(clf.score(x_test, y_test, device=device))
+#                 print('{}: {:.2f}'.format(run, accs[run]))
+#             accs = np.array(accs)
+#             acc = accs.mean()
+#             std = accs.std()
+#         print("Accuracy on {} is {:.2f} ({:.2f}), time: {:.2f}s".format(key, acc, std, time.time() - start))
+#         print('-' * 25)
+#         accuracy[key] = acc
+#         stdv[key] = std
+#         torch.cuda.empty_cache()
+#         gc.collect()
+#     return accuracy, stdv
 
 
 def setup(args):
@@ -236,14 +308,15 @@ def main(args):
     test_features, test_labels, test_fake_labels = encode(network, data_test, device, bucketed=False)
 
     print("Real POS")
-    classify(args.probe, num_labels, train_features, train_labels, test_features, test_labels, dev_features, dev_labels, device)
+    # classify(args.probe, num_labels, train_features, train_labels, test_features, test_labels, dev_features, dev_labels, device)
+    classify(args.probe, train_features, train_labels, test_features, test_labels)
 
     if 'pos' in train_features:
         train_features.pop('pos')
         dev_features.pop('pos')
         test_features.pop('pos')
     print('Fake POS')
-    classify(args.probe, num_labels, train_features, train_fake_labels, test_features, test_fake_labels, dev_features, dev_fake_labels, device)
+    classify(args.probe, train_features, train_fake_labels, test_features, test_fake_labels)
 
 
 if __name__ == "__main__":
