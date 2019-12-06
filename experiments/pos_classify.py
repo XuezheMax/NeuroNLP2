@@ -52,6 +52,40 @@ class ErrorHandler(object):
         raise Exception(msg)
 
 
+def run(probe, key, x_train, y_train, x_test, y_test, error_queue):
+    try:
+        run_classifier(probe, key, x_train, y_train, x_test, y_test)
+    except KeyboardInterrupt:
+        pass  # killed by parent, do nothing
+    except Exception:
+        # propagate exception to parent process, keeping original traceback
+        import traceback
+        error_queue.put((args.rank, traceback.format_exc()))
+
+
+def classify(probe, train_data, train_label, test_data, test_label):
+    mp = multiprocessing.get_context('spawn')
+    # Create a thread to listen for errors in the child processes.
+    error_queue = mp.SimpleQueue()
+    error_handler = ErrorHandler(error_queue)
+    processes = []
+    for key in train_data:
+        x_train = train_data[key]
+        y_train = train_label
+        x_test = test_data[key]
+        y_test = test_label
+
+        process = mp.Process(target=run,
+                             args=(probe, key, x_train, y_train, x_test, y_test, error_queue),
+                             daemon=False)
+        process.start()
+        error_handler.add_child(process.pid)
+        processes.append(process)
+
+    for process in processes:
+        process.join()
+
+
 def run_classifier(probe, key, x_train, y_train, x_test, y_test):
     if probe.startswith('svm'):
         clf = SVC(kernel='linear', max_iter=-1)
@@ -69,29 +103,6 @@ def run_classifier(probe, key, x_train, y_train, x_test, y_test):
     acc = clf.score(x_test.numpy(), y_test.numpy()) * 100
     gc.collect()
     print("Accuracy on {} is {:.2f}, time: {:.2f}s".format(key, acc, time.time() - start))
-
-
-def classify(probe, train_data, train_label, test_data, test_label):
-    mp = multiprocessing.get_context('spawn')
-    # Create a thread to listen for errors in the child processes.
-    error_queue = mp.SimpleQueue()
-    error_handler = ErrorHandler(error_queue)
-    processes = []
-    for key in train_data:
-        x_train = train_data[key]
-        y_train = train_label
-        x_test = test_data[key]
-        y_test = test_label
-
-        process = mp.Process(target=run_classifier,
-                             args=(probe, key, x_train, y_train, x_test, y_test, error_queue, ),
-                             daemon=False)
-        process.start()
-        error_handler.add_child(process.pid)
-        processes.append(process)
-
-    for process in processes:
-        process.join()
 
 
 # def classify(probe, num_labels, train_data, train_label, test_data, test_label, dev_data, dev_label, device):
