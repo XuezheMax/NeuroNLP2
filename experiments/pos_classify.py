@@ -56,10 +56,10 @@ def run_classifier(probe, key, x_train, y_train, x_test, y_test):
     if probe.startswith('svm'):
         clf = SVC(kernel='linear', max_iter=-1)
         if probe == 'svm2':
-            clf = OneVsRestClassifier(clf, n_jobs=10)
+            clf = OneVsRestClassifier(clf, n_jobs=8)
 
     elif probe == 'logistic':
-        clf = LogisticRegression(max_iter=100, n_jobs=10)
+        clf = LogisticRegression(max_iter=100, n_jobs=8)
     else:
         raise ValueError('unknown probe: {}'.format(probe))
 
@@ -307,16 +307,29 @@ def main(args):
     dev_features, dev_labels, dev_fake_labels = encode(network, data_dev, device, bucketed=False)
     test_features, test_labels, test_fake_labels = encode(network, data_test, device, bucketed=False)
 
+    layer = args.layer
     print("Real POS")
-    # classify(args.probe, num_labels, train_features, train_labels, test_features, test_labels, dev_features, dev_labels, device)
-    classify(args.probe, train_features, train_labels, test_features, test_labels)
+    if layer is None:
+        # classify(args.probe, num_labels, train_features, train_labels, test_features, test_labels, dev_features, dev_labels, device)
+        classify(args.probe, train_features, train_labels, test_features, test_labels)
 
-    if 'pos' in train_features:
-        train_features.pop('pos')
-        dev_features.pop('pos')
-        test_features.pop('pos')
-    print('Fake POS')
-    classify(args.probe, train_features, train_fake_labels, test_features, test_fake_labels)
+        if 'pos' in train_features:
+            train_features.pop('pos')
+            dev_features.pop('pos')
+            test_features.pop('pos')
+        print('Fake POS')
+        classify(args.probe, train_features, train_fake_labels, test_features, test_fake_labels)
+    else:
+        x_train = train_features[layer]
+        y_train = train_labels
+        x_test = test_features[layer]
+        y_test = test_labels
+        run_classifier(args.probe, layer, x_train, y_train, x_test, y_test)
+        if layer != 'pos':
+            y_train = train_fake_labels
+            y_test = test_fake_labels
+            print('Fake POS')
+            run_classifier(args.probe, layer, x_train, y_train, x_test, y_test)
 
 
 if __name__ == "__main__":
@@ -326,6 +339,7 @@ if __name__ == "__main__":
     args_parser.add_argument('--dev', help='path for dev file.')
     args_parser.add_argument('--test', help='path for test file.', required=True)
     args_parser.add_argument('--model_path', help='path for saving model file.', required=True)
+    args_parser.add_argument('--layer', help='layer of model to classify.', default=None)
     args = args_parser.parse_args()
     main(args)
 
