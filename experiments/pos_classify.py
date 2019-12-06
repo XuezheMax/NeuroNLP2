@@ -14,8 +14,7 @@ import signal
 import threading
 import multiprocessing
 import numpy as np
-from sklearn.svm import SVC
-from sklearn.multiclass import OneVsRestClassifier
+from sklearn.svm import SVC, LinearSVC
 from sklearn.linear_model import LogisticRegression
 import torch
 
@@ -87,11 +86,10 @@ def classify(probe, train_data, train_label, test_data, test_label):
 
 
 def run_classifier(probe, key, x_train, y_train, x_test, y_test):
-    if probe.startswith('svm'):
-        clf = SVC(kernel='linear', max_iter=-1)
-        if probe == 'svm2':
-            clf = OneVsRestClassifier(clf, n_jobs=8)
-
+    if probe == 'svm-rbf':
+        clf = SVC(kernel='rbf')
+    elif probe == 'svm-linear':
+        clf = LinearSVC(loss='hinge')
     elif probe == 'logistic':
         clf = LogisticRegression(max_iter=100, n_jobs=8)
     else:
@@ -345,7 +343,7 @@ def main(args):
 
 if __name__ == "__main__":
     args_parser = argparse.ArgumentParser(description='POS tag classification')
-    args_parser.add_argument('--probe', choices=['svm1', 'svm2', 'logistic', 'linear', 'mlp'], required=True, help='classifier for probe')
+    args_parser.add_argument('--probe', choices=['svm-linear', 'svm-rbf', 'logistic'], required=True, help='classifier for probe')
     args_parser.add_argument('--train', help='path for training file.')
     args_parser.add_argument('--dev', help='path for dev file.')
     args_parser.add_argument('--test', help='path for test file.', required=True)
