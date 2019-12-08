@@ -62,7 +62,7 @@ def run(probe, key, x_train, y_train, x_test, y_test, error_queue):
         error_queue.put((args.rank, traceback.format_exc()))
 
 
-def classify(probe, train_data, train_label, test_data, test_label):
+def classify(probe, train_data, train_label, train_fake_label, test_data, test_label, test_fake_label):
     mp = multiprocessing.get_context('spawn')
     # Create a thread to listen for errors in the child processes.
     error_queue = mp.SimpleQueue()
@@ -73,6 +73,22 @@ def classify(probe, train_data, train_label, test_data, test_label):
         y_train = train_label
         x_test = test_data[key]
         y_test = test_label
+
+        process = mp.Process(target=run,
+                             args=(probe, key, x_train, y_train, x_test, y_test, error_queue),
+                             daemon=False)
+        process.start()
+        error_handler.add_child(process.pid)
+        processes.append(process)
+
+    if 'pos' in train_data:
+        train_data.pop('pos')
+        test_data.pop('pos')
+    for key in train_data:
+        x_train = train_data[key]
+        y_train = train_fake_label
+        x_test = test_data[key]
+        y_test = test_fake_label
 
         process = mp.Process(target=run,
                              args=(probe, key, x_train, y_train, x_test, y_test, error_queue),
@@ -95,12 +111,12 @@ def run_classifier(probe, key, x_train, y_train, x_test, y_test):
     else:
         raise ValueError('unknown probe: {}'.format(probe))
 
-    print('training: layer: {}, classifier: {}'.format(key, probe))
     start = time.time()
     clf.fit(x_train.numpy(), y_train.numpy())
     acc = clf.score(x_test.numpy(), y_test.numpy()) * 100
     gc.collect()
     print("Accuracy on {} is {:.2f}, time: {:.2f}s".format(key, acc, time.time() - start))
+    print('-' * 25)
 
 
 # def classify(probe, num_labels, train_data, train_label, test_data, test_label, dev_data, dev_label, device):
@@ -317,22 +333,15 @@ def main(args):
     test_features, test_labels, test_fake_labels = encode(network, data_test, device, bucketed=False)
 
     layer = args.layer
-    print("Real POS")
     if layer is None:
         # classify(args.probe, num_labels, train_features, train_labels, test_features, test_labels, dev_features, dev_labels, device)
-        classify(args.probe, train_features, train_labels, test_features, test_labels)
-
-        if 'pos' in train_features:
-            train_features.pop('pos')
-            dev_features.pop('pos')
-            test_features.pop('pos')
-        print('Fake POS')
-        classify(args.probe, train_features, train_fake_labels, test_features, test_fake_labels)
+        classify(args.probe, train_features, train_labels, train_fake_labels, test_features, test_labels, test_fake_labels)
     else:
         x_train = train_features[layer]
         y_train = train_labels
         x_test = test_features[layer]
         y_test = test_labels
+        print('Real POS')
         run_classifier(args.probe, layer, x_train, y_train, x_test, y_test)
         if layer != 'pos':
             y_train = train_fake_labels
