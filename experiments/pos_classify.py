@@ -119,53 +119,50 @@ def run_classifier(probe, key, x_train, y_train, x_test, y_test):
     print('-' * 25)
 
 
-# def classify(probe, num_labels, train_data, train_label, test_data, test_label, dev_data, dev_label, device):
-#     accuracy = dict()
-#     stdv = dict()
-#     for key in train_data:
-#         x_train = train_data[key]
-#         y_train = train_label
-#         x_test = test_data[key]
-#         y_test = test_label
-#         x_dev = dev_data[key]
-#         y_dev = dev_label
-#         start = time.time()
-#         print('training: layer: {}, classifier: {}'.format(key, probe))
-#         if probe.startswith('svm'):
-#             clf = SVC(kernel='linear')
-#             if probe == 'svm2':
-#                 clf = OneVsRestClassifier(clf, n_jobs=20)
-#             clf.fit(x_train.numpy(), y_train.numpy())
-#             acc = clf.score(x_test.numpy(), y_test.numpy()) * 100
-#             std = 0.
-#         elif probe == 'logistic':
-#             clf = LogisticRegression(max_iter=200, n_jobs=20)
-#             clf.fit(x_train.numpy(), y_train.numpy())
-#             acc = clf.score(x_test.numpy(), y_test.numpy()) * 100
-#             std = 0.
-#         else:
-#             accs = []
-#             for run in range(5):
-#                 if probe == 'linear':
-#                     clf = LinearClassifier(x_train.size(1), num_labels)
-#                 elif probe == 'mlp':
-#                     clf = MLPClassifier(x_train.size(1), num_labels)
-#                 else:
-#                     raise ValueError('Unknown Classifier: {}'.format(probe))
-#                 clf.fit(x_train, y_train, x_val=x_dev, y_val=y_dev, device=device)
-#                 with torch.no_grad():
-#                     accs.append(clf.score(x_test, y_test, device=device))
-#                 print('{}: {:.2f}'.format(run, accs[run]))
-#             accs = np.array(accs)
-#             acc = accs.mean()
-#             std = accs.std()
-#         print("Accuracy on {} is {:.2f} ({:.2f}), time: {:.2f}s".format(key, acc, std, time.time() - start))
-#         print('-' * 25)
-#         accuracy[key] = acc
-#         stdv[key] = std
-#         torch.cuda.empty_cache()
-#         gc.collect()
-#     return accuracy, stdv
+def mlp(num_labels, train_data, train_label, train_fake_label, test_data, test_label, test_fake_label, dev_data, dev_label, dev_fake_label, device):
+    for key in train_data:
+        x_train = train_data[key]
+        y_train = train_label
+        x_test = test_data[key]
+        y_test = test_label
+        x_dev = dev_data[key]
+        y_dev = dev_label
+
+        start = time.time()
+        accs = []
+        for run in range(5):
+            clf = MLPClassifier(x_train.size(1), num_labels)
+            clf.fit(x_train, y_train, x_val=x_dev, y_val=y_dev, device=device)
+            with torch.no_grad():
+                accs.append(clf.score(x_test, y_test, device=device))
+            print('{}: {:.2f}'.format(run, accs[run]))
+        accs = np.array(accs)
+        acc = accs.mean()
+        std = accs.std()
+        print("Accuracy on {} is {:.2f} ({:.2f}), time: {:.2f}s".format(key + ':real', acc, std, time.time() - start))
+        print('-' * 25)
+        torch.cuda.empty_cache()
+        gc.collect()
+
+        y_train = train_fake_label
+        y_test = test_fake_label
+        y_dev = dev_fake_label
+
+        start = time.time()
+        accs = []
+        for run in range(5):
+            clf = MLPClassifier(x_train.size(1), num_labels)
+            clf.fit(x_train, y_train, x_val=x_dev, y_val=y_dev, device=device)
+            with torch.no_grad():
+                accs.append(clf.score(x_test, y_test, device=device))
+            print('{}: {:.2f}'.format(run, accs[run]))
+        accs = np.array(accs)
+        acc = accs.mean()
+        std = accs.std()
+        print("Accuracy on {} is {:.2f} ({:.2f}), time: {:.2f}s".format(key + ':fake', acc, std, time.time() - start))
+        print('-' * 25)
+        torch.cuda.empty_cache()
+        gc.collect()
 
 
 def setup(args):
@@ -334,8 +331,10 @@ def main(args):
 
     layer = args.layer
     if layer is None:
-        # classify(args.probe, num_labels, train_features, train_labels, test_features, test_labels, dev_features, dev_labels, device)
-        classify(args.probe, train_features, train_labels, train_fake_labels, test_features, test_labels, test_fake_labels)
+        if args.probe == 'mlp':
+            mlp(num_labels, train_features, train_labels, train_fake_labels, test_features, test_labels, test_fake_labels, dev_features, dev_labels, dev_fake_labels, device)
+        else:
+            classify(args.probe, train_features, train_labels, train_fake_labels, test_features, test_labels, test_fake_labels)
     else:
         x_train = train_features[layer]
         y_train = train_labels
@@ -352,7 +351,7 @@ def main(args):
 
 if __name__ == "__main__":
     args_parser = argparse.ArgumentParser(description='POS tag classification')
-    args_parser.add_argument('--probe', choices=['svm-linear', 'svm-rbf', 'logistic'], required=True, help='classifier for probe')
+    args_parser.add_argument('--probe', choices=['svm-linear', 'svm-rbf', 'logistic', 'mlp'], required=True, help='classifier for probe')
     args_parser.add_argument('--train', help='path for training file.')
     args_parser.add_argument('--dev', help='path for dev file.')
     args_parser.add_argument('--test', help='path for test file.', required=True)
