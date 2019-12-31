@@ -75,7 +75,7 @@ def classify(probe, train_data, train_label, train_fake_label, test_data, test_l
         y_test = test_label
 
         process = mp.Process(target=run,
-                             args=(probe, key, x_train, y_train, x_test, y_test, error_queue),
+                             args=(probe, key + ':real', x_train, y_train, x_test, y_test, error_queue),
                              daemon=False)
         process.start()
         error_handler.add_child(process.pid)
@@ -91,7 +91,7 @@ def classify(probe, train_data, train_label, train_fake_label, test_data, test_l
         y_test = test_fake_label
 
         process = mp.Process(target=run,
-                             args=(probe, key, x_train, y_train, x_test, y_test, error_queue),
+                             args=(probe, key + ':fake', x_train, y_train, x_test, y_test, error_queue),
                              daemon=False)
         process.start()
         error_handler.add_child(process.pid)
@@ -103,9 +103,9 @@ def classify(probe, train_data, train_label, train_fake_label, test_data, test_l
 
 def run_classifier(probe, key, x_train, y_train, x_test, y_test):
     if probe == 'svm-rbf':
-        clf = SVC(kernel='rbf')
+        clf = SVC(kernel='rbf', max_iter=10000)
     elif probe == 'svm-linear':
-        clf = LinearSVC(loss='hinge')
+        clf = SVC(kernel='linear', max_iter=10000)
     elif probe == 'logistic':
         clf = LogisticRegression(max_iter=100, n_jobs=8)
     else:
