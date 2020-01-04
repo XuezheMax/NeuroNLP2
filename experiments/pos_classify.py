@@ -103,9 +103,9 @@ def classify(probe, train_data, train_label, train_fake_label, test_data, test_l
 
 def run_classifier(probe, key, x_train, y_train, x_test, y_test):
     if probe == 'svm-rbf':
-        clf = SVC(kernel='rbf', max_iter=10000)
+        clf = SVC(kernel='rbf', max_iter=10000, cache_size=1000)
     elif probe == 'svm-linear':
-        clf = SVC(kernel='linear', max_iter=10000)
+        clf = SVC(kernel='linear', max_iter=10000, cache_size=1000)
     elif probe == 'logistic':
         clf = LogisticRegression(max_iter=100, n_jobs=8)
     else:
