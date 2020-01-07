@@ -437,7 +437,7 @@ def train(args):
             dev_ucorr_nopunc, dev_lcorr_nopunc, dev_ucomlpete_nopunc, dev_lcomplete_nopunc, dev_total_nopunc = dev_stats_nopunct
             dev_root_corr, dev_total_root, dev_total_inst = dev_stats_root
 
-            if best_lcorrect_nopunc < dev_lcorr_nopunc or (best_lcorrect_nopunc == dev_lcorr_nopunc and best_ucorrect_nopunc < dev_ucorr_nopunc):
+            if best_ucorrect_nopunc + best_lcorrect_nopunc < dev_ucorr_nopunc + dev_lcorr_nopunc:
                 best_ucorrect_nopunc = dev_ucorr_nopunc
                 best_lcorrect_nopunc = dev_lcorr_nopunc
                 best_ucomlpete_nopunc = dev_ucomlpete_nopunc
