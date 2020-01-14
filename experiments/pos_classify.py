@@ -62,12 +62,17 @@ def run(probe, key, x_train, y_train, x_test, y_test, error_queue):
         error_queue.put((args.rank, traceback.format_exc()))
 
 
-def classify(probe, train_data, train_label, train_fake_label, test_data, test_label, test_fake_label):
+def classify(probe, train_data, train_label, test_data, test_label, fake):
     mp = multiprocessing.get_context('spawn')
     # Create a thread to listen for errors in the child processes.
     error_queue = mp.SimpleQueue()
     error_handler = ErrorHandler(error_queue)
     processes = []
+    suffix = ':fake' if fake else ':real'
+    if fake and 'pos' in train_data:
+        train_data.pop('pos')
+        test_data.pop('pos')
+
     for key in train_data:
         x_train = train_data[key]
         y_train = train_label
@@ -75,23 +80,7 @@ def classify(probe, train_data, train_label, train_fake_label, test_data, test_l
         y_test = test_label
 
         process = mp.Process(target=run,
-                             args=(probe, key + ':real', x_train, y_train, x_test, y_test, error_queue),
-                             daemon=False)
-        process.start()
-        error_handler.add_child(process.pid)
-        processes.append(process)
-
-    if 'pos' in train_data:
-        train_data.pop('pos')
-        test_data.pop('pos')
-    for key in train_data:
-        x_train = train_data[key]
-        y_train = train_fake_label
-        x_test = test_data[key]
-        y_test = test_fake_label
-
-        process = mp.Process(target=run,
-                             args=(probe, key + ':fake', x_train, y_train, x_test, y_test, error_queue),
+                             args=(probe, key + suffix, x_train, y_train, x_test, y_test, error_queue),
                              daemon=False)
         process.start()
         error_handler.add_child(process.pid)
@@ -103,9 +92,9 @@ def classify(probe, train_data, train_label, train_fake_label, test_data, test_l
 
 def run_classifier(probe, key, x_train, y_train, x_test, y_test):
     if probe == 'svm-rbf':
-        clf = SVC(kernel='rbf', max_iter=10000, cache_size=1000)
+        clf = SVC(kernel='rbf', cache_size=1000)
     elif probe == 'svm-linear':
-        clf = SVC(kernel='linear', max_iter=10000, cache_size=1000)
+        clf = SVC(kernel='linear', cache_size=1000)
     elif probe == 'logistic':
         clf = LogisticRegression(max_iter=100, n_jobs=8)
     else:
@@ -329,24 +318,22 @@ def main(args):
     dev_features, dev_labels, dev_fake_labels = encode(network, data_dev, device, bucketed=False)
     test_features, test_labels, test_fake_labels = encode(network, data_test, device, bucketed=False)
 
+    fake = args.fake
     layer = args.layer
     if layer is None:
         if args.probe == 'mlp':
             mlp(num_labels, train_features, train_labels, train_fake_labels, test_features, test_labels, test_fake_labels, dev_features, dev_labels, dev_fake_labels, device)
         else:
-            classify(args.probe, train_features, train_labels, train_fake_labels, test_features, test_labels, test_fake_labels)
+            classify(args.probe, train_features, train_labels, test_features, test_labels, fake)
     else:
         x_train = train_features[layer]
-        y_train = train_labels
+        y_train = train_fake_labels if fake else train_labels
         x_test = test_features[layer]
-        y_test = test_labels
-        print('Real POS')
-        run_classifier(args.probe, layer, x_train, y_train, x_test, y_test)
-        if layer != 'pos':
-            y_train = train_fake_labels
-            y_test = test_fake_labels
-            print('Fake POS')
-            run_classifier(args.probe, layer, x_train, y_train, x_test, y_test)
+        y_test = test_fake_labels if fake else test_labels
+
+        suffix = ':fake' if fake else ':real'
+        key = layer + suffix
+        run_classifier(args.probe, key, x_train, y_train, x_test, y_test)
 
 
 if __name__ == "__main__":
@@ -357,6 +344,7 @@ if __name__ == "__main__":
     args_parser.add_argument('--test', help='path for test file.', required=True)
     args_parser.add_argument('--model_path', help='path for saving model file.', required=True)
     args_parser.add_argument('--layer', help='layer of model to classify.', default=None)
+    args_parser.add_argument('--fake', type=int, help='layer of model to classify.', default=0, required=True)
     args = args_parser.parse_args()
     main(args)
 
