@@ -324,7 +324,9 @@ def main(args):
         if args.probe == 'mlp':
             mlp(num_labels, train_features, train_labels, train_fake_labels, test_features, test_labels, test_fake_labels, dev_features, dev_labels, dev_fake_labels, device)
         else:
-            classify(args.probe, train_features, train_labels, test_features, test_labels, fake)
+            y_train = train_fake_labels if fake else train_labels
+            y_test = test_fake_labels if fake else test_labels
+            classify(args.probe, train_features, y_train, test_features, y_test, fake)
     else:
         x_train = train_features[layer]
         y_train = train_fake_labels if fake else train_labels
