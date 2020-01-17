@@ -99,14 +99,13 @@ class DeepBiAffine(nn.Module):
         # concatenate word and char [batch, length, word_dim+char_filter]
         enc = torch.cat([word, char], dim=2)
 
-        output, _, layer_outputs = self.rnn1.get_layer_outputs(enc, mask)
+        output, _, layer_outputs1 = self.rnn1.get_layer_outputs(enc, mask)
 
         # [batch, length, pos_dim]
         pos = self.pos_embed(input_pos)
         enc = torch.cat([output, pos], dim=2)
         _, _, layer_outputs2 = self.rnn2.get_layer_outputs(enc, mask)
-        layer_outputs.append(layer_outputs2)
-        return {"word": word, "char": char, "pos": pos, "layers": layer_outputs}
+        return {"word": word, "char": char, "pos": pos, "layers": layer_outputs1 + layer_outputs2}
 
     def _get_rnn_output(self, input_word, input_char, input_pos, mask=None):
         # [batch, length, word_dim]
@@ -457,15 +456,14 @@ class StackPtrNet(nn.Module):
         # concatenate word and char [batch, length, word_dim+char_filter]
         enc = torch.cat([word, char], dim=2)
 
-        output, _, layer_outputs = self.encoder1.get_layer_outputs(enc, mask)
+        output, _, layer_outputs1 = self.encoder1.get_layer_outputs(enc, mask)
 
         # [batch, length, pos_dim]
         pos = self.pos_embed(input_pos)
         enc = torch.cat([output, pos], dim=2)
 
         _, _, layer_outputs2 = self.encoder2.get_layer_outputs(enc, mask)
-        layer_outputs.append(layer_outputs2)
-        return {"word": word, "char": char, "pos": pos, "layers": layer_outputs}
+        return {"word": word, "char": char, "pos": pos, "layers": layer_outputs1 + layer_outputs2}
 
     def _get_encoder_output(self, input_word, input_char, input_pos, mask=None):
         # [batch, length, word_dim]
