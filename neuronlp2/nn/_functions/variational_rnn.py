@@ -195,7 +195,7 @@ def AutogradVarRNN(num_layers=1, batch_first=False, bidirectional=False, lstm=Fa
                 output = output.transpose(0, 1)
                 layer_outputs = [out.transpose(0, 1) for out in layer_outputs]
 
-            return nexth, output, layer_outputs
+            return output, nexth, layer_outputs
         else:
             nexth, output = func(input, hidden, cells, mask)
 
