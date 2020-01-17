@@ -19,11 +19,11 @@ class PriorOrder(Enum):
 
 class DeepBiAffine(nn.Module):
     def __init__(self, word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, rnn_mode, hidden_size, num_layers, num_labels, arc_space, type_space,
-                 embedd_word=None, embedd_char=None, embedd_pos=None, p_in=0.33, p_out=0.33, p_rnn=(0.33, 0.33), pos=True, activation='elu'):
+                 embedd_word=None, embedd_char=None, embedd_pos=None, p_in=0.33, p_out=0.33, p_rnn=(0.33, 0.33), pos=1, activation='elu'):
         super(DeepBiAffine, self).__init__()
 
         self.word_embed = nn.Embedding(num_words, word_dim, _weight=embedd_word, padding_idx=1)
-        self.pos_embed = nn.Embedding(num_pos, pos_dim, _weight=embedd_pos, padding_idx=1) if pos else None
+        self.pos_embed = nn.Embedding(num_pos, pos_dim, _weight=embedd_pos, padding_idx=1)
         self.char_embed = nn.Embedding(num_chars, char_dim, _weight=embedd_char, padding_idx=1)
         self.char_cnn = CharCNN(2, char_dim, char_dim, hidden_channels=char_dim * 4, activation=activation)
 
@@ -42,13 +42,13 @@ class DeepBiAffine(nn.Module):
         else:
             raise ValueError('Unknown RNN mode: %s' % rnn_mode)
 
-        dim_enc = word_dim + char_dim
-        if pos:
-            dim_enc += pos_dim
-
-        self.rnn = RNN(dim_enc, hidden_size, num_layers=num_layers, batch_first=True, bidirectional=True, dropout=p_rnn)
-
+        assert pos in [1, 2]
         out_dim = hidden_size * 2
+        dim_enc1 = word_dim + char_dim
+        dim_enc2 = out_dim + pos_dim
+        self.rnn1 = RNN(dim_enc1, hidden_size, num_layers=pos, batch_first=True, bidirectional=True, dropout=p_rnn)
+        self.rnn2 = RNN(dim_enc2, hidden_size, num_layers=num_layers - pos, batch_first=True, bidirectional=True, dropout=p_rnn)
+
         self.arc_h = nn.Linear(out_dim, arc_space)
         self.arc_c = nn.Linear(out_dim, arc_space)
         self.biaffine = BiAffine(arc_space, arc_space)
@@ -99,14 +99,13 @@ class DeepBiAffine(nn.Module):
         # concatenate word and char [batch, length, word_dim+char_filter]
         enc = torch.cat([word, char], dim=2)
 
-        if self.pos_embed is not None:
-            # [batch, length, pos_dim]
-            pos = self.pos_embed(input_pos)
-            enc = torch.cat([enc, pos], dim=2)
-        else:
-            pos = None
+        output, _, layer_outputs = self.rnn1.get_layer_outputs(enc, mask)
 
-        _, _, layer_outputs = self.rnn.get_layer_outputs(enc, mask)
+        # [batch, length, pos_dim]
+        pos = self.pos_embed(input_pos)
+        enc = torch.cat([output, pos], dim=2)
+        _, _, layer_outputs2 = self.rnn2.get_layer_outputs(enc, mask)
+        layer_outputs.append(layer_outputs2)
         return {"word": word, "char": char, "pos": pos, "layers": layer_outputs}
 
     def _get_rnn_output(self, input_word, input_char, input_pos, mask=None):
@@ -123,15 +122,17 @@ class DeepBiAffine(nn.Module):
         # concatenate word and char [batch, length, word_dim+char_filter]
         enc = torch.cat([word, char], dim=2)
 
-        if self.pos_embed is not None:
-            # [batch, length, pos_dim]
-            pos = self.pos_embed(input_pos)
-            # apply dropout on input
-            pos = self.dropout_in(pos)
-            enc = torch.cat([enc, pos], dim=2)
+        # output from rnn [batch, length, hidden_size]
+        output, _ = self.rnn1(enc, mask)
+
+        # [batch, length, pos_dim]
+        pos = self.pos_embed(input_pos)
+        # apply dropout on input
+        pos = self.dropout_in(pos)
+        enc = torch.cat([output, pos], dim=2)
 
         # output from rnn [batch, length, hidden_size]
-        output, _ = self.rnn(enc, mask)
+        output, _ = self.rnn2(enc, mask)
 
         # apply dropout for output
         # [batch, length, hidden_size] --> [batch, hidden_size, length] --> [batch, length, hidden_size]
@@ -280,7 +281,7 @@ class DeepBiAffine(nn.Module):
 
 class NeuroMST(DeepBiAffine):
     def __init__(self, word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, rnn_mode, hidden_size, num_layers, num_labels, arc_space, type_space,
-                 embedd_word=None, embedd_char=None, embedd_pos=None, p_in=0.33, p_out=0.33, p_rnn=(0.33, 0.33), pos=True, activation='elu'):
+                 embedd_word=None, embedd_char=None, embedd_pos=None, p_in=0.33, p_out=0.33, p_rnn=(0.33, 0.33), pos=1, activation='elu'):
         super(NeuroMST, self).__init__(word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, rnn_mode, hidden_size, num_layers, num_labels, arc_space, type_space,
                                        embedd_word=embedd_word, embedd_char=embedd_char, embedd_pos=embedd_pos, p_in=p_in, p_out=p_out, p_rnn=p_rnn, pos=pos, activation=activation)
         self.biaffine = None
@@ -350,11 +351,11 @@ class StackPtrNet(nn.Module):
     def __init__(self, word_dim, num_words, char_dim, num_chars, pos_dim, num_pos, rnn_mode, hidden_size,
                  encoder_layers, decoder_layers, num_labels, arc_space, type_space,
                  embedd_word=None, embedd_char=None, embedd_pos=None, p_in=0.33, p_out=0.33, p_rnn=(0.33, 0.33),
-                 pos=True, prior_order='inside_out', grandPar=False, sibling=False, activation='elu'):
+                 pos=1, prior_order='inside_out', grandPar=False, sibling=False, activation='elu'):
 
         super(StackPtrNet, self).__init__()
         self.word_embed = nn.Embedding(num_words, word_dim, _weight=embedd_word, padding_idx=1)
-        self.pos_embed = nn.Embedding(num_pos, pos_dim, _weight=embedd_pos, padding_idx=1) if pos else None
+        self.pos_embed = nn.Embedding(num_pos, pos_dim, _weight=embedd_pos, padding_idx=1)
         self.char_embed = nn.Embedding(num_chars, char_dim, _weight=embedd_char, padding_idx=1)
         self.char_cnn = CharCNN(2, char_dim, char_dim, hidden_channels=char_dim * 4, activation=activation)
 
@@ -389,12 +390,14 @@ class StackPtrNet(nn.Module):
         else:
             raise ValueError('Unknown RNN mode: %s' % rnn_mode)
 
-        dim_enc = word_dim + char_dim
-        if pos:
-            dim_enc += pos_dim
+        assert pos in [1, 2]
+        out_dim = hidden_size * 2
+        dim_enc1 = word_dim + char_dim
+        dim_enc2 = out_dim + pos_dim
 
         self.encoder_layers = encoder_layers
-        self.encoder = RNN_ENCODER(dim_enc, hidden_size, num_layers=encoder_layers, batch_first=True, bidirectional=True, dropout=p_rnn)
+        self.encoder1 = RNN_ENCODER(dim_enc1, hidden_size, num_layers=pos, batch_first=True, bidirectional=True, dropout=p_rnn)
+        self.encoder2 = RNN_ENCODER(dim_enc2, hidden_size, num_layers=encoder_layers - pos, batch_first=True, bidirectional=True, dropout=p_rnn)
 
         dim_dec = hidden_size // 2
         self.src_dense = nn.Linear(2 * hidden_size, dim_dec)
@@ -454,14 +457,14 @@ class StackPtrNet(nn.Module):
         # concatenate word and char [batch, length, word_dim+char_filter]
         enc = torch.cat([word, char], dim=2)
 
-        if self.pos_embed is not None:
-            # [batch, length, pos_dim]
-            pos = self.pos_embed(input_pos)
-            enc = torch.cat([enc, pos], dim=2)
-        else:
-            pos = None
+        output, _, layer_outputs = self.encoder1.get_layer_outputs(enc, mask)
 
-        _, _, layer_outputs = self.encoder.get_layer_outputs(enc, mask)
+        # [batch, length, pos_dim]
+        pos = self.pos_embed(input_pos)
+        enc = torch.cat([output, pos], dim=2)
+
+        _, _, layer_outputs2 = self.encoder2.get_layer_outputs(enc, mask)
+        layer_outputs.append(layer_outputs2)
         return {"word": word, "char": char, "pos": pos, "layers": layer_outputs}
 
     def _get_encoder_output(self, input_word, input_char, input_pos, mask=None):
@@ -478,15 +481,17 @@ class StackPtrNet(nn.Module):
         # concatenate word and char [batch, length, word_dim+char_filter]
         enc = torch.cat([word, char], dim=2)
 
-        if self.pos_embed is not None:
-            # [batch, length, pos_dim]
-            pos = self.pos_embed(input_pos)
-            # apply dropout on input
-            pos = self.dropout_in(pos)
-            enc = torch.cat([enc, pos], dim=2)
+        # output from rnn [batch, length, hidden_size]
+        output, _ = self.encoder1(enc, mask)
+
+        # [batch, length, pos_dim]
+        pos = self.pos_embed(input_pos)
+        # apply dropout on input
+        pos = self.dropout_in(pos)
+        enc = torch.cat([output, pos], dim=2)
 
         # output from rnn [batch, length, hidden_size]
-        output, hn = self.encoder(enc, mask)
+        output, hn = self.encoder2(enc, mask)
         # apply dropout
         # [batch, length, hidden_size] --> [batch, hidden_size, length] --> [batch, length, hidden_size]
         output = self.dropout_out(output.transpose(1, 2)).transpose(1, 2)
