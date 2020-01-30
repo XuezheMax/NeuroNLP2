@@ -51,20 +51,24 @@ def create_alphabets(alphabet_directory, train_path, data_paths=None, max_vocabu
     word_alphabet = Alphabet('word', defualt_value=True, singleton=True)
     char_alphabet = Alphabet('character', defualt_value=True)
     pos_alphabet = Alphabet('pos')
+    fakepos_alphabet = Alphabet('fakepos')
     type_alphabet = Alphabet('type')
     if not os.path.isdir(alphabet_directory):
         logger.info("Creating Alphabets: %s" % alphabet_directory)
 
         char_alphabet.add(PAD_CHAR)
         pos_alphabet.add(PAD_POS)
+        fakepos_alphabet.add(PAD_POS)
         type_alphabet.add(PAD_TYPE)
 
         char_alphabet.add(ROOT_CHAR)
         pos_alphabet.add(ROOT_POS)
+        fakepos_alphabet.add(ROOT_POS)
         type_alphabet.add(ROOT_TYPE)
 
         char_alphabet.add(END_CHAR)
         pos_alphabet.add(END_POS)
+        fakepos_alphabet.add(END_POS)
         type_alphabet.add(END_TYPE)
 
         vocab = defaultdict(int)
@@ -83,6 +87,8 @@ def create_alphabets(alphabet_directory, train_path, data_paths=None, max_vocabu
 
                 pos = tokens[4]
                 pos_alphabet.add(pos)
+                fakepos = tokens[3]
+                fakepos_alphabet.add(fakepos)
 
                 type = tokens[7]
                 type_alphabet.add(type)
@@ -117,32 +123,36 @@ def create_alphabets(alphabet_directory, train_path, data_paths=None, max_vocabu
         word_alphabet.save(alphabet_directory)
         char_alphabet.save(alphabet_directory)
         pos_alphabet.save(alphabet_directory)
+        fakepos_alphabet.save(alphabet_directory)
         type_alphabet.save(alphabet_directory)
     else:
         word_alphabet.load(alphabet_directory)
         char_alphabet.load(alphabet_directory)
         pos_alphabet.load(alphabet_directory)
+        fakepos_alphabet.load(alphabet_directory)
         type_alphabet.load(alphabet_directory)
 
     word_alphabet.close()
     char_alphabet.close()
     pos_alphabet.close()
+    fakepos_alphabet.close()
     type_alphabet.close()
     logger.info("Word Alphabet Size (Singleton): %d (%d)" % (word_alphabet.size(), word_alphabet.singleton_size()))
     logger.info("Character Alphabet Size: %d" % char_alphabet.size())
     logger.info("POS Alphabet Size: %d" % pos_alphabet.size())
+    logger.info("Fake POS Alphabet Size: %d" % fakepos_alphabet.size())
     logger.info("Type Alphabet Size: %d" % type_alphabet.size())
-    return word_alphabet, char_alphabet, pos_alphabet, type_alphabet
+    return word_alphabet, char_alphabet, pos_alphabet, fakepos_alphabet, type_alphabet
 
 
-def read_data(source_path: str, word_alphabet: Alphabet, char_alphabet: Alphabet, pos_alphabet: Alphabet, type_alphabet: Alphabet,
-              max_size=None, normalize_digits=True, symbolic_root=False, symbolic_end=False):
+def read_data(source_path: str, word_alphabet: Alphabet, char_alphabet: Alphabet, pos_alphabet: Alphabet, fakepos_alphabet: Alphabet,
+              type_alphabet: Alphabet, max_size=None, normalize_digits=True, symbolic_root=False, symbolic_end=False):
     data = []
     max_length = 0
     max_char_length = 0
     print('Reading data from %s' % source_path)
     counter = 0
-    reader = CoNLLXReader(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
+    reader = CoNLLXReader(source_path, word_alphabet, char_alphabet, pos_alphabet, fakepos_alphabet, type_alphabet)
     inst = reader.getNext(normalize_digits=normalize_digits, symbolic_root=symbolic_root, symbolic_end=symbolic_end)
     while inst is not None and (not max_size or counter < max_size):
         counter += 1
@@ -217,13 +227,13 @@ def read_data(source_path: str, word_alphabet: Alphabet, char_alphabet: Alphabet
     return data_tensor, data_size
 
 
-def read_bucketed_data(source_path: str, word_alphabet: Alphabet, char_alphabet: Alphabet, pos_alphabet: Alphabet, type_alphabet: Alphabet,
-                       max_size=None, normalize_digits=True, symbolic_root=False, symbolic_end=False):
+def read_bucketed_data(source_path: str, word_alphabet: Alphabet, char_alphabet: Alphabet, pos_alphabet: Alphabet, fakepos_alphabet: Alphabet,
+                       type_alphabet: Alphabet, max_size=None, normalize_digits=True, symbolic_root=False, symbolic_end=False):
     data = [[] for _ in _buckets]
     max_char_length = [0 for _ in _buckets]
     print('Reading data from %s' % source_path)
     counter = 0
-    reader = CoNLLXReader(source_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
+    reader = CoNLLXReader(source_path, word_alphabet, char_alphabet, pos_alphabet, fakepos_alphabet, type_alphabet)
     inst = reader.getNext(normalize_digits=normalize_digits, symbolic_root=symbolic_root, symbolic_end=symbolic_end)
     while inst is not None and (not max_size or counter < max_size):
         counter += 1

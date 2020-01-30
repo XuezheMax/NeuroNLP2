@@ -166,16 +166,18 @@ def setup(args):
     logger.info("Loading Alphabets")
     alphabet_path = os.path.join(model_path, 'alphabets')
     assert os.path.exists(alphabet_path)
-    word_alphabet, char_alphabet, pos_alphabet, type_alphabet = conllx_data.create_alphabets(alphabet_path, None)
+    word_alphabet, char_alphabet, pos_alphabet, fakepos_alphabet, type_alphabet = conllx_data.create_alphabets(alphabet_path, None)
 
     num_words = word_alphabet.size()
     num_chars = char_alphabet.size()
     num_pos = pos_alphabet.size()
+    num_fakepos = fakepos_alphabet.size()
     num_types = type_alphabet.size()
 
     logger.info("Word Alphabet Size: %d" % num_words)
     logger.info("Character Alphabet Size: %d" % num_chars)
     logger.info("POS Alphabet Size: %d" % num_pos)
+    logger.info("Fake POS Alphabet Size: %d" % num_fakepos)
     logger.info("Type Alphabet Size: %d" % num_types)
 
     logger.info("loading network...")
@@ -229,9 +231,9 @@ def setup(args):
     train_path = args.train
     dev_path = args.dev
     test_path = args.test
-    data_train = conllx_data.read_bucketed_data(train_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, symbolic_root=True)
-    data_dev = conllx_data.read_data(dev_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, symbolic_root=True)
-    data_test = conllx_data.read_data(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet, symbolic_root=True)
+    data_train = conllx_data.read_bucketed_data(train_path, word_alphabet, char_alphabet, pos_alphabet, fakepos_alphabet, type_alphabet, symbolic_root=True)
+    data_dev = conllx_data.read_data(dev_path, word_alphabet, char_alphabet, pos_alphabet, fakepos_alphabet, type_alphabet, symbolic_root=True)
+    data_test = conllx_data.read_data(test_path, word_alphabet, char_alphabet, pos_alphabet, fakepos_alphabet, type_alphabet, symbolic_root=True)
 
     return network, (data_train, data_dev, data_test), num_pos - conllx_data.NUM_SYMBOLIC_TAGS, device
 

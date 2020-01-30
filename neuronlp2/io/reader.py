@@ -7,11 +7,12 @@ from neuronlp2.io.common import DIGIT_RE, MAX_CHAR_LENGTH
 
 
 class CoNLLXReader(object):
-    def __init__(self, file_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet):
+    def __init__(self, file_path, word_alphabet, char_alphabet, pos_alphabet, fakepos_alphabet, type_alphabet):
         self.__source_file = open(file_path, 'r')
         self.__word_alphabet = word_alphabet
         self.__char_alphabet = char_alphabet
         self.__pos_alphabet = pos_alphabet
+        self.__fakepos_alphabet = fakepos_alphabet
         self.__type_alphabet = type_alphabet
 
     def close(self):
@@ -55,7 +56,7 @@ class CoNLLXReader(object):
             postags.append(ROOT_POS)
             pos_ids.append(self.__pos_alphabet.get_index(ROOT_POS))
             fake_postags.append(ROOT_POS)
-            fake_pos_ids.append(self.__pos_alphabet.get_index(ROOT_POS))
+            fake_pos_ids.append(self.__fakepos_alphabet.get_index(ROOT_POS))
             types.append(ROOT_TYPE)
             type_ids.append(self.__type_alphabet.get_index(ROOT_TYPE))
             heads.append(0)
@@ -85,7 +86,7 @@ class CoNLLXReader(object):
             pos_ids.append(self.__pos_alphabet.get_index(pos))
 
             fake_postags.append(fakepos)
-            fake_pos_ids.append(self.__pos_alphabet.get_index(fakepos))
+            fake_pos_ids.append(self.__fakepos_alphabet.get_index(fakepos))
 
             types.append(type)
             type_ids.append(self.__type_alphabet.get_index(type))
@@ -100,7 +101,7 @@ class CoNLLXReader(object):
             postags.append(END_POS)
             pos_ids.append(self.__pos_alphabet.get_index(END_POS))
             fake_postags.append(END_POS)
-            fake_pos_ids.append(self.__pos_alphabet.get_index(END_POS))
+            fake_pos_ids.append(self.__fakepos_alphabet.get_index(END_POS))
             types.append(END_TYPE)
             type_ids.append(self.__type_alphabet.get_index(END_TYPE))
             heads.append(0)
