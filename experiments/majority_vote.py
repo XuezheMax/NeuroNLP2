@@ -15,11 +15,20 @@ from neuronlp2.io import get_logger, conllx_data
 from neuronlp2.io.common import DIGIT_RE
 
 
-def conll_pos(train_path, dev_path, test_path, word_alphabet, pos_alphabet, lowercase, fake=False):
+def find_best_pos(vote):
+    bc = 0
+    bpos = ''
+    for pos, c in vote.items():
+        if c > bc:
+            bpos = pos
+            bc = c
+    return bpos
+
+
+def conll_pos(train_path, dev_path, test_path, word_alphabet, lowercase, fake=False):
     votes = dict()
     num_tokens = 0
-    num_postags = pos_alphabet.size() - conllx_data.NUM_SYMBOLIC_TAGS
-    mtf = [0] * num_postags
+    mtf = dict()
     with open(train_path, 'r') as ifile:
         for line in ifile:
             line = line.strip()
@@ -31,22 +40,28 @@ def conll_pos(train_path, dev_path, test_path, word_alphabet, pos_alphabet, lowe
                 word = word.lower()
             pos = tokens[3] if fake else tokens[4]
 
-            word = word_alphabet.get_index(word)
-            pos = pos_alphabet.get_index(pos) - conllx_data.NUM_SYMBOLIC_TAGS
+            if word_alphabet is not None:
+                word = word_alphabet.get_index(word)
 
             if word in votes:
                 vote = votes[word]
-                vote[pos] += 1
+                if pos in vote:
+                    vote[pos] += 1
+                else:
+                    vote[pos] = 1
             else:
-                vote = [0] * num_postags
+                vote = dict()
                 vote[pos] = 1
                 votes[word] = vote
             num_tokens += 1
-            mtf[pos] += 1
+            if pos in mtf:
+                mtf[pos] += 1
+            else:
+                mtf[pos] = 1
     print('number tokens in traning data: %d' % num_tokens)
     print('number distinguished tokens: %d' % len(votes))
-    mtf = np.argmax(np.array(mtf))
-    votes = {word: np.argmax(np.array(vote)) for word, vote in votes.items()}
+    mtf = find_best_pos(mtf)
+    votes = {word: find_best_pos(vote) for word, vote in votes.items()}
 
     corr = 0
     total = 0
@@ -60,10 +75,11 @@ def conll_pos(train_path, dev_path, test_path, word_alphabet, pos_alphabet, lowe
             word = DIGIT_RE.sub("0", tokens[1])
             if lowercase:
                 word = word.lower()
-            pos = tokens[3] if fake else tokens[4]
+            gold = tokens[3] if fake else tokens[4]
 
-            word = word_alphabet.get_index(word)
-            gold = pos_alphabet.get_index(pos) - conllx_data.NUM_SYMBOLIC_TAGS
+            if word_alphabet is not None:
+                word = word_alphabet.get_index(word)
+
             if word in votes:
                 pred = votes[word]
             else:
@@ -71,6 +87,7 @@ def conll_pos(train_path, dev_path, test_path, word_alphabet, pos_alphabet, lowe
                 oov += 1
             corr += int(pred == gold)
             total += 1
+            # print(word, gold, pred)
     print('total: %d, correct: %d, acc: %.2f, oov: %d' % (total, corr, float(corr) / total * 100, oov))
 
 
@@ -79,24 +96,26 @@ if __name__ == "__main__":
     args_parser.add_argument('--train', help='path for training file.')
     args_parser.add_argument('--dev', help='path for dev file.')
     args_parser.add_argument('--test', help='path for test file.', required=True)
-    args_parser.add_argument('--model_path', help='path for saving model file.', required=True)
+    args_parser.add_argument('--model_path', help='path for saving model file.', default=None)
     args_parser.add_argument('--lowercase', action='store_true', help='lowercase all the tokens.')
     args = args_parser.parse_args()
 
     logger = get_logger('POS')
 
     model_path = args.model_path
-    model_name = os.path.join(model_path, 'model.pt')
     print(args)
 
-    logger.info("Loading Alphabets")
-    alphabet_path = os.path.join(model_path, 'alphabets')
-    word_alphabet, char_alphabet, pos_alphabet, type_alphabet = conllx_data.create_alphabets(alphabet_path, None)
+    if model_path is not None:
+        logger.info("Loading Alphabets")
+        alphabet_path = os.path.join(model_path, 'alphabets')
+        word_alphabet, _, _, _ = conllx_data.create_alphabets(alphabet_path, None)
+    else:
+        word_alphabet = None
 
     train_path = args.train
     dev_path = args.dev
     test_path = args.test
 
-    conll_pos(train_path, dev_path, test_path, word_alphabet, pos_alphabet, lowercase=args.lowercase, fake=False)
-    conll_pos(train_path, dev_path, test_path, word_alphabet, pos_alphabet, lowercase=args.lowercase, fake=True)
+    # conll_pos(train_path, dev_path, test_path, word_alphabet, lowercase=args.lowercase, fake=False)
+    conll_pos(train_path, dev_path, test_path, word_alphabet, lowercase=args.lowercase, fake=True)
 
