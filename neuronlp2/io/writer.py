@@ -29,6 +29,32 @@ class CoNLL03Writer(object):
             self.__source_file.write('\n')
 
 
+class POSWriter(object):
+    def __init__(self, word_alphabet, char_alphabet, pos_alphabet):
+        self.__source_file = None
+        self.__word_alphabet = word_alphabet
+        self.__char_alphabet = char_alphabet
+        self.__pos_alphabet = pos_alphabet
+
+    def start(self, file_path):
+        self.__source_file = open(file_path, 'w')
+
+    def close(self):
+        self.__source_file.close()
+
+    def write(self, word, predictions, targets, lengths, symbolic_root=False, symbolic_end=False):
+        batch_size, _ = word.shape
+        start = 1 if symbolic_root else 0
+        end = 1 if symbolic_end else 0
+        for i in range(batch_size):
+            for j in range(start, lengths[i] - end):
+                w = self.__word_alphabet.get_instance(word[i, j])
+                pred = self.__pos_alphabet.get_instance(predictions[i, j])
+                tgt = self.__pos_alphabet.get_instance(targets[i, j])
+                self.__source_file.write('%d\t%s\t_\t%s\t%s\n' % (j, w, tgt, pred))
+            self.__source_file.write('\n')
+
+
 class CoNLLXWriter(object):
     def __init__(self, word_alphabet, char_alphabet, pos_alphabet, type_alphabet):
         self.__source_file = None

@@ -19,7 +19,7 @@ import torch
 from torch.optim.adamw import AdamW
 from torch.optim import SGD
 from torch.nn.utils import clip_grad_norm_
-from neuronlp2.io import get_logger, conllx_data, iterate_data
+from neuronlp2.io import get_logger, conllx_data, iterate_data, POSWriter
 from neuronlp2.models import BiRecurrentConv, BiVarRecurrentConv, BiRecurrentConvCRF, BiVarRecurrentConvCRF
 from neuronlp2.optim import ExponentialScheduler
 from neuronlp2 import utils
@@ -35,18 +35,22 @@ def get_optimizer(parameters, optim, learning_rate, lr_decay, amsgrad, weight_de
     return optimizer, scheduler
 
 
-def eval(data, network, device):
+def eval(data, network, writer, outfile, device):
     network.eval()
     corr = 0
     total = 0
+    writer.start(outfile)
     for data in iterate_data(data, 256):
         words = data['WORD'].to(device)
         chars = data['CHAR'].to(device)
         masks = data['MASK'].to(device)
         postags = data['POS'].to(device)
+        lengths = data['LENGTH'].numpy()
         preds = network.decode(words, chars, mask=masks, leading_symbolic=conllx_data.NUM_SYMBOLIC_TAGS)
         corr += torch.eq(preds, postags).float().mul(masks).sum().item()
         total += masks.sum().item()
+        writer.write(words.cpu().numpy(), preds.cpu().numpy(), postags.cpu().numpy(), lengths)
+    writer.close()
     return corr, total
 
 
@@ -121,6 +125,8 @@ def main():
 
     data_dev = conllx_data.read_data(dev_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
     data_test = conllx_data.read_data(test_path, word_alphabet, char_alphabet, pos_alphabet, type_alphabet)
+
+    writer = POSWriter(word_alphabet, char_alphabet, pos_alphabet)
 
     def construct_word_embedding_table():
         scale = np.sqrt(3.0 / embedd_dim)
@@ -255,7 +261,8 @@ def main():
 
         # evaluate performance on dev data
         with torch.no_grad():
-            dev_corr, dev_total = eval(data_dev, network, device)
+            outfile = os.path.join(result_path, 'pred_dev%d' % epoch)
+            dev_corr, dev_total = eval(data_dev, network, writer, outfile, device)
             print('Dev  corr: %d, total: %d, acc: %.2f%%' % (dev_corr, dev_total, dev_corr * 100 / dev_total))
             if best_corr < dev_corr:
                 torch.save(network.state_dict(), model_name)
@@ -264,7 +271,8 @@ def main():
                 best_epoch = epoch
 
                 # evaluate on test data when better performance detected
-                test_corr, test_total = eval(data_test, network, device)
+                outfile = os.path.join(result_path, 'pred_test%d' % epoch)
+                test_corr, test_total = eval(data_test, network, writer, outfile, device)
                 print('test corr: %d, total: %d, acc: %.2f%%' % (test_corr, test_total, test_corr * 100 / test_total))
                 patient = 0
             else:
