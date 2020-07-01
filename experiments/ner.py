@@ -13,16 +13,23 @@ sys.path.append(root_path)
 
 import time
 import argparse
+import random
 
 import numpy as np
 import torch
-from torch.optim import SGD
 from torch.optim.lr_scheduler import ExponentialLR
 from torch.nn.utils import clip_grad_norm_
 from neuronlp2.io import get_logger, conll03_data, CoNLL03Writer, iterate_data
 from neuronlp2.models import BiRecurrentConv, BiVarRecurrentConv, BiRecurrentConvCRF, BiVarRecurrentConvCRF
-from neuronlp2.optim import AdamW, AtomW, Atom
+from neuronlp2.optim import AdamW, AtomW, Atom, SGD
 from neuronlp2 import utils
+
+
+def logging(info, logfile=None):
+    print(info)
+    if logfile is not None:
+        print(info, file=logfile)
+        logfile.flush()
 
 
 def evaluate(output_file, scorefile):
@@ -42,7 +49,8 @@ def evaluate(output_file, scorefile):
 def get_optimizer(parameters, optim, learning_rate, hyper1, hyper2, eps, amsgrad,
                   lr_decay, weight_decay, warmup_steps, init_lr):
     if optim == 'sgd':
-        optimizer = SGD(parameters, lr=learning_rate, momentum=hyper1, weight_decay=weight_decay, nesterov=True)
+        optimizer = SGD(parameters, lr=learning_rate, momentum=hyper1, warmups=warmup_steps, init_lr=init_lr,
+                        weight_decay=weight_decay, nesterov=True)
         opt = 'momentum=%.1f, ' % (hyper1)
     elif optim == 'adamw':
         optimizer = AdamW(parameters, lr=learning_rate, betas=(hyper1, hyper2), eps=eps, amsgrad=amsgrad,
@@ -87,6 +95,8 @@ def eval(data, network, writer, outfile, scorefile, device):
 def main():
     parser = argparse.ArgumentParser(description='NER with bi-directional RNN-CNN')
     parser.add_argument('--config', type=str, help='config file', required=True)
+    parser.add_argument('--seed', type=int, default=65537, metavar='S', help='random seed (default: 65537)')
+    parser.add_argument('--run', type=int, default=1, metavar='N', help='number of runs for the experiment')
     parser.add_argument('--num_epochs', type=int, default=100, help='Number of training epochs')
     parser.add_argument('--batch_size', type=int, default=16, help='Number of sentences in each batch')
     parser.add_argument('--loss_type', choices=['sentence', 'token'], default='sentence', help='loss type (default: sentence)')
@@ -111,10 +121,16 @@ def main():
 
     args = parser.parse_args()
 
-    logger = get_logger("NER")
-
     args.cuda = torch.cuda.is_available()
+    random_seed = args.seed
+    random.seed(random_seed)
+    np.random.seed(random_seed)
+    torch.manual_seed(random_seed)
     device = torch.device('cuda', 0) if args.cuda else torch.device('cpu')
+    if args.cuda:
+        torch.cuda.set_device(device)
+        torch.cuda.manual_seed(random_seed)
+
     train_path = args.train
     dev_path = args.dev
     test_path = args.test
@@ -141,7 +157,9 @@ def main():
     embedding = args.embedding
     embedding_path = args.embedding_dict
 
-    print(args)
+    log = open(os.path.join(model_path, 'log.run{}.txt'.format(args.run)), 'w')
+    logger = get_logger("NER")
+    logging(args, log)
 
     embedd_dict, embedd_dim = utils.load_embedding_dict(embedding, embedding_path)
 
@@ -182,7 +200,7 @@ def main():
                 embedding = np.random.uniform(-scale, scale, [1, embedd_dim]).astype(np.float32)
                 oov += 1
             table[index, :] = embedding
-        print('oov: %d' % oov)
+        logging('oov: %d' % oov, log)
         return torch.from_numpy(table)
 
     word_table = construct_word_embedding_table()
@@ -230,21 +248,26 @@ def main():
     logger.info("Network: %s, num_layer=%d, hidden=%d, act=%s" % (model, num_layers, hidden_size, activation))
     logger.info("training: l2: %f, (#training data: %d, batch: %d, unk replace: %.2f)" % (weight_decay, num_data, batch_size, unk_replace))
     logger.info("dropout(in, out, rnn): %s(%.2f, %.2f, %s)" % (dropout, p_in, p_out, p_rnn))
-    print('# of Parameters: %d' % (sum([param.numel() for param in network.parameters()])))
+    logging('# of Parameters: %d' % (sum([param.numel() for param in network.parameters()])), log)
 
-    best_f1 = 0.0
-    best_acc = 0.0
-    best_precision = 0.0
-    best_recall = 0.0
-    test_f1 = 0.0
-    test_acc = 0.0
-    test_precision = 0.0
-    test_recall = 0.0
+    best_val_f1 = 0.0
+    best_val_acc = 0.0
+    best_val_precision = 0.0
+    best_val_recall = 0.0
+    best_test_f1 = 0.0
+    best_test_acc = 0.0
+    best_test_precision = 0.0
+    best_test_recall = 0.0
     best_epoch = 0
     num_batches = num_data // batch_size + 1
     result_path = os.path.join(model_path, 'tmp')
     if not os.path.exists(result_path):
         os.makedirs(result_path)
+
+    numbers = {'train sent loss': [], 'train token loss': [],
+               'val prec': [], 'val recall': [], 'val f1': [],
+               'test prec': [], 'test recall': [], 'test f1': []}
+
     for epoch in range(1, num_epochs + 1):
         start_time = time.time()
         train_loss = 0.
@@ -253,7 +276,7 @@ def main():
         num_back = 0
         network.train()
         lr = scheduler.get_last_lr()[0]
-        print('Epoch %d (%s, lr=%.6f, %s): ' % (epoch, optim, lr, opt))
+        logging('Epoch %d (%s, lr=%.6f, %s): ' % (epoch, optim, lr, opt), log)
         if args.cuda:
             torch.cuda.empty_cache()
         gc.collect()
@@ -298,35 +321,51 @@ def main():
         sys.stdout.write("\b" * num_back)
         sys.stdout.write(" " * num_back)
         sys.stdout.write("\b" * num_back)
-        print('total: %d (%d), loss: %.4f (%.4f), time: %.2fs' % (num_insts, num_words, train_loss / num_insts,
-                                                                  train_loss / num_words, time.time() - start_time))
-        print('-' * 100)
+        logging('total: %d (%d), loss: %.4f (%.4f), time: %.2fs' % (num_insts, num_words, train_loss / num_insts,
+                                                                    train_loss / num_words, time.time() - start_time), log)
+        logging('-' * 100, log)
         scheduler.step()
 
         # evaluate performance on dev data
         with torch.no_grad():
             outfile = os.path.join(result_path, 'pred_dev%d' % epoch)
             scorefile = os.path.join(result_path, "score_dev%d" % epoch)
-            acc, precision, recall, f1 = eval(data_dev, network, writer, outfile, scorefile, device)
-            print('Dev  acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%%' % (acc, precision, recall, f1))
-            if best_f1 < f1:
+            val_acc, val_precision, val_recall, val_f1 = eval(data_dev, network, writer, outfile, scorefile, device)
+            logging('Dev  acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%%' % (val_acc, val_precision, val_recall, val_f1), log)
+            # evaluate on test data
+            outfile = os.path.join(result_path, 'pred_test%d' % epoch)
+            scorefile = os.path.join(result_path, "score_test%d" % epoch)
+            test_acc, test_precision, test_recall, test_f1 = eval(data_test, network, writer, outfile, scorefile, device)
+            logging('test acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%%' % (test_acc, test_precision, test_recall, test_f1), log)
+            if best_val_f1 < val_f1:
                 torch.save(network.state_dict(), model_name)
-                best_f1 = f1
-                best_acc = acc
-                best_precision = precision
-                best_recall = recall
+                best_val_f1 = val_f1
+                best_val_acc = val_acc
+                best_val_precision = val_precision
+                best_val_recall = val_recall
+                best_test_f1 = test_f1
+                best_test_acc = test_acc
+                best_test_precision = test_precision
+                best_test_recall = test_recall
                 best_epoch = epoch
 
-                # evaluate on test data when better performance detected
-                outfile = os.path.join(result_path, 'pred_test%d' % epoch)
-                scorefile = os.path.join(result_path, "score_test%d" % epoch)
-                test_acc, test_precision, test_recall, test_f1 = eval(data_test, network, writer, outfile, scorefile, device)
-                print('test acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%%' % (test_acc, test_precision, test_recall, test_f1))
-            print('-' * 100)
+        logging('-' * 100, log)
+        logging("Best dev  acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%% (epoch: %d)" % (
+                best_val_acc, best_val_precision, best_val_recall, best_val_f1, best_epoch), log)
+        logging("Best test acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%% (epoch: %d)" % (
+                best_test_acc, best_test_precision, best_test_recall, best_test_f1, best_epoch), log)
+        logging('=' * 100, log)
 
-            print("Best dev  acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%% (epoch: %d)" % (best_acc, best_precision, best_recall, best_f1, best_epoch))
-            print("Best test acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%% (epoch: %d)" % (test_acc, test_precision, test_recall, test_f1, best_epoch))
-            print('=' * 100)
+        numbers['train sent loss'].append(train_loss / num_insts)
+        numbers['train token loss'].append(train_loss / num_words)
+        numbers['val prec'].append(val_precision)
+        numbers['val recall'].append(val_recall)
+        numbers['val f1'].append(val_f1)
+        numbers['test prec'].append(test_precision)
+        numbers['test recall'].append(test_recall)
+        numbers['test f1'].append(test_f1)
+
+    json.dump(numbers, open(os.path.join(model_path, 'values.run{}.json'.format(args.run)), 'w'))
 
 
 if __name__ == '__main__':
