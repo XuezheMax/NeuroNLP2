@@ -96,6 +96,7 @@ def main():
     parser.add_argument('--amsgrad', action='store_true', help='AMS Grad')
     parser.add_argument('--opt_h1', type=float, default=0.9, help='momentum for SGD, beta1 of Adam or beta for Atom')
     parser.add_argument('--opt_h2', type=float, default=0.999, help='beta2 of Adam or convexity bound for Atom')
+    parser.add_argument('--eps', type=float, default=1e-8, help='eps of Adam')
     parser.add_argument('--init_lr', type=float, default=0.01, help='initial learning rate')
     parser.add_argument('--grad_clip', type=float, default=0, help='max norm for gradient clip (default 0: no clip')
     parser.add_argument('--warmup_steps', type=int, default=0, metavar='N', help='number of steps to warm up (default: 0)')
