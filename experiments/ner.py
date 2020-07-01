@@ -17,7 +17,7 @@ import random
 
 import numpy as np
 import torch
-from torch.optim.lr_scheduler import ExponentialLR
+from torch.optim.lr_scheduler import ExponentialLR, MultiStepLR
 from torch.nn.utils import clip_grad_norm_
 from neuronlp2.io import get_logger, conll03_data, CoNLL03Writer, iterate_data
 from neuronlp2.models import BiRecurrentConv, BiVarRecurrentConv, BiRecurrentConvCRF, BiVarRecurrentConvCRF
@@ -47,7 +47,7 @@ def evaluate(output_file, scorefile):
 
 
 def get_optimizer(parameters, optim, learning_rate, hyper1, hyper2, eps, amsgrad,
-                  lr_decay, weight_decay, warmup_steps, init_lr):
+                  lr_decay, decay_rate, milestone, weight_decay, warmup_steps, init_lr):
     if optim == 'sgd':
         optimizer = SGD(parameters, lr=learning_rate, momentum=hyper1, warmups=warmup_steps, init_lr=init_lr,
                         weight_decay=weight_decay, nesterov=True)
@@ -69,8 +69,16 @@ def get_optimizer(parameters, optim, learning_rate, hyper1, hyper2, eps, amsgrad
     else:
         raise ValueError('unknown optimizer: {}'.format(optim))
 
-    opt = opt + 'lr decay={:.3f}, warmup={}, init_lr={:.1e}, wd={:.1e}'.format(lr_decay, warmup_steps, init_lr, weight_decay)
-    scheduler = ExponentialLR(optimizer, lr_decay)
+    if lr_decay == 'exp':
+        opt = opt + 'lr decay={}, decay rate={:.3f}, '.format(lr_decay, decay_rate)
+        scheduler = ExponentialLR(optimizer, decay_rate)
+    elif lr_decay == 'milestone':
+        opt = opt + 'lr decay={} {}, decay rate={:.3f}, '.format(lr_decay, milestone, decay_rate)
+        scheduler = MultiStepLR(optimizer, milestones=milestone, gamma=decay_rate)
+    else:
+        raise ValueError('unknown lr decay: {}'.format(lr_decay))
+
+    opt += 'warmup={}, init_lr={:.1e}, wd={:.1e}'.format(warmup_steps, init_lr, weight_decay)
     return optimizer, scheduler, opt
 
 
@@ -102,7 +110,9 @@ def main():
     parser.add_argument('--loss_type', choices=['sentence', 'token'], default='sentence', help='loss type (default: sentence)')
     parser.add_argument('--optim', choices=['sgd', 'adamw', 'atom', 'atomw'], help='type of optimizer', required=True)
     parser.add_argument('--learning_rate', type=float, default=0.1, help='Learning rate')
-    parser.add_argument('--lr_decay', type=float, default=0.99, help='Decay rate of learning rate')
+    parser.add_argument('--lr_decay', choices=['exp', 'milestone'], required=True, help='Decay rate of learning rate')
+    parser.add_argument('--decay_rate', type=float, required=True, help='Decay rate of learning rate')
+    parser.add_argument('--milestone', type=int, nargs='+', default=[100, 150], help='Decrease learning rate at these epochs.')
     parser.add_argument('--amsgrad', action='store_true', help='AMS Grad')
     parser.add_argument('--opt_h1', type=float, default=0.9, help='momentum for SGD, beta1 of Adam or beta for Atom')
     parser.add_argument('--opt_h2', type=float, default=0.999, help='beta2 of Adam or convexity bound for Atom')
@@ -157,9 +167,7 @@ def main():
     embedding = args.embedding
     embedding_path = args.embedding_dict
 
-    log = open(os.path.join(model_path, 'log.run{}.txt'.format(args.run)), 'w')
     logger = get_logger("NER")
-    logging(args, log)
 
     embedd_dict, embedd_dim = utils.load_embedding_dict(embedding, embedding_path)
 
@@ -200,7 +208,7 @@ def main():
                 embedding = np.random.uniform(-scale, scale, [1, embedd_dim]).astype(np.float32)
                 oov += 1
             table[index, :] = embedding
-        logging('oov: %d' % oov, log)
+        logger.info('oov: %d' % oov)
         return torch.from_numpy(table)
 
     word_table = construct_word_embedding_table()
@@ -248,6 +256,9 @@ def main():
     logger.info("Network: %s, num_layer=%d, hidden=%d, act=%s" % (model, num_layers, hidden_size, activation))
     logger.info("training: l2: %f, (#training data: %d, batch: %d, unk replace: %.2f)" % (weight_decay, num_data, batch_size, unk_replace))
     logger.info("dropout(in, out, rnn): %s(%.2f, %.2f, %s)" % (dropout, p_in, p_out, p_rnn))
+
+    log = open(os.path.join(model_path, 'log.run{}.txt'.format(args.run)), 'w')
+    logging(args, log)
     logging('# of Parameters: %d' % (sum([param.numel() for param in network.parameters()])), log)
 
     best_val_f1 = 0.0
@@ -336,7 +347,7 @@ def main():
             outfile = os.path.join(result_path, 'pred_test%d' % epoch)
             scorefile = os.path.join(result_path, "score_test%d" % epoch)
             test_acc, test_precision, test_recall, test_f1 = eval(data_test, network, writer, outfile, scorefile, device)
-            logging('test acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%%' % (test_acc, test_precision, test_recall, test_f1), log)
+            logging('Test acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%%' % (test_acc, test_precision, test_recall, test_f1), log)
             if best_val_f1 < val_f1:
                 torch.save(network.state_dict(), model_name)
                 best_val_f1 = val_f1
