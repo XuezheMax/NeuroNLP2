@@ -150,6 +150,8 @@ def main():
     optim = args.optim
     learning_rate = args.learning_rate
     lr_decay = args.lr_decay
+    decay_rate = args.decay_rate
+    milestone = args.milestone
     hyper1 = args.opt_h1
     hyper2 = args.opt_h2
     eps = args.eps
@@ -251,7 +253,8 @@ def main():
     network = network.to(device)
 
     optimizer, scheduler, opt = get_optimizer(network.parameters(), optim, learning_rate, hyper1, hyper2, eps, amsgrad,
-                                         lr_decay=lr_decay, weight_decay=weight_decay, warmup_steps=warmup_steps, init_lr=init_lr)
+                                              lr_decay=lr_decay, decay_rate=decay_rate, milestone=milestone,
+                                              weight_decay=weight_decay, warmup_steps=warmup_steps, init_lr=init_lr)
     model = "{}-CNN{}".format(mode, "-CRF" if crf else "")
     logger.info("Network: %s, num_layer=%d, hidden=%d, act=%s" % (model, num_layers, hidden_size, activation))
     logger.info("training: l2: %f, (#training data: %d, batch: %d, unk replace: %.2f)" % (weight_decay, num_data, batch_size, unk_replace))
