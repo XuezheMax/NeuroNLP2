@@ -51,12 +51,12 @@ class AtomW(Optimizer):
                 loss = closure()
 
         for group in self.param_groups:
+            denom = 0
             for p in group['params']:
                 if p.grad is None:
                     continue
 
                 state = self.state[p]
-
                 # State initialization
                 if len(state) == 0:
                     state['step'] = 0
@@ -67,20 +67,23 @@ class AtomW(Optimizer):
                     # Previous update direction
                     state['update'] = torch.zeros_like(p, memory_format=torch.preserve_format)
 
-                # Calculate current lr
-                if state['step'] < group['warmups']:
-                    curr_lr = (group['base_lr'] - group['init_lr']) * state['step'] / group['warmups'] + group['init_lr']
-                else:
-                    curr_lr = group['lr']
+                d_p = state['update']
+                denom = denom + d_p.pow(4).sum()
+            # Compute the norm for numerical stability.
+            denom = denom.pow(0.25).add(group['eps'])
 
+            delta = 0
+            for p in group['params']:
+                if p.grad is None:
+                    continue
+
+                state = self.state[p]
                 # Perform optimization step
                 grad = p.grad
                 if grad.is_sparse:
                     raise RuntimeError('Atom does not support sparse gradients.')
 
                 beta = group['beta']
-                m = group['m']
-                eps = group['eps']
                 exp_avg_grad = state['exp_avg_grad']
                 B = state['approx_hessian']
                 d_p = state['update']
@@ -90,19 +93,35 @@ class AtomW(Optimizer):
                 bias_curr = 1 - beta ** state['step']
                 alpha = (1 - beta) / bias_curr
 
-                denom = d_p.norm(p=4).add(eps)
                 d_p.div_(denom)
                 v_sq = d_p.mul(d_p)
-                delta = (grad - exp_avg_grad).div_(denom).mul_(d_p).sum().mul(-alpha) - B.mul(v_sq).sum()
-
-                # Update B
-                B.addcmul_(v_sq, delta)
+                delta = delta + (grad - exp_avg_grad).div_(denom).mul_(d_p).sum().mul(-alpha) - B.mul(v_sq).sum()
 
                 # Decay the running average coefficient
                 exp_avg_grad.mul_(beta * bias_prev / bias_curr).add_(grad, alpha=alpha)
 
-                denom = B.abs().clamp_(min=m)
-                d_p.copy_(exp_avg_grad.div(denom))
+            for p in group['params']:
+                if p.grad is None:
+                    continue
+
+                state = self.state[p]
+                # Calculate current lr
+                if state['step'] < group['warmups']:
+                    curr_lr = (group['base_lr'] - group['init_lr']) * state['step'] / group['warmups'] + group['init_lr']
+                else:
+                    curr_lr = group['lr']
+
+                m = group['m']
+                exp_avg_grad = state['exp_avg_grad']
+                B = state['approx_hessian']
+                d_p = state['update']
+                v_sq = d_p.mul(d_p)
+
+                # Update B
+                B.addcmul_(v_sq, delta)
+
+                hessian = B.abs().clamp_(min=m)
+                d_p.copy_(exp_avg_grad.div(hessian))
 
                 # Perform stepweight decay
                 if group['weight_decay'] != 0:
