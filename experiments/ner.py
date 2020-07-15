@@ -21,7 +21,7 @@ from torch.optim.lr_scheduler import ExponentialLR, MultiStepLR
 from torch.nn.utils import clip_grad_norm_
 from neuronlp2.io import get_logger, conll03_data, CoNLL03Writer, iterate_data
 from neuronlp2.models import BiRecurrentConv, BiVarRecurrentConv, BiRecurrentConvCRF, BiVarRecurrentConvCRF
-from neuronlp2.optim import AdamW, AtomW, Atom, SGD
+from neuronlp2.optim import AdamW, Apollo, ApolloW, SGD
 from neuronlp2 import utils
 
 
@@ -56,16 +56,14 @@ def get_optimizer(parameters, optim, learning_rate, hyper1, hyper2, eps, amsgrad
         optimizer = AdamW(parameters, lr=learning_rate, betas=(hyper1, hyper2), eps=eps, amsgrad=amsgrad,
                           warmups=warmup_steps, init_lr=init_lr, weight_decay=weight_decay)
         opt = 'betas=(%.1f, %.3f), eps=%.1e, ' % (hyper1, hyper2, eps)
-    elif optim == 'atom':
-        m = hyper2
-        optimizer = Atom(parameters, lr=learning_rate, beta=hyper1, m=m, eps=eps,
-                         warmups=warmup_steps, init_lr=init_lr, weight_decay=weight_decay)
-        opt = 'beta=%.1f, m=%.1f, eps=%.1e, ' % (hyper1, m, eps)
-    elif optim == 'atomw':
-        m = hyper2
-        optimizer = AtomW(parameters, lr=learning_rate, beta=hyper1, m=m, eps=eps,
-                          warmups=warmup_steps, init_lr=init_lr, weight_decay=weight_decay)
-        opt = 'beta=%.1f, m=%.1f, eps=%.1e, ' % (hyper1, m, eps)
+    elif optim == 'apollo':
+        optimizer = Apollo(parameters, rho=learning_rate, beta=hyper1, eps=eps, warmups=warmup_steps,
+                           init_lr=init_lr, weight_decay=weight_decay)
+        opt = 'beta=%.1f, m=%.1f, eps=%.1e, ' % (hyper1, 1.0 / learning_rate, eps)
+    elif optim == 'apollow':
+        optimizer = ApolloW(parameters, rho=learning_rate, beta=hyper1, eps=eps, warmups=warmup_steps,
+                            init_lr=init_lr, weight_decay=weight_decay)
+        opt = 'beta=%.1f, m=%.1f, eps=%.1e, ' % (hyper1, 1.0 / learning_rate, eps)
     else:
         raise ValueError('unknown optimizer: {}'.format(optim))
 
@@ -108,7 +106,7 @@ def main():
     parser.add_argument('--num_epochs', type=int, default=100, help='Number of training epochs')
     parser.add_argument('--batch_size', type=int, default=16, help='Number of sentences in each batch')
     parser.add_argument('--loss_type', choices=['sentence', 'token'], default='sentence', help='loss type (default: sentence)')
-    parser.add_argument('--optim', choices=['sgd', 'adamw', 'atom', 'atomw'], help='type of optimizer', required=True)
+    parser.add_argument('--optim', choices=['sgd', 'adamw', 'apollo', 'apollpw'], help='type of optimizer', required=True)
     parser.add_argument('--learning_rate', type=float, default=0.1, help='Learning rate')
     parser.add_argument('--lr_decay', choices=['exp', 'milestone'], required=True, help='Decay rate of learning rate')
     parser.add_argument('--decay_rate', type=float, required=True, help='Decay rate of learning rate')
