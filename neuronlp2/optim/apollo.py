@@ -1,13 +1,14 @@
+import numpy as np
 import torch
 from torch.optim.optimizer import Optimizer
 
 
 class Apollo(Optimizer):
-    r"""Implements Atom algorithm.
+    r"""Implements Apollo algorithm.
         Arguments:
             params (iterable): iterable of parameters to optimize or dicts defining
                 parameter groups
-            rho (float, optional): ratio of learning rate over convexity (default: 1.0)
+            rho (float, optional): ratio of learning rate over convexity (default: 0.1)
             beta (float, optional): coefficient used for computing
                 running averages of gradient (default: 0.9)
             eps (float, optional): term added to the denominator to improve
@@ -17,7 +18,7 @@ class Apollo(Optimizer):
             weight_decay (float, optional): weight decay coefficient (default: 0)
         """
 
-    def __init__(self, params, rho=1.0, beta=0.9, eps=1e-8, warmups=100, init_lr=0.01, weight_decay=0):
+    def __init__(self, params, rho=0.1, beta=0.9, eps=1e-8, warmups=100, init_lr=0.01, weight_decay=0):
         if not 0.0 < rho:
             raise ValueError("Invalid rho value: {}".format(rho))
         if not 0.0 <= eps:
@@ -32,9 +33,9 @@ class Apollo(Optimizer):
             raise ValueError("Invalid initial learning rate: {}".format(init_lr))
 
         lr = 1.0
-        convexity = lr / rho
-        defaults = dict(lr=lr, beta=beta, eps=eps, warmups=warmups, init_lr=init_lr,
-                        base_lr=lr, convexity=convexity, weight_decay=weight_decay)
+        rho = lr / rho
+        defaults = dict(lr=lr, base_lr=lr, beta=beta, rho=rho, eps=eps,
+                        warmups=warmups, init_lr=init_lr, weight_decay=weight_decay)
         super(Apollo, self).__init__(params, defaults)
 
     def __setstate__(self, state):
@@ -52,6 +53,8 @@ class Apollo(Optimizer):
             with torch.enable_grad():
                 loss = closure()
 
+        grad_norms = []
+        norm_type = 2
         for group in self.param_groups:
             for p in group['params']:
                 if p.grad is None:
@@ -69,12 +72,6 @@ class Apollo(Optimizer):
                     # Previous update direction
                     state['update'] = torch.zeros_like(p, memory_format=torch.preserve_format)
 
-                # Calculate current lr
-                if state['step'] < group['warmups']:
-                    curr_lr = (group['base_lr'] - group['init_lr']) * state['step'] / group['warmups'] + group['init_lr']
-                else:
-                    curr_lr = group['lr']
-
                 # Perform optimization step
                 grad = p.grad
                 if grad.is_sparse:
@@ -85,7 +82,6 @@ class Apollo(Optimizer):
                     grad = grad.add(p, alpha=group['weight_decay'])
 
                 beta = group['beta']
-                convexity = group['convexity']
                 exp_avg_grad = state['exp_avg_grad']
                 B = state['approx_hessian']
                 d_p = state['update']
@@ -97,6 +93,7 @@ class Apollo(Optimizer):
                 # Update the running average grad
                 delta_grad = grad - exp_avg_grad
                 exp_avg_grad.add_(delta_grad, alpha=alpha)
+                grad_norms.append(exp_avg_grad.norm(p=norm_type))
 
                 denom = d_p.norm(p=4).add(group['eps'])
                 d_p.div_(denom)
@@ -106,10 +103,30 @@ class Apollo(Optimizer):
                 # Update B
                 B.addcmul_(v_sq, delta)
 
+        total_norm = torch.norm(torch.stack(grad_norms), p=norm_type)
+        for group in self.param_groups:
+            for p in group['params']:
+                if p.grad is None:
+                    continue
+
+                state = self.state[p]
+
+                # Calculate current lr
+                if state['step'] < group['warmups']:
+                    curr_lr = (group['base_lr'] - group['init_lr']) * state['step'] / group['warmups'] + group['init_lr']
+                else:
+                    curr_lr = group['lr']
+
+                rho = group['rho']
+                exp_avg_grad = state['exp_avg_grad']
+                B = state['approx_hessian']
+                d_p = state['update']
+
                 # calc direction of parameter updates
-                denom = B.abs().clamp_(min=convexity)
+                denom = torch.max(B.abs(), total_norm.mul(rho))
                 d_p.copy_(exp_avg_grad.div(denom))
 
+                # Update parameters
                 p.add_(d_p, alpha=-curr_lr)
 
         return loss
