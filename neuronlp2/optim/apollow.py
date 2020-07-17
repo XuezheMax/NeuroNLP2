@@ -1,4 +1,4 @@
-import numpy as np
+import math
 import torch
 from torch.optim.optimizer import Optimizer
 
@@ -9,8 +9,8 @@ class ApolloW(Optimizer):
             params (iterable): iterable of parameters to optimize or dicts defining
                 parameter groups
             rho (float, optional): ratio of learning rate over convexity (default: 0.1)
-            beta (float, optional): coefficient used for computing
-                running averages of gradient (default: 0.9)
+            betas (Tuple[float, float], optional): coefficients used for computing
+                running averages of gradient and its square (default: (0.9, 0.999))
             eps (float, optional): term added to the denominator to improve
                 numerical stability (default: 1e-8)
             warmups (int, optional): number of warmup steps (default: 0)
@@ -18,13 +18,15 @@ class ApolloW(Optimizer):
             weight_decay (float, optional): weight decay coefficient (default: 0)
         """
 
-    def __init__(self, params, rho=0.1, beta=0.9, eps=1e-8, warmups=100, init_lr=0.01, weight_decay=0):
+    def __init__(self, params, rho=0.1, betas=(0.9, 0.999), eps=1e-8, warmups=100, init_lr=0.01, weight_decay=0):
         if not 0.0 < rho:
             raise ValueError("Invalid rho value: {}".format(rho))
         if not 0.0 <= eps:
             raise ValueError("Invalid epsilon value: {}".format(eps))
-        if not 0.0 <= beta < 1.0:
-            raise ValueError("Invalid beta parameter at index 0: {}".format(beta))
+        if not 0.0 <= betas[0] < 1.0:
+            raise ValueError("Invalid beta parameter at index 0: {}".format(betas[0]))
+        if not 0.0 <= betas[1] < 1.0:
+            raise ValueError("Invalid beta parameter at index 1: {}".format(betas[1]))
         if not 0.0 <= weight_decay:
             raise ValueError("Invalid weight_decay value: {}".format(weight_decay))
         if not 0.0 <= warmups:
@@ -34,7 +36,7 @@ class ApolloW(Optimizer):
 
         lr = 1.0
         rho = lr / rho
-        defaults = dict(lr=lr, base_lr=lr, beta=beta, rho=rho, eps=eps,
+        defaults = dict(lr=lr, base_lr=lr, betas=betas, rho=rho, eps=eps,
                         warmups=warmups, init_lr=init_lr, weight_decay=weight_decay)
         super(ApolloW, self).__init__(params, defaults)
 
@@ -53,8 +55,6 @@ class ApolloW(Optimizer):
             with torch.enable_grad():
                 loss = closure()
 
-        grad_norms = []
-        norm_type = 2
         for group in self.param_groups:
             for p in group['params']:
                 if p.grad is None:
@@ -67,45 +67,13 @@ class ApolloW(Optimizer):
                     state['step'] = 0
                     # Exponential moving average of gradient values
                     state['exp_avg_grad'] = torch.zeros_like(p, memory_format=torch.preserve_format)
+                    # Exponential moving average of squared gradient norm
+                    state['exp_avg_sq'] = p.new_zeros(1)
+                    state['max_exp_avg_sq'] = p.new_zeros(1)
                     # Exponential moving average of squared gradient values
                     state['approx_hessian'] = torch.zeros_like(p, memory_format=torch.preserve_format)
                     # Previous update direction
                     state['update'] = torch.zeros_like(p, memory_format=torch.preserve_format)
-
-                # Perform optimization step
-                grad = p.grad
-                if grad.is_sparse:
-                    raise RuntimeError('Atom does not support sparse gradients.')
-
-                beta = group['beta']
-                exp_avg_grad = state['exp_avg_grad']
-                B = state['approx_hessian']
-                d_p = state['update']
-
-                state['step'] += 1
-                bias_correction = 1 - beta ** state['step']
-                alpha = (1 - beta) / bias_correction
-
-                # Update the running average grad
-                delta_grad = grad - exp_avg_grad
-                exp_avg_grad.add_(delta_grad, alpha=alpha)
-                grad_norms.append(exp_avg_grad.norm(p=norm_type))
-
-                denom = d_p.norm(p=4).add(group['eps'])
-                d_p.div_(denom)
-                v_sq = d_p.mul(d_p)
-                delta = delta_grad.div_(denom).mul_(d_p).sum().mul(-alpha) - B.mul(v_sq).sum()
-
-                # Update B
-                B.addcmul_(v_sq, delta)
-
-        total_norm = torch.norm(torch.stack(grad_norms), p=norm_type)
-        for group in self.param_groups:
-            for p in group['params']:
-                if p.grad is None:
-                    continue
-
-                state = self.state[p]
 
                 # Calculate current lr
                 if state['step'] < group['warmups']:
@@ -113,13 +81,40 @@ class ApolloW(Optimizer):
                 else:
                     curr_lr = group['lr']
 
+                # Perform optimization step
+                grad = p.grad
+                if grad.is_sparse:
+                    raise RuntimeError('Atom does not support sparse gradients.')
+
+                beta1, beta2 = group['betas']
                 rho = group['rho']
-                exp_avg_grad = state['exp_avg_grad']
+                exp_avg_grad, exp_avg_sq = state['exp_avg_grad'], state['exp_avg_sq']
+                max_exp_avg_sq = state['max_exp_avg_sq']
                 B = state['approx_hessian']
                 d_p = state['update']
 
+                state['step'] += 1
+                bias_correction1 = 1 - beta1 ** state['step']
+                alpha = (1 - beta1) / bias_correction1
+                bias_correction2 = 1 - beta2 ** state['step']
+
+                # Update the running average gradient and squared norm
+                delta_grad = grad - exp_avg_grad
+                exp_avg_grad.add_(delta_grad, alpha=alpha)
+                exp_avg_sq.mul_(beta2).add_(grad.norm(p=2).pow(2), alpha=1 - beta2)
+                # Maintains the maximum of all 2nd moment running avg. till now
+                torch.max(max_exp_avg_sq, exp_avg_sq, out=max_exp_avg_sq)
+
+                # Update B
+                denom = d_p.norm(p=4).add(group['eps'])
+                d_p.div_(denom)
+                v_sq = d_p.mul(d_p)
+                delta = delta_grad.div_(denom).mul_(d_p).sum().mul(-alpha) - B.mul(v_sq).sum()
+                B.addcmul_(v_sq, delta)
+
                 # calc direction of parameter updates
-                denom = torch.max(B.abs(), total_norm.mul(rho))
+                convexity = max_exp_avg_sq.sqrt() / (math.sqrt(bias_correction2) / rho)
+                denom = torch.max(B.abs(), convexity)
                 d_p.copy_(exp_avg_grad.div(denom))
 
                 # Perform step weight decay

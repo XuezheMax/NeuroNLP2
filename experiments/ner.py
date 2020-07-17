@@ -57,13 +57,13 @@ def get_optimizer(parameters, optim, learning_rate, hyper1, hyper2, eps, amsgrad
                           warmups=warmup_steps, init_lr=init_lr, weight_decay=weight_decay)
         opt = 'betas=(%.1f, %.3f), eps=%.1e, ' % (hyper1, hyper2, eps)
     elif optim == 'apollo':
-        optimizer = Apollo(parameters, rho=learning_rate, beta=hyper1, eps=eps, warmups=warmup_steps,
+        optimizer = Apollo(parameters, rho=learning_rate, betas=(hyper1, hyper2), eps=eps, warmups=warmup_steps,
                            init_lr=init_lr, weight_decay=weight_decay)
-        opt = 'beta=%.1f, m=%.1f, eps=%.1e, ' % (hyper1, 1.0 / learning_rate, eps)
+        opt = 'rho=%.1f, betas=(%.1f, %.3f), eps=%.1e, ' % (1.0 / learning_rate, hyper1, hyper2, eps)
     elif optim == 'apollow':
-        optimizer = ApolloW(parameters, rho=learning_rate, beta=hyper1, eps=eps, warmups=warmup_steps,
+        optimizer = ApolloW(parameters, rho=learning_rate, betas=(hyper1, hyper2), eps=eps, warmups=warmup_steps,
                             init_lr=init_lr, weight_decay=weight_decay)
-        opt = 'beta=%.1f, m=%.1f, eps=%.1e, ' % (hyper1, 1.0 / learning_rate, eps)
+        opt = 'rho=%.1f, betas=(%.1f, %.3f), eps=%.1e, ' % (1.0 / learning_rate, hyper1, hyper2, eps)
     else:
         raise ValueError('unknown optimizer: {}'.format(optim))
 
