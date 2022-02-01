@@ -1,6 +1,5 @@
 __author__ = 'max'
 
-from overrides import overrides
 from collections import OrderedDict
 import math
 import numpy as np
@@ -153,7 +152,6 @@ class BiAffine(nn.Module):
             output = output * mask_key.unsqueeze(1)
         return output
 
-    @overrides
     def extra_repr(self):
         s = '{key_dim}, {query_dim}'
         return s.format(**self.__dict__)
